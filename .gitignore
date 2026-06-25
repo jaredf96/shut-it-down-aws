@@ -1,0 +1,29 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment & credentials — never commit AWS keys or secrets
+.env
+.env.*
+!.env.example
+.aws/
+
+# Terraform — state can contain secrets/ARNs
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

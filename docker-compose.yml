@@ -1,0 +1,46 @@
+# Convenience compose file for running the backend in a container locally.
+#
+#   docker compose up --build
+#
+# AWS credentials are mounted read-only from your host (~/.aws) so the
+# container can scan your account without baking any secrets into the image.
+# Alternatively, pass AWS_* environment variables (see the `environment` block).
+#
+# Scan history is persisted to a local DynamoDB (the `dynamodb-local` service),
+# so nothing is written to your real AWS account. The backend auto-creates the
+# table on startup (DYNAMODB_AUTO_CREATE=true).
+
+services:
+  backend:
+    build: ./backend
+    image: cloud-lab-cleanup-dashboard-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Honors standard AWS env vars if you prefer them over the mounted file.
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # Uncomment to inject keys directly instead of mounting ~/.aws:
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      #
+      # Scan-history persistence -> local DynamoDB container.
+      - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-cloud-lab-scans}
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - DYNAMODB_AUTO_CREATE=true
+    volumes:
+      # Read-only mount of your AWS credentials/config.
+      - ${HOME}/.aws:/home/appuser/.aws:ro
+    depends_on:
+      - dynamodb-local
+    restart: unless-stopped
+
+  # Amazon's official local DynamoDB. In-memory: data resets when it stops.
+  # Remove "-inMemory" and add a volume if you want it to persist across runs.
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    ports:
+      - "8001:8000"
+    restart: unless-stopped

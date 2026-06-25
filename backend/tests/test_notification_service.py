@@ -1,0 +1,61 @@
+from app.models import Alert, AlertSeverity
+from app.services import notify
+
+
+def _alert(severity, rid):
+    return Alert(
+        id=f"r:{rid}",
+        severity=severity,
+        rule="x",
+        title="t",
+        message="m",
+        resource_type="EC2 Instance",
+        resource_id=rid,
+        region="us-east-1",
+        risk_level="HIGH",
+    )
+
+
+class _RecordingNotifier:
+    def __init__(self, name="rec", fail=False):
+        self.name = name
+        self.fail = fail
+        self.received = None
+
+    def send(self, alerts):
+        if self.fail:
+            raise RuntimeError("channel down")
+        self.received = alerts
+
+
+def test_filters_below_min_severity():
+    rec = _RecordingNotifier()
+    alerts = [_alert(AlertSeverity.INFO, "a"), _alert(AlertSeverity.WARNING, "b")]
+    result = notify(alerts, notifiers=[rec], min_severity="WARNING")
+
+    assert result["sent_count"] == 1
+    assert [a.resource_id for a in rec.received] == ["b"]
+    assert result["channels"][0]["status"] == "sent"
+
+
+def test_skips_when_no_alerts_at_threshold():
+    rec = _RecordingNotifier()
+    result = notify([_alert(AlertSeverity.INFO, "a")], notifiers=[rec], min_severity="CRITICAL")
+    assert result["channels"][0]["status"] == "skipped"
+    assert rec.received is None
+
+
+def test_one_failing_channel_does_not_break_others():
+    good = _RecordingNotifier(name="good")
+    bad = _RecordingNotifier(name="bad", fail=True)
+    alerts = [_alert(AlertSeverity.CRITICAL, "a")]
+    result = notify(alerts, notifiers=[good, bad], min_severity="INFO")
+
+    by_channel = {c["channel"]: c["status"] for c in result["channels"]}
+    assert by_channel == {"good": "sent", "bad": "error"}
+
+
+def test_no_notifiers_configured_is_noop():
+    result = notify([_alert(AlertSeverity.CRITICAL, "a")], notifiers=[])
+    assert result["channels"] == []
+    assert result["sent_count"] == 0

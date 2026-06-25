@@ -1,0 +1,11 @@
+# Keep the build context small and never ship secrets or local cruft.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.local
+.aws/
+tests/
+README.md
+.DS_Store

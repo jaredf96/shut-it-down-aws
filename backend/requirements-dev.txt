@@ -1,0 +1,6 @@
+# Dev/test-only dependencies (not needed at runtime or in the Docker image).
+-r requirements.txt
+pytest==8.3.4
+moto[ec2,elb,elbv2,rds,s3]==5.0.27
+httpx==0.28.1
+ruff==0.8.6

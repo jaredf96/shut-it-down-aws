@@ -1,0 +1,148 @@
+import boto3
+
+from app.aws.session import session_for_account
+from app.repositories import account_repository
+from app.services import diff_scans, scan_accounts
+from app.services.multi_account_service import _tag
+from tests.conftest import REGION
+
+# --- account_repository --------------------------------------------------
+
+
+def test_account_id_parsed_from_role_arn():
+    arn = "arn:aws:iam::123456789012:role/CloudLabReadOnly"
+    assert account_repository.account_id_from_role_arn(arn) == "123456789012"
+
+
+def test_create_list_get_delete_account(dynamo_table):
+    created = account_repository.create_account(
+        "tenant-1",
+        {"name": "Sandbox", "role_arn": "arn:aws:iam::111111111111:role/Read"},
+    )
+    assert created["account_id"] == "111111111111"
+    assert "pk" not in created and "sk" not in created
+
+    listed = account_repository.list_accounts("tenant-1")
+    assert len(listed) == 1
+
+    assert account_repository.get_account("tenant-1", "111111111111") is not None
+    assert account_repository.delete_account("tenant-1", "111111111111") is True
+    assert account_repository.list_accounts("tenant-1") == []
+
+
+def test_accounts_are_isolated_by_tenant(dynamo_table):
+    account_repository.create_account(
+        "tenant-a", {"name": "A", "role_arn": "arn:aws:iam::111111111111:role/R"}
+    )
+    assert len(account_repository.list_accounts("tenant-a")) == 1
+    assert account_repository.list_accounts("tenant-b") == []
+
+
+# --- assume-role session -------------------------------------------------
+
+
+def test_session_for_account_assumes_role(dynamo_table):
+    # moto's STS returns usable temp credentials for any role ARN.
+    session = session_for_account(
+        {"role_arn": "arn:aws:iam::222222222222:role/Read", "external_id": None}
+    )
+    assert isinstance(session, boto3.Session)
+    assert session.get_credentials() is not None
+
+
+# --- multi-account scan tagging ------------------------------------------
+
+
+def test_scan_accounts_falls_back_to_default_when_none_registered(dynamo_table):
+    boto3.client("ec2", region_name=REGION).run_instances(
+        ImageId="ami-12345678", MinCount=1, MaxCount=1
+    )
+    result = scan_accounts("tenant-1")  # no accounts registered
+    assert "accounts_scanned" not in result  # default single-account path
+    assert result["summary"]["total_resources"] >= 1
+
+
+def test_scan_accounts_tags_resources(dynamo_table, monkeypatch):
+    # Register two accounts; make assume-role a no-op (use the moto default session).
+    account_repository.create_account(
+        "tenant-1", {"name": "Acct One", "role_arn": "arn:aws:iam::111111111111:role/R"}
+    )
+    account_repository.create_account(
+        "tenant-1", {"name": "Acct Two", "role_arn": "arn:aws:iam::222222222222:role/R"}
+    )
+    monkeypatch.setattr(
+        "app.services.multi_account_service.session_for_account",
+        lambda account: boto3.Session(),
+    )
+    boto3.client("ec2", region_name=REGION).run_instances(
+        ImageId="ami-12345678", MinCount=1, MaxCount=1
+    )
+
+    result = scan_accounts("tenant-1")
+    assert len(result["accounts_scanned"]) == 2
+    assert result["account_errors"] == []
+    # Every resource is tagged with one of the two account ids.
+    account_ids = {r.account_id for r in result["resources"]}
+    assert account_ids <= {"111111111111", "222222222222"}
+    assert all(r.account_label in ("Acct One", "Acct Two") for r in result["resources"])
+
+
+def test_scan_accounts_collects_per_account_errors(dynamo_table, monkeypatch):
+    account_repository.create_account(
+        "tenant-1", {"name": "Broken", "role_arn": "arn:aws:iam::333333333333:role/R"}
+    )
+
+    def boom(account):
+        raise RuntimeError("assume role denied")
+
+    monkeypatch.setattr("app.services.multi_account_service.session_for_account", boom)
+
+    result = scan_accounts("tenant-1")
+    assert result["resources"] == []
+    assert len(result["account_errors"]) == 1
+    assert "denied" in result["account_errors"][0]["error"]
+
+
+# --- account-aware diffing -----------------------------------------------
+
+
+def test_diff_identity_includes_account(dynamo_table):
+    from app.repositories import scan_repository
+
+    def res(account_id):
+        return {
+            "resource_type": "EC2 Instance",
+            "resource_id": "i-1",
+            "region": "us-east-1",
+            "status": "running",
+            "risk_level": "MEDIUM",
+            "account_id": account_id,
+        }
+
+    older = scan_repository.save_scan({"summary": {}, "resources": [res("111111111111")]})
+    newer = scan_repository.save_scan({"summary": {}, "resources": [res("222222222222")]})
+
+    # Same resource_id but different accounts -> added + removed, not "unchanged".
+    result = diff_scans(older, newer)
+    assert result["summary"]["added"] == 1
+    assert result["summary"]["removed"] == 1
+    assert result["summary"]["unchanged"] == 0
+
+
+def test_tag_sets_account_fields():
+    from app.models import Resource
+
+    r = Resource(
+        resource_type="EC2 Instance",
+        resource_id="i-1",
+        region="us-east-1",
+        status="running",
+        risk_level="MEDIUM",
+        monthly_cost_risk="x",
+        suggested_action="y",
+    )
+    tagged = _tag(r, {"account_id": "123456789012", "name": "Prod"})
+    assert tagged.account_id == "123456789012"
+    assert tagged.account_label == "Prod"
+    # Original is untouched (model_copy).
+    assert r.account_id is None

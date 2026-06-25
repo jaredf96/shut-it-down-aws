@@ -1,0 +1,80 @@
+# Convenience shortcuts for the Cloud Lab Cleanup Dashboard.
+#
+# Backend commands create/use a virtualenv at backend/.venv. The Python version
+# is pinned by backend/.python-version (3.12.3); with pyenv installed, the bare
+# `python` below resolves to that version automatically. Override if needed:
+#
+#   make install PYTHON=python3.12
+#
+# Run `make` or `make help` to see all targets.
+
+PYTHON ?= python
+VENV   := backend/.venv
+BIN    := $(VENV)/bin
+
+.DEFAULT_GOAL := help
+
+.PHONY: help install install-dev run test lint format build create-table \
+        frontend-install frontend-run frontend-build \
+        docker-build docker-up clean
+
+help: ## Show this help
+	@echo "Cloud Lab Cleanup Dashboard — make targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# --- Backend -------------------------------------------------------------
+
+install: ## Create backend venv and install runtime deps
+	cd backend && $(PYTHON) -m venv .venv
+	$(BIN)/pip install --upgrade pip
+	$(BIN)/pip install -r backend/requirements.txt
+
+install-dev: ## Create backend venv and install runtime + dev/test deps
+	cd backend && $(PYTHON) -m venv .venv
+	$(BIN)/pip install --upgrade pip
+	$(BIN)/pip install -r backend/requirements-dev.txt
+
+run: ## Run the backend API locally (http://localhost:8000)
+	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
+
+test: ## Run backend tests (offline via moto)
+	cd backend && .venv/bin/pytest
+
+lint: ## Lint and check formatting (no changes)
+	cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check .
+
+format: ## Auto-fix lint issues and reformat
+	cd backend && .venv/bin/ruff check --fix . && .venv/bin/ruff format .
+
+create-table: ## Create the DynamoDB scan-history table (reads DYNAMODB_* env vars)
+	cd backend && .venv/bin/python -m scripts.create_table
+
+# --- Frontend ------------------------------------------------------------
+
+frontend-install: ## Install frontend dependencies
+	cd frontend && npm install
+
+frontend-run: ## Run the frontend dev server (http://localhost:5173)
+	cd frontend && npm run dev
+
+frontend-build: ## Production build of the frontend
+	cd frontend && npm run build
+
+build: frontend-build ## Build the deployable frontend bundle (compile check)
+
+# --- Docker --------------------------------------------------------------
+
+docker-build: ## Build the backend Docker image
+	docker build -t cloud-lab-cleanup-dashboard-backend ./backend
+
+docker-up: ## Run the backend in Docker (mounts ~/.aws read-only)
+	docker compose up --build
+
+# --- Housekeeping --------------------------------------------------------
+
+clean: ## Remove venv, node_modules, and caches
+	rm -rf $(VENV) frontend/node_modules frontend/dist
+	find backend -type d -name __pycache__ -prune -exec rm -rf {} +
+	rm -rf backend/.pytest_cache backend/.ruff_cache
