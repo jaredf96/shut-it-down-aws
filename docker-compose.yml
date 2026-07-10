@@ -36,11 +36,20 @@ services:
       - dynamodb-local
     restart: unless-stopped
 
-  # Amazon's official local DynamoDB. In-memory: data resets when it stops.
-  # Remove "-inMemory" and add a volume if you want it to persist across runs.
+  # Amazon's official local DynamoDB. Durable: scan history survives container
+  # restarts via the named volume. Swap "-dbPath ./data" for "-inMemory" (and
+  # drop the volume + user) if you prefer data that resets on every stop.
   dynamodb-local:
     image: amazon/dynamodb-local:latest
-    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    # The image's non-root user can't write to a freshly created named volume;
+    # root is fine for a local dev convenience container.
+    user: root
     ports:
       - "8001:8000"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
     restart: unless-stopped
+
+volumes:
+  dynamodb-data:
