@@ -12,7 +12,8 @@ HOURS_PER_MONTH = 730
 
 # Flat hourly charges.
 NAT_GATEWAY_HOURLY = 0.045
-EIP_UNASSOCIATED_HOURLY = 0.005
+# Since February 2024 AWS charges for every public IPv4 address, associated or not.
+PUBLIC_IPV4_HOURLY = 0.005
 ALB_HOURLY = 0.0225
 NLB_HOURLY = 0.0225
 CLB_HOURLY = 0.025

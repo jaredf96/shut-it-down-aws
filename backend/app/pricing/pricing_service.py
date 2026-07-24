@@ -49,7 +49,8 @@ def _static_estimate(resource: dict) -> float | None:
         return sp.monthly(sp.NAT_GATEWAY_HOURLY)
 
     if rtype == "Elastic IP":
-        return sp.monthly(sp.EIP_UNASSOCIATED_HOURLY) if status == "unassociated" else 0.0
+        # All public IPv4 addresses are billed hourly, associated or not.
+        return sp.monthly(sp.PUBLIC_IPV4_HOURLY)
 
     if rtype.startswith("Load Balancer"):
         hourly = sp.CLB_HOURLY if "CLASSIC" in rtype else sp.ALB_HOURLY

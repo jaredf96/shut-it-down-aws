@@ -40,13 +40,18 @@ def test_running_vs_stopped_ec2():
     assert stopped["estimated_monthly_cost"] == 0.0  # no compute charge when stopped
 
 
-def test_unassociated_eip_costs_associated_is_free():
-    assert pricing_service.estimate(_res("Elastic IP", status="unassociated"))[
-        "estimated_monthly_cost"
-    ] == round(0.005 * 730, 2)
+def test_all_eips_cost_the_public_ipv4_rate():
+    # Since Feb 2024 AWS bills every public IPv4 address, associated or not.
+    expected = round(0.005 * 730, 2)
+    assert (
+        pricing_service.estimate(_res("Elastic IP", status="unassociated"))[
+            "estimated_monthly_cost"
+        ]
+        == expected
+    )
     assert (
         pricing_service.estimate(_res("Elastic IP", status="associated"))["estimated_monthly_cost"]
-        == 0.0
+        == expected
     )
 
 
