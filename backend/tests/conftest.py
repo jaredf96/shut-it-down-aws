@@ -35,8 +35,9 @@ def mocked_aws(aws_credentials):
 def single_region(monkeypatch):
     """Pin region discovery to one region so tests are fast and deterministic.
 
-    Each scanner imported `get_regions` into its own namespace, so we patch the
-    reference on every module that uses it.
+    Each scanner imported `get_regions` into its own namespace, and the scan
+    service now resolves regions once for the whole aggregate scan, so we patch
+    the reference on every module that uses it.
     """
     from app.scanners import (
         ebs_scanner,
@@ -46,6 +47,7 @@ def single_region(monkeypatch):
         nat_gateway_scanner,
         rds_scanner,
     )
+    from app.services import scan_service
 
     for module in (
         ec2_scanner,
@@ -54,6 +56,7 @@ def single_region(monkeypatch):
         nat_gateway_scanner,
         load_balancer_scanner,
         rds_scanner,
+        scan_service,
     ):
         monkeypatch.setattr(module, "get_regions", lambda session=None: [REGION])
 

@@ -7,9 +7,17 @@ DynamoDB, or background jobs without touching the route handlers.
 
 from __future__ import annotations
 
+import logging
+import time
+
+import boto3
+
 from app.models import Resource
 from app.pricing import pricing_service
 from app.scanners import SCANNERS
+from app.utils import get_regions
+
+logger = logging.getLogger("app.scan")
 
 
 def scan_one(scanner_key: str, regions: list[str] | None = None, session=None) -> list[Resource]:
@@ -24,17 +32,33 @@ def scan_one(scanner_key: str, regions: list[str] | None = None, session=None) -
 
 
 def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object]:
-    """Run every scanner and return a combined, summarized result."""
+    """Run every scanner and return a combined, summarized result.
+
+    Regions are discovered once here and passed down to every scanner, so a
+    single aggregate scan makes one `describe_regions` call instead of one per
+    scanner. Each scanner then fans its region sweep out concurrently.
+    """
+    session = session or boto3.Session()
+    regions = regions or get_regions(session)
+
     all_resources: list[Resource] = []
+    logger.info("scan start: %d region(s) across %d scanners", len(regions), len(SCANNERS))
+    started = time.perf_counter()
 
     for key in SCANNERS:
+        t0 = time.perf_counter()
         try:
             found = scan_one(key, regions, session=session)
         except Exception:
             # One failing scanner should never break the whole scan.
+            logger.exception("scanner %s failed", key)
             found = []
         all_resources.extend(found)
+        logger.info("  %-14s %3d resource(s) in %6.2fs", key, len(found), time.perf_counter() - t0)
 
+    logger.info(
+        "scan done: %d resource(s) in %.2fs", len(all_resources), time.perf_counter() - started
+    )
     return {
         "summary": summarize(all_resources),
         "resources": all_resources,

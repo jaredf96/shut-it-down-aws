@@ -102,9 +102,16 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - **IDs in URLs:** `scan_id` uses `_` as separator, never `#` (URL fragment —
   it silently truncated paths once).
 - **Test fixture patching:** scanners import `get_regions` into their own
-  namespace; `tests/conftest.py` patches it per-module with signature
-  `lambda session=None: [REGION]` — keep the `session` param or every
-  region-based scanner silently returns empty.
+  namespace, and `services/scan_service.py` now resolves it once for the whole
+  aggregate scan; `tests/conftest.py` patches it per-module (all 6 scanners
+  **plus `scan_service`**) with signature `lambda session=None: [REGION]` — keep
+  the `session` param and the `scan_service` entry, or scans silently return empty.
+- **Region sweeps run concurrently** via `utils/concurrency.scan_regions`; each
+  scanner splits its per-region body into a `_scan_region(region, session)`
+  helper. boto3 client construction goes through `make_client` (lock-guarded —
+  the botocore client factory isn't safe to call concurrently on a shared
+  Session). Single-region calls (every test) stay on the calling thread, so moto
+  never sees worker threads. Per-region errors are swallowed inside `scan_regions`.
 - **moto quirks:** STS assume-role accepts any ARN (handy for multi-account
   tests); us-east-1 `get_bucket_location` returns `None`.
 - **`.gitignore`:** root ignores `.env.*` but negates `!.env.example` — keep the
@@ -129,8 +136,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 ## Extension recipes
 
 - **New scanner:** add `app/scanners/<svc>_scanner.py` with the uniform `scan()`
-  contract, register in `scanners/__init__.py` SCANNERS dict → per-service
-  endpoint and aggregate scan come free. Add risk levels + plain-English
+  contract — put the per-region body in a `_scan_region(region, session)` helper
+  and return `scan_regions(lambda r: _scan_region(r, session), regions, session)`
+  (build clients via `make_client`). Register in `scanners/__init__.py` SCANNERS
+  dict → per-service endpoint and aggregate scan come free. Add risk levels + plain-English
   `monthly_cost_risk`/`suggested_action`; populate `details` if cost-estimable;
   add a static price entry in `pricing/static_prices.py`; write moto tests.
 - **New cleanup action:** add to `ACTIONS` in `services/cleanup_actions.py`

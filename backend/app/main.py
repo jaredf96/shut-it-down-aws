@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from app import config
 from app.auth import get_current_principal, get_current_tenant, require_admin
+from app.logging_setup import configure_logging
 from app.models import AccountCreate, CleanupRequest, UserCreate
 from app.repositories import (
     account_repository,
@@ -38,6 +39,7 @@ from app.services import (
 from app.services.cleanup_actions import NOT_SUPPORTED
 from app.services.cleanup_actions import catalog as cleanup_catalog
 
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

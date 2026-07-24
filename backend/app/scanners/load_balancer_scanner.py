@@ -7,12 +7,13 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.models import Resource, RiskLevel
 from app.utils import get_regions
+from app.utils.concurrency import make_client, scan_regions
 
 
 def _scan_v2(region: str, session: boto3.Session) -> list[Resource]:
     """Application and Network Load Balancers (elbv2)."""
     resources: list[Resource] = []
-    elbv2 = session.client("elbv2", region_name=region)
+    elbv2 = make_client(session, "elbv2", region)
     paginator = elbv2.get_paginator("describe_load_balancers")
     for page in paginator.paginate():
         for lb in page.get("LoadBalancers", []):
@@ -41,7 +42,7 @@ def _scan_v2(region: str, session: boto3.Session) -> list[Resource]:
 def _scan_classic(region: str, session: boto3.Session) -> list[Resource]:
     """Classic Load Balancers (elb)."""
     resources: list[Resource] = []
-    elb = session.client("elb", region_name=region)
+    elb = make_client(session, "elb", region)
     paginator = elb.get_paginator("describe_load_balancers")
     for page in paginator.paginate():
         for lb in page.get("LoadBalancerDescriptions", []):
@@ -66,20 +67,23 @@ def _scan_classic(region: str, session: boto3.Session) -> list[Resource]:
     return resources
 
 
+def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
+    # v2 and classic are billed and queried independently: a failure in one
+    # (e.g. an endpoint not present in a region) must not hide the other.
+    resources: list[Resource] = []
+    try:
+        resources.extend(_scan_v2(region, session))
+    except (BotoCoreError, ClientError):
+        pass
+    try:
+        resources.extend(_scan_classic(region, session))
+    except (BotoCoreError, ClientError):
+        pass
+    return resources
+
+
 def scan(regions: list[str] | None = None, session: boto3.Session | None = None) -> list[Resource]:
     """Return all load balancers (ALB/NLB/Classic) as Resource objects."""
     session = session or boto3.Session()
     regions = regions or get_regions(session)
-    resources: list[Resource] = []
-
-    for region in regions:
-        try:
-            resources.extend(_scan_v2(region, session))
-        except (BotoCoreError, ClientError):
-            pass
-        try:
-            resources.extend(_scan_classic(region, session))
-        except (BotoCoreError, ClientError):
-            pass
-
-    return resources
+    return scan_regions(lambda region: _scan_region(region, session), regions, session)
