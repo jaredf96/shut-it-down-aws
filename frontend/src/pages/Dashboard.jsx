@@ -20,6 +20,8 @@ import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
 import ScanHistory from "../components/ScanHistory.jsx";
+import ScanProgress from "../components/ScanProgress.jsx";
+import ThemeToggle from "../components/ThemeToggle.jsx";
 import UsersPanel from "../components/UsersPanel.jsx";
 
 const RISK_ORDER = { HIGH: 0, REVIEW: 1, MEDIUM: 2, LOW: 3 };
@@ -196,15 +198,20 @@ export default function Dashboard() {
             Read-only scan for AWS resources that may be costing money after labs and tutorials.
           </p>
         </div>
-        <button className="scan-button" onClick={runScan} disabled={loading}>
-          {loading ? "Working…" : "Run scan"}
-        </button>
+        <div className="page__header-actions">
+          <ThemeToggle />
+          <button className="scan-button" onClick={runScan} disabled={loading}>
+            {loading ? "Scanning…" : "Run scan"}
+          </button>
+        </div>
       </header>
 
       <div className="notice">
         🔒 This tool only reads your account and makes recommendations. It never
         deletes, stops, or changes anything. Any cleanup is done manually by you.
       </div>
+
+      {loading && <ScanProgress />}
 
       {error && <div className="error">{error}</div>}
 
@@ -328,19 +335,11 @@ export default function Dashboard() {
   );
 }
 
-const TONE_COLORS = {
-  HIGH: "#c62828",
-  REVIEW: "#3949ab",
-  MEDIUM: "#b26a00",
-  LOW: "#1e7e34",
-};
-
 function SummaryCard({ label, value, tone }) {
+  const toneClass = tone ? ` summary-card--${tone.toLowerCase()}` : "";
   return (
-    <div className="summary-card">
-      <div className="summary-card__value" style={{ color: tone ? TONE_COLORS[tone] : "#222" }}>
-        {value}
-      </div>
+    <div className={`summary-card${toneClass}`}>
+      <div className="summary-card__value">{value}</div>
       <div className="summary-card__label">{label}</div>
     </div>
   );
