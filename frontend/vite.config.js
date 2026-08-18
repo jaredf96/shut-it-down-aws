@@ -22,4 +22,10 @@ export default defineConfig({
       allow: [".."],
     },
   },
+  test: {
+    environment: "jsdom",
+    globals: false,
+    setupFiles: ["./src/test/setup.js"],
+    include: ["src/**/*.test.{js,jsx}"],
+  },
 });

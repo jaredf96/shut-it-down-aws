@@ -22,6 +22,7 @@ import {
   startCheckout,
 } from "../api/client.js";
 
+/** @type {import("./contract").ScanProvider} */
 export const apiScanProvider = {
   mode: "api",
 

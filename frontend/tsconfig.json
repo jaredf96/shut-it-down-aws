@@ -1,0 +1,33 @@
+{
+  "//": [
+    "Type checking is deliberately scoped to the provider boundary (src/data).",
+    "That is where the demo and live implementations must agree, and where a",
+    "shape mismatch has already reached the browser once. The React components",
+    "stay plain JS; checking them would be a much larger cleanup for much less",
+    "protection.",
+    "Not `strict`: the goal is verifying each provider satisfies the",
+    "ScanProvider contract, not fully typing the pre-existing JS it calls.",
+    "Full strictness floods on implicit any in api/client.js.",
+    "Run with: npm run typecheck"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@demo-data/*": ["../demo-data/*"]
+    }
+  },
+  "include": ["src/data/**/*.js", "src/data/**/*.d.ts"],
+  "exclude": ["src/data/**/*.test.js"]
+}

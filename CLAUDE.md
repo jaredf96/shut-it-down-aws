@@ -142,6 +142,18 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - Repository connectivity/credential failures raise `PersistenceUnavailable`
   (→ structured 503). `ClientError` is *not* translated: it means DynamoDB
   answered, and callers like `ensure_table` depend on reading its code.
+- **The provider boundary is a contract.** Demo and live providers may obtain
+  data differently, but everything above them receives identical shapes.
+  Enforced three ways: `src/data/contract.d.ts` at compile time, the
+  provider-contract test at runtime, and `test_demo_fixtures.py` against the
+  real Pydantic models. When changing a service's return shape, update the
+  contract *and* regenerate fixtures (`make demo-fixtures`) — the demo computes
+  its own diff locally and will silently diverge otherwise. It already did once:
+  `changed` entries are `{resource, changes}` keyed by field, **not** a flat
+  resource with an array.
+- **Demo fixtures are generated, never hand-edited.** `make demo-fixtures` runs
+  the real scanners over a seeded moto sandbox. The seed matters: without it,
+  every regeneration churns all IDs and invalidates the committed screenshots.
 
 ## Conventions
 
@@ -149,8 +161,11 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   Always run `make format` then `make lint` before finishing.
 - Tests colocate per feature (`tests/test_<feature>.py`), use moto via autouse
   fixtures in `conftest.py`, and must pass fully offline.
-- Frontend: plain React + fetch client (`frontend/src/api/client.js`), one
-  panel component per feature, styles in `frontend/src/styles.css` (BEM-ish).
+- Frontend: plain React, one panel component per feature, styles in
+  `frontend/src/styles.css` (BEM-ish). **Components never import
+  `api/client.js`** — they go through the provider (`frontend/src/data/`).
+- Frontend tests: `npm test` (vitest + React Testing Library) and
+  `npm run typecheck` (tsc, scoped to `src/data`). Both run in CI.
 - Keep READMEs in sync: endpoint tables in `backend/README.md`, feature list and
   env-var table in root `README.md`, plus `docs/ARCHITECTURE.md` / `SECURITY.md`
   when structure or security behavior changes.

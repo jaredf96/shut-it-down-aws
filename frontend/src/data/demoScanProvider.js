@@ -5,10 +5,21 @@
 // Fixtures live in repo-root `demo-data/` so the backend test suite can
 // validate them against the real Pydantic models and they can never silently
 // drift from the API schema.
-import accountsFixture from "@demo-data/accounts.json";
-import alertsFixture from "@demo-data/alerts.json";
-import currentScan from "@demo-data/current-scan.json";
-import previousScan from "@demo-data/previous-scan.json";
+import accountsRaw from "@demo-data/accounts.json";
+import alertsRaw from "@demo-data/alerts.json";
+import currentRaw from "@demo-data/current-scan.json";
+import previousRaw from "@demo-data/previous-scan.json";
+
+// JSON imports widen string literals ("HIGH" -> string), so assert the fixture
+// types once, here, where untyped data enters typed code. The values are not
+// taken on trust: backend/tests/test_demo_fixtures.py validates these same
+// files against the real Pydantic models, which enforce the enums at runtime.
+const currentScan = /** @type {import("./contract").Scan} */ (currentRaw);
+const previousScan = /** @type {import("./contract").Scan} */ (previousRaw);
+const alertsFixture = /** @type {{ alerts: import("./contract").Alert[] }} */ (alertsRaw);
+const accountsFixture = /** @type {{ accounts: import("./contract").AwsAccount[] }} */ (
+  accountsRaw
+);
 
 // Long enough for the staged progress indicator to read as a real scan.
 const SIMULATED_SCAN_MS = 3500;
@@ -69,6 +80,7 @@ function notAvailable(what) {
     Promise.reject(new Error(`${what} is not available in the demo. View the source for the real implementation.`));
 }
 
+/** @type {import("./contract").ScanProvider} */
 export const demoScanProvider = {
   mode: "demo",
 

@@ -40,6 +40,7 @@ OUT_DIR = REPO_ROOT / "demo-data"
 sys.path.insert(0, str(BACKEND))
 
 from app.services import evaluate_alerts, scan_all  # noqa: E402
+from app.services.diff_service import diff_resource_lists  # noqa: E402
 
 SANDBOX = {"account_id": "111122223333", "label": "sandbox-lab", "region": "us-east-1"}
 TRAINING = {"account_id": "444455556666", "label": "training-account", "region": "us-west-2"}
@@ -269,6 +270,24 @@ def main() -> None:
     write(
         OUT_DIR / "alerts.json",
         {"alerts": [a.model_dump(mode="json") for a in evaluate_alerts(current, previous)]},
+    )
+
+    # The diff the REAL backend produces for these two scans. The frontend's
+    # demo provider computes its own diff locally, so this file is the contract
+    # it is tested against — a cross-language check that both sides of the
+    # provider boundary emit the same shape. See frontend provider-contract test.
+    meta = lambda scan_id, at, resources: {  # noqa: E731
+        "scan_id": scan_id,
+        "created_at": at,
+        "summary": summarize(resources),
+    }
+    write(
+        OUT_DIR / "expected-diff.json",
+        {
+            "from": meta(PREVIOUS_SCAN_ID, PREVIOUS_AT, previous),
+            "to": meta(CURRENT_SCAN_ID, CURRENT_AT, current),
+            **diff_resource_lists(previous, current),
+        },
     )
     write(
         OUT_DIR / "accounts.json",

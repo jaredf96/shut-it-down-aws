@@ -205,15 +205,28 @@ All tests run **fully offline** — `moto` mocks AWS, so no real credentials or
 network are used.
 
 ```bash
-make test                  # 144 backend tests (pytest + moto)
+make test                  # 159 backend tests (pytest + moto)
 make lint                  # ruff check + format check
-make build                 # production frontend build (compile check)
+make demo-fixtures         # regenerate demo-data/ from the real scanners
+
+cd frontend
+npm test                   # 19 frontend tests (vitest + Testing Library)
+npm run typecheck          # provider-boundary types (tsc)
 ```
 
-CI runs the same checks plus a frontend build and a Docker build on every push.
-Coverage spans scanners, pricing, alerts, notifications, persistence, diffing,
-tenancy/roles, multi-account, cleanup safety, billing, and the fail-closed
-behavior of the persistence layer.
+CI runs all of it on every push, plus both frontend build profiles and a Docker
+build. Backend coverage spans scanners, pricing, alerts, notifications,
+persistence, diffing, tenancy/roles, multi-account, cleanup safety, billing, and
+the fail-closed behavior of the persistence layer.
+
+**The provider boundary is tested as a contract.** Demo and live providers fetch
+data differently, but everything above them must receive identical shapes. That
+is enforced at three levels: `contract.d.ts` at compile time, a test that runs
+equivalent inputs through both providers and compares the results, and a check
+that `demo-data/` still validates against the real Pydantic models. The demo's
+locally-computed diff is verified against output from the actual backend diff
+service — a cross-language check that caught a shape mismatch which had already
+crashed the compare view.
 
 ---
 

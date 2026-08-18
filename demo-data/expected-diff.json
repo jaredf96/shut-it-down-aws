@@ -1,0 +1,123 @@
+{
+  "from": {
+    "scan_id": "2026-08-14T08:12:44.201Z_7c1e93af",
+    "created_at": "2026-08-14T08:12:44.201Z",
+    "summary": {
+      "total_resources": 14,
+      "by_risk_level": {
+        "HIGH": 1,
+        "REVIEW": 2,
+        "MEDIUM": 4,
+        "LOW": 7
+      },
+      "estimated_monthly_cost": 89.5
+    }
+  },
+  "to": {
+    "scan_id": "2026-08-17T14:05:11.884Z_3b9f2ad1",
+    "created_at": "2026-08-17T14:05:11.884Z",
+    "summary": {
+      "total_resources": 15,
+      "by_risk_level": {
+        "HIGH": 3,
+        "REVIEW": 2,
+        "MEDIUM": 4,
+        "LOW": 6
+      },
+      "estimated_monthly_cost": 121.0
+    }
+  },
+  "added": [
+    {
+      "resource_type": "Elastic IP",
+      "resource_id": "eipalloc-8a571f951985fe53a",
+      "name": "left-over-lab-ip",
+      "region": "us-east-1",
+      "status": "unassociated",
+      "risk_level": "HIGH",
+      "monthly_cost_risk": "AWS charges hourly for every public IPv4 address, and this one is not even attached to a running resource.",
+      "suggested_action": "Release this Elastic IP manually if you no longer need a static address. It is likely leftover from a deleted instance.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": 3.65,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "NAT Gateway",
+      "resource_id": "nat-bcebadb4a7c3c19da",
+      "name": "lab-vpc-nat",
+      "region": "us-east-1",
+      "status": "available",
+      "risk_level": "HIGH",
+      "monthly_cost_risk": "NAT Gateways bill an hourly charge plus data processing fees and are one of the most common surprise costs.",
+      "suggested_action": "Confirm you still need outbound internet for a private subnet. If this is leftover lab infrastructure, delete it manually.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": 32.85,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    }
+  ],
+  "removed": [
+    {
+      "resource_type": "EBS Volume",
+      "resource_id": "vol-0e11a2b3c4d5e6f70",
+      "name": "retired-lab-volume",
+      "region": "us-west-2",
+      "status": "available",
+      "risk_level": "MEDIUM",
+      "monthly_cost_risk": "Unattached volumes still cost money per GB-month even though nothing is using them.",
+      "suggested_action": "Review this orphaned volume. If it holds no data you need, snapshot it (optional) and delete it manually.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": {
+        "size_gb": 50,
+        "volume_type": "gp2"
+      },
+      "estimated_monthly_cost": 5.0,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    }
+  ],
+  "changed": [
+    {
+      "resource": {
+        "resource_type": "EC2 Instance",
+        "resource_id": "i-af04af89f100491dd",
+        "name": "tutorial-web-server",
+        "region": "us-east-1",
+        "status": "running",
+        "risk_level": "MEDIUM",
+        "monthly_cost_risk": "Can generate compute charges while running.",
+        "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
+        "account_id": "111122223333",
+        "account_label": "sandbox-lab",
+        "details": {
+          "instance_type": "t3.micro"
+        },
+        "estimated_monthly_cost": 7.59,
+        "cost_currency": "USD",
+        "cost_source": "static"
+      },
+      "changes": {
+        "status": {
+          "from": "stopped",
+          "to": "running"
+        },
+        "risk_level": {
+          "from": "LOW",
+          "to": "MEDIUM"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "added": 2,
+    "removed": 1,
+    "changed": 1,
+    "unchanged": 12
+  }
+}
