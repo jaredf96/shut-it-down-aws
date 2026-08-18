@@ -146,9 +146,14 @@ export default function Dashboard() {
       setViewingMeta(null);
       refreshHistory(); // a saved scan may have just been added
     } catch (e) {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      // The demo has no API, so pointing a visitor at one would be nonsense —
+      // and would leak a localhost URL into the public bundle.
       setError(
-        `${e.message}. Is the API reachable at ${apiBase}, and are its AWS credentials configured?`
+        isDemoMode
+          ? `${e.message}. The demo runs on bundled sample data; try reloading the page.`
+          : `${e.message}. Is the API reachable at ${
+              import.meta.env.VITE_API_BASE_URL || "the configured base URL"
+            }, and are its AWS credentials configured?`
       );
     } finally {
       setLoading(false);

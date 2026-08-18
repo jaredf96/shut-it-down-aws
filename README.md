@@ -17,13 +17,15 @@ about it.**
 
 ## 🔍 Try it
 
+### ▶ **[Live demo](https://dr89rz7ihjs8i.cloudfront.net)**
+
+Click **Run scan**. No AWS account, no credentials, nothing to configure.
+
+Or run the same build locally:
+
 ```bash
 npm --prefix frontend install && npm --prefix frontend run dev:demo
 ```
-
-That runs the dashboard against curated fixture data — no AWS account, no
-credentials, nothing to configure. A hosted version is coming (see
-[What's next](#-whats-next)).
 
 > **The public demo is deliberately isolated from the privileged control plane.**
 > It is a static build with fixture data: it makes no AWS calls and holds no
@@ -296,9 +298,6 @@ More on credentials, least-privilege IAM, and assume-role:
 ---
 
 ## 🔭 What's next
-
-**Public demo** — deploy the static fixture build; validate fixtures against the
-backend Pydantic models in CI so the demo can never drift from the real schema.
 
 **Repository correctness** — an explicit `DEPLOYMENT_MODE` (`local` | `hosted`).
 Local keeps today's zero-config behavior; hosted fails closed, rejecting missing,

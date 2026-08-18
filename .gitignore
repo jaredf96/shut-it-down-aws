@@ -25,6 +25,10 @@ frontend/dist/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+# Saved plans embed the full resource graph, including resolved values.
+*.tfplan
+# NOTE: .terraform.lock.hcl is deliberately NOT ignored — the provider lock
+# belongs in version control so applies are reproducible.
 
 # Editor / OS
 .DS_Store
