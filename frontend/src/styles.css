@@ -175,8 +175,9 @@ code,
 
 .page {
   /* Wide enough that a multi-account scan table (9 columns, two of them prose)
-     fits beside the history sidebar without horizontal scrolling. */
-  max-width: 1480px;
+     fits beside the history sidebar without horizontal scrolling. Narrower
+     viewports still work — .table-wrapper scrolls. */
+  max-width: 1660px;
   margin: 0 auto;
   padding: 28px 24px 72px;
 }

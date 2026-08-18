@@ -2,14 +2,19 @@
   "scan_id": "2026-08-17T14:05:11.884Z_3b9f2ad1",
   "created_at": "2026-08-17T14:05:11.884Z",
   "summary": {
-    "total_resources": 3,
-    "by_risk_level": { "HIGH": 1, "MEDIUM": 1, "LOW": 1 },
-    "estimated_monthly_cost": 7.38
+    "total_resources": 15,
+    "by_risk_level": {
+      "HIGH": 3,
+      "REVIEW": 2,
+      "MEDIUM": 4,
+      "LOW": 6
+    },
+    "estimated_monthly_cost": 121.0
   },
   "resources": [
     {
       "resource_type": "Elastic IP",
-      "resource_id": "eipalloc-0a1b2c3d4e5f60718",
+      "resource_id": "eipalloc-8a571f951985fe53a",
       "name": "left-over-lab-ip",
       "region": "us-east-1",
       "status": "unassociated",
@@ -24,8 +29,75 @@
       "cost_source": "static"
     },
     {
+      "resource_type": "NAT Gateway",
+      "resource_id": "nat-bcebadb4a7c3c19da",
+      "name": "lab-vpc-nat",
+      "region": "us-east-1",
+      "status": "available",
+      "risk_level": "HIGH",
+      "monthly_cost_risk": "NAT Gateways bill an hourly charge plus data processing fees and are one of the most common surprise costs.",
+      "suggested_action": "Confirm you still need outbound internet for a private subnet. If this is leftover lab infrastructure, delete it manually.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": 32.85,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "RDS Database",
+      "resource_id": "training-postgres",
+      "name": "training-postgres (postgres db.t3.micro)",
+      "region": "us-west-2",
+      "status": "available",
+      "risk_level": "HIGH",
+      "monthly_cost_risk": "RDS databases bill for compute and storage continuously. Even a stopped instance is auto-started after 7 days and keeps paying for storage.",
+      "suggested_action": "Confirm you still need this database. If it was for a lab, take a final snapshot (optional) and delete it manually.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": {
+        "instance_class": "db.t3.micro",
+        "engine": "postgres"
+      },
+      "estimated_monthly_cost": 12.41,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "S3 Bucket",
+      "resource_id": "cloud-lab-artifacts-2026",
+      "name": "cloud-lab-artifacts-2026",
+      "region": "us-east-1",
+      "status": "active",
+      "risk_level": "REVIEW",
+      "monthly_cost_risk": "S3 cost depends on how much data is stored and how often it is accessed. An empty bucket is nearly free; a bucket full of lab data or old backups can add up.",
+      "suggested_action": "Review the contents and size of this bucket. Empty and delete it manually if it only holds leftover tutorial data.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": null,
+      "cost_currency": "USD",
+      "cost_source": "unknown"
+    },
+    {
+      "resource_type": "S3 Bucket",
+      "resource_id": "classroom-submissions-archive",
+      "name": "classroom-submissions-archive",
+      "region": "us-west-2",
+      "status": "active",
+      "risk_level": "REVIEW",
+      "monthly_cost_risk": "S3 cost depends on how much data is stored and how often it is accessed. An empty bucket is nearly free; a bucket full of lab data or old backups can add up.",
+      "suggested_action": "Review the contents and size of this bucket. Empty and delete it manually if it only holds leftover tutorial data.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": null,
+      "estimated_monthly_cost": null,
+      "cost_currency": "USD",
+      "cost_source": "unknown"
+    },
+    {
       "resource_type": "EBS Volume",
-      "resource_id": "vol-0c9d8e7f6a5b40312",
+      "resource_id": "vol-65cda05fb57b338b4",
       "name": "tutorial-scratch-volume",
       "region": "us-east-1",
       "status": "available",
@@ -34,14 +106,160 @@
       "suggested_action": "Review this orphaned volume. If it holds no data you need, snapshot it (optional) and delete it manually.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
-      "details": { "size_gb": 1, "volume_type": "gp3" },
-      "estimated_monthly_cost": 0.08,
+      "details": {
+        "size_gb": 100,
+        "volume_type": "gp3"
+      },
+      "estimated_monthly_cost": 8.0,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EC2 Instance",
+      "resource_id": "i-af04af89f100491dd",
+      "name": "tutorial-web-server",
+      "region": "us-east-1",
+      "status": "running",
+      "risk_level": "MEDIUM",
+      "monthly_cost_risk": "Can generate compute charges while running.",
+      "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": {
+        "instance_type": "t3.micro"
+      },
+      "estimated_monthly_cost": 7.59,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EC2 Instance",
+      "resource_id": "i-92136a00abb75c933",
+      "name": "student-sandbox-07",
+      "region": "us-west-2",
+      "status": "running",
+      "risk_level": "MEDIUM",
+      "monthly_cost_risk": "Can generate compute charges while running.",
+      "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": {
+        "instance_type": "t3.medium"
+      },
+      "estimated_monthly_cost": 30.37,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "Load Balancer (APPLICATION)",
+      "resource_id": "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/lab-alb/50dc6c495c0c9188",
+      "name": "lab-alb",
+      "region": "us-east-1",
+      "status": "active",
+      "risk_level": "MEDIUM",
+      "monthly_cost_risk": "Load balancers bill an hourly charge plus capacity units even with no traffic.",
+      "suggested_action": "Review whether any app still sits behind this load balancer. Delete it manually if the backing service is gone.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": 16.43,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EBS Volume",
+      "resource_id": "vol-57f291181bd07b328",
+      "name": null,
+      "region": "us-east-1",
+      "status": "in-use",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Attached volumes cost money but are in active use by an instance.",
+      "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": {
+        "size_gb": 8,
+        "volume_type": "gp2"
+      },
+      "estimated_monthly_cost": 0.8,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EBS Volume",
+      "resource_id": "vol-e26c307484277c5ca",
+      "name": null,
+      "region": "us-east-1",
+      "status": "in-use",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Attached volumes cost money but are in active use by an instance.",
+      "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": {
+        "size_gb": 8,
+        "volume_type": "gp2"
+      },
+      "estimated_monthly_cost": 0.8,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EBS Volume",
+      "resource_id": "vol-68508d075b85918b5",
+      "name": null,
+      "region": "us-west-2",
+      "status": "in-use",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Attached volumes cost money but are in active use by an instance.",
+      "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": {
+        "size_gb": 8,
+        "volume_type": "gp2"
+      },
+      "estimated_monthly_cost": 0.8,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "EC2 Instance",
+      "resource_id": "i-1f3090239f0f2240d",
+      "name": "workshop-node-01",
+      "region": "us-east-1",
+      "status": "stopped",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Stopped instances do not incur compute charges, but attached EBS volumes may still cost money.",
+      "suggested_action": "Confirm you no longer need this instance. Consider terminating it and deleting unused volumes.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": {
+        "instance_type": "t3.small"
+      },
+      "estimated_monthly_cost": 0.0,
       "cost_currency": "USD",
       "cost_source": "static"
     },
     {
       "resource_type": "Elastic IP",
-      "resource_id": "eipalloc-0e5d4c3b2a1908f7d",
+      "resource_id": "eipalloc-e1a974d1c8e506bc9",
+      "name": "lab-vpc-nat-address",
+      "region": "us-east-1",
+      "status": "associated",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Since February 2024 AWS charges hourly for all public IPv4 addresses, including Elastic IPs attached to an instance.",
+      "suggested_action": "Keep while the attached resource is in use.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": null,
+      "estimated_monthly_cost": 3.65,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "Elastic IP",
+      "resource_id": "eipalloc-23c66c005acc890c4",
       "name": "bastion-address",
       "region": "us-west-2",
       "status": "associated",

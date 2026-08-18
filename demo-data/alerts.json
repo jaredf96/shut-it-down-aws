@@ -1,16 +1,52 @@
 {
   "alerts": [
     {
-      "id": "new_billable_resource:Elastic IP:us-east-1:eipalloc-0a1b2c3d4e5f60718",
+      "id": "new_billable_resource:NAT Gateway:us-east-1:nat-bcebadb4a7c3c19da:111122223333",
+      "severity": "CRITICAL",
+      "rule": "new_billable_resource",
+      "title": "New billable resource: NAT Gateway in us-east-1",
+      "message": "NAT Gateways bill an hourly charge plus data processing fees and are one of the most common surprise costs.",
+      "resource_type": "NAT Gateway",
+      "resource_id": "nat-bcebadb4a7c3c19da",
+      "region": "us-east-1",
+      "risk_level": "HIGH",
+      "estimated_monthly_cost": 32.85
+    },
+    {
+      "id": "risk_increased:EC2 Instance:us-east-1:i-af04af89f100491dd:111122223333",
+      "severity": "CRITICAL",
+      "rule": "risk_increased",
+      "title": "Risk increased: EC2 Instance in us-east-1",
+      "message": "Can generate compute charges while running.",
+      "resource_type": "EC2 Instance",
+      "resource_id": "i-af04af89f100491dd",
+      "region": "us-east-1",
+      "risk_level": "MEDIUM",
+      "estimated_monthly_cost": 7.59
+    },
+    {
+      "id": "new_billable_resource:Elastic IP:us-east-1:eipalloc-8a571f951985fe53a:111122223333",
       "severity": "CRITICAL",
       "rule": "new_billable_resource",
       "title": "New billable resource: Elastic IP in us-east-1",
       "message": "AWS charges hourly for every public IPv4 address, and this one is not even attached to a running resource.",
       "resource_type": "Elastic IP",
-      "resource_id": "eipalloc-0a1b2c3d4e5f60718",
+      "resource_id": "eipalloc-8a571f951985fe53a",
       "region": "us-east-1",
       "risk_level": "HIGH",
       "estimated_monthly_cost": 3.65
+    },
+    {
+      "id": "high_risk_resource:RDS Database:us-west-2:training-postgres:444455556666",
+      "severity": "WARNING",
+      "rule": "high_risk_resource",
+      "title": "Ongoing high-risk resource: RDS Database in us-west-2",
+      "message": "RDS databases bill for compute and storage continuously. Even a stopped instance is auto-started after 7 days and keeps paying for storage.",
+      "resource_type": "RDS Database",
+      "resource_id": "training-postgres",
+      "region": "us-west-2",
+      "risk_level": "HIGH",
+      "estimated_monthly_cost": 12.41
     }
   ]
 }

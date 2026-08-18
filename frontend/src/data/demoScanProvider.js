@@ -21,7 +21,10 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // the same id in two accounts is never conflated.
 const identity = (r) => `${r.resource_type}|${r.region}|${r.resource_id}|${r.account_id ?? ""}`;
 
-const COMPARED_FIELDS = ["status", "risk_level", "estimated_monthly_cost"];
+// Mirrors backend/app/services/diff_service.py: only status and risk_level are
+// tracked, and each changed entry is {resource, changes} with `changes` keyed by
+// field name. DiffView destructures exactly that shape.
+const COMPARED_FIELDS = ["status", "risk_level"];
 
 function diff(fromScan, toScan) {
   const before = new Map(fromScan.resources.map((r) => [identity(r), r]));
@@ -35,12 +38,13 @@ function diff(fromScan, toScan) {
   for (const [key, current] of after) {
     const prior = before.get(key);
     if (!prior) continue;
-    const changes = COMPARED_FIELDS.filter((f) => prior[f] !== current[f]).map((field) => ({
-      field,
-      from: prior[field],
-      to: current[field],
-    }));
-    if (changes.length) changed.push({ ...current, changes });
+    const changes = {};
+    for (const field of COMPARED_FIELDS) {
+      if (prior[field] !== current[field]) {
+        changes[field] = { from: prior[field], to: current[field] };
+      }
+    }
+    if (Object.keys(changes).length) changed.push({ resource: current, changes });
     else unchanged += 1;
   }
 

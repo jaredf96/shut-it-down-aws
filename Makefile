@@ -14,7 +14,7 @@ BIN    := $(VENV)/bin
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-dev run test lint format build create-table \
+.PHONY: help install install-dev run test demo-fixtures lint format build create-table \
         frontend-install frontend-run frontend-build \
         docker-build docker-up clean
 
@@ -41,6 +41,9 @@ run: ## Run the backend API locally (http://localhost:8000)
 
 test: ## Run backend tests (offline via moto)
 	cd backend && .venv/bin/pytest
+
+demo-fixtures: ## Regenerate demo-data/ from the real scanners (moto sandbox)
+	cd backend && .venv/bin/python scripts/generate_demo_fixtures.py
 
 lint: ## Lint and check formatting (no changes)
 	cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check .
