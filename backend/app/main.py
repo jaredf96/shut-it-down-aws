@@ -86,7 +86,7 @@ def health():
     """Liveness check that does not touch AWS."""
     return {
         "status": "ok",
-        "service": "cloud-lab-cleanup-dashboard",
+        "service": "shut-it-down-aws",
         "version": "0.1.0",
         "persistence_enabled": scan_repository.is_enabled(),
         "auth_required": config.auth_required(),

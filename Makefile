@@ -67,7 +67,7 @@ build: frontend-build ## Build the deployable frontend bundle (compile check)
 # --- Docker --------------------------------------------------------------
 
 docker-build: ## Build the backend Docker image
-	docker build -t cloud-lab-cleanup-dashboard-backend ./backend
+	docker build -t shut-it-down-aws-backend ./backend
 
 docker-up: ## Run the backend in Docker (mounts ~/.aws read-only)
 	docker compose up --build

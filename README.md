@@ -1,7 +1,7 @@
 # Cloud Lab Cleanup Dashboard
 
-<!-- After you push to GitHub, replace OWNER/REPO to activate this badge: -->
-<!-- ![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg) -->
+[![CI](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Find the AWS resources quietly draining your wallet after a tutorial — and clean them up safely.**
 
@@ -338,7 +338,7 @@ Stripe · Mangum (Lambda) · pytest + moto · ruff
 ## Project structure
 
 ```
-cloud-lab-cleanup-dashboard/
+shut-it-down-aws/
   backend/
     app/
       main.py              FastAPI app + routes

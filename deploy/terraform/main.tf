@@ -39,7 +39,7 @@ resource "aws_dynamodb_table" "app" {
   }
 
   tags = {
-    Project = "cloud-lab-cleanup-dashboard"
+    Project = "shut-it-down-aws"
   }
 }
 
