@@ -60,7 +60,8 @@ boto3 picks up credentials automatically from any of:
 
 | Method | Path                   | Description                                      |
 | ------ | ---------------------- | ----------------------------------------------- |
-| GET    | `/health`              | Liveness check (no AWS calls)                   |
+| GET    | `/health`              | Liveness — process only, touches no dependency  |
+| GET    | `/ready`               | Readiness — verifies DynamoDB; `503` if unreachable |
 | POST   | `/tenants`             | Register a tenant + first admin user (key once) |
 | GET    | `/me`                  | Current principal (tenant, user, role)          |
 | GET    | `/users`               | List team members                               |

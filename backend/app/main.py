@@ -10,18 +10,23 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import config
 from app.auth import get_current_principal, get_current_tenant, require_admin
+from app.errors import PersistenceUnavailable
 from app.logging_setup import configure_logging
 from app.models import AccountCreate, CleanupRequest, UserCreate
 from app.repositories import (
     account_repository,
     audit_repository,
+    dynamo,
     scan_repository,
     tenant_repository,
     user_repository,
@@ -61,6 +66,64 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(PersistenceUnavailable)
+async def _persistence_unavailable(request: Request, exc: PersistenceUnavailable):
+    """Infrastructure failure -> structured 503 rather than an opaque 500."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.warning(
+        "persistence unavailable path=%s correlation_id=%s: %s",
+        request.url.path,
+        correlation_id,
+        exc,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Persistence backend is unavailable.",
+            "error": "persistence_unavailable",
+            "correlation_id": correlation_id,
+        },
+    )
+
+
+class ErrorEnvelopeMiddleware(BaseHTTPMiddleware):
+    """Tag every request with a correlation ID; turn any escape into JSON.
+
+    This must sit *inside* CORSMiddleware. Starlette's outermost error handler
+    runs outside the CORS layer, so an unhandled exception returns a bare 500
+    with no `Access-Control-Allow-Origin` header — which a browser reports as a
+    CORS failure, hiding the actual error. Converting the exception here means
+    CORS still sees a normal response and attaches its headers.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        correlation_id = request.headers.get("X-Correlation-ID") or uuid4().hex[:12]
+        request.state.correlation_id = correlation_id
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                "unhandled error path=%s correlation_id=%s",
+                request.url.path,
+                correlation_id,
+            )
+            response = JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "Internal server error.",
+                    "error": "internal_error",
+                    "correlation_id": correlation_id,
+                },
+            )
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
+
+
+# Order matters: middleware added later wraps middleware added earlier, so CORS
+# must come last to remain the outermost layer and decorate error envelopes too.
+app.add_middleware(ErrorEnvelopeMiddleware)
+
 # Allow the local Vite dev server to call the API during development.
 app.add_middleware(
     CORSMiddleware,
@@ -83,7 +146,11 @@ class PlanUpdate(BaseModel):
 
 @app.get("/health")
 def health():
-    """Liveness check that does not touch AWS."""
+    """Liveness: is the process up? Touches no dependency (no AWS, no DynamoDB).
+
+    Safe for a load balancer to poll frequently. Use `/ready` to check whether
+    the persistence backend is actually reachable.
+    """
     return {
         "status": "ok",
         "service": "shut-it-down-aws",
@@ -91,6 +158,20 @@ def health():
         "persistence_enabled": scan_repository.is_enabled(),
         "auth_required": config.auth_required(),
     }
+
+
+@app.get("/ready")
+def ready():
+    """Readiness: can we actually reach the persistence backend?
+
+    Returns 503 (via the `PersistenceUnavailable` handler) when DynamoDB is
+    configured but unreachable. With persistence disabled the app is still able
+    to serve scans, so that is reported as ready.
+    """
+    if not scan_repository.is_enabled():
+        return {"ready": True, "persistence": "disabled"}
+    dynamo.ping()
+    return {"ready": True, "persistence": "ok"}
 
 
 @app.post("/tenants", status_code=201)

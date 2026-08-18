@@ -120,6 +120,21 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   account_id)` — account included so the same id in two accounts never conflates.
 - The `dynamo_table` fixture in conftest is opt-in (not autouse); tests without
   it run with persistence disabled — that's intentional coverage of both modes.
+- **Local DynamoDB gets dummy credentials.** botocore signs every request
+  through the ambient credential chain, so an expired SSO session used to break
+  *local* persistence too. `repositories/dynamo.py` supplies placeholder creds
+  when the endpoint host is in a narrow allowlist (`localhost`, `127.0.0.1`,
+  `::1`, `dynamodb-local`). Never widen that list — dummy creds must not reach a
+  real endpoint.
+- **Unhandled exceptions bypass CORS.** Starlette's outermost error handler runs
+  outside `CORSMiddleware`, so a raw 500 arrives with no
+  `Access-Control-Allow-Origin` and the browser reports a *CORS* error, hiding
+  the real failure. `ErrorEnvelopeMiddleware` converts escapes into JSON and is
+  registered **before** CORS so CORS stays outermost (later `add_middleware`
+  wraps earlier ones). Keep that ordering.
+- Repository connectivity/credential failures raise `PersistenceUnavailable`
+  (→ structured 503). `ClientError` is *not* translated: it means DynamoDB
+  answered, and callers like `ensure_table` depend on reading its code.
 
 ## Conventions
 
