@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and fill in. That file is gitignored, so the address
+# stays out of version control; Terraform state also holds it, which is why
+# state is never committed either.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# Where the 80%-of-budget alert is sent. Leave unset to create the budget
+# without a notification.
+budget_alert_email = "you@example.com"
+
+# Optional overrides:
+# region             = "us-east-1"
+# name_prefix        = "shut-it-down"
+# monthly_budget_usd = "5"
