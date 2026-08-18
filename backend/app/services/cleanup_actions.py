@@ -96,7 +96,7 @@ ACTIONS: dict[str, dict] = {
         "verb": "Stop",
         "destructive": False,
         "reversible": True,
-        "description": "Stop a running instance to halt compute charges. Reversible.",
+        "description": "Stop a running instance to halt compute charges.",
         "run": _stop_ec2_instance,
     },
     "release_elastic_ip": {
@@ -112,7 +112,7 @@ ACTIONS: dict[str, dict] = {
         "verb": "Delete",
         "destructive": True,
         "reversible": False,
-        "description": "Delete an unattached (available) volume. Irreversible data loss.",
+        "description": "Delete an unattached (available) volume. The data cannot be recovered.",
         "run": _delete_unattached_ebs_volume,
     },
 }

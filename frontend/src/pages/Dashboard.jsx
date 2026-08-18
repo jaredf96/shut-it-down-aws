@@ -207,8 +207,9 @@ export default function Dashboard() {
       </header>
 
       <div className="notice">
-        🔒 This tool only reads your account and makes recommendations. It never
-        deletes, stops, or changes anything. Any cleanup is done manually by you.
+        🔒 Scanning is strictly read-only — it only issues Describe/List/Get calls and
+        never modifies your account. Guided cleanup is a separate, opt-in feature that is
+        disabled by default and requires explicit per-resource confirmation.
       </div>
 
       {loading && <ScanProgress />}
@@ -216,29 +217,6 @@ export default function Dashboard() {
       {error && <div className="error">{error}</div>}
 
       {viewingLive && <AlertsPanel alerts={alerts} />}
-
-      <BillingPanel isAdmin={isAdmin} />
-
-      {users !== null && (
-        <UsersPanel
-          users={users}
-          isAdmin={isAdmin}
-          currentUserId={me?.user_id}
-          onAdd={addUser}
-          onDelete={removeUser}
-        />
-      )}
-
-      {accounts !== null && (
-        <AccountsPanel
-          accounts={accounts}
-          isAdmin={isAdmin}
-          onAdd={addAccount}
-          onDelete={removeAccount}
-        />
-      )}
-
-      <CleanupPanel isAdmin={isAdmin} />
 
       {!viewingLive && viewingMeta && (
         <div className="banner">
@@ -331,6 +309,31 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Configuration panels sit below the findings: a visitor should see what the
+          scan found before meeting any account, team, or cleanup controls. */}
+      <BillingPanel isAdmin={isAdmin} />
+
+      {users !== null && (
+        <UsersPanel
+          users={users}
+          isAdmin={isAdmin}
+          currentUserId={me?.user_id}
+          onAdd={addUser}
+          onDelete={removeUser}
+        />
+      )}
+
+      {accounts !== null && (
+        <AccountsPanel
+          accounts={accounts}
+          isAdmin={isAdmin}
+          onAdd={addAccount}
+          onDelete={removeAccount}
+        />
+      )}
+
+      <CleanupPanel isAdmin={isAdmin} />
     </div>
   );
 }
