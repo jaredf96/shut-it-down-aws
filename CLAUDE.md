@@ -1,4 +1,4 @@
-# CLAUDE.md — Cloud Lab Cleanup Dashboard
+# CLAUDE.md — Shut It Down
 
 Project context for Claude Code. Read this before making changes.
 
@@ -6,11 +6,18 @@ Project context for Claude Code. Read this before making changes.
 
 A read-only AWS scanner that finds resources left running after labs/tutorials
 (EC2, EBS, Elastic IPs, NAT Gateways, ELB, RDS, S3), explains in plain English
-why each costs money and roughly how much, and alerts on new risks. Built out to
-a multi-tenant SaaS MVP: teams/roles, multi-account assume-role scanning, scan
-history + diffing, Slack/email notifications, Stripe billing, and one carefully
-guarded opt-in cleanup feature. Status: **tested proof-of-concept scaffold, not
+why each costs money and roughly how much, and alerts on new risks. Includes
+teams/roles, multi-account assume-role scanning, scan history + diffing,
+Slack/email notifications, a Stripe test integration, and one carefully guarded
+opt-in cleanup feature. Status: **tested proof-of-concept scaffold, not
 production-hardened** (see `docs/SECURITY.md` → Production gaps).
+
+**Two deployment surfaces, one codebase.** The public demo is a static build fed
+by `demo-data/` fixtures — no credentials, no API client in the bundle. The
+authenticated app talks to the real API. The frontend picks between them at
+build time via the provider in `frontend/src/data/`; components never import
+`api/client.js` directly. Keep that boundary. The SaaS build-out (Cognito,
+queued workers, Stripe lifecycle) is deliberately **shelved**, not in progress.
 
 Paths below assume the repo root is the project root (`backend/`, `frontend/`).
 
@@ -20,7 +27,7 @@ Run from the repo root (Makefile drives everything):
 
 ```bash
 make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 126 backend tests — pytest + moto, fully offline, no AWS creds needed
+make test          # 144 backend tests — pytest + moto, fully offline, no AWS creds needed
 make lint          # ruff check + ruff format --check
 make format        # auto-fix lint + reformat (run before committing)
 make run           # backend on :8000 (uvicorn, reload)
@@ -179,5 +186,5 @@ mutating master switch) · `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` /
 
 `docs/ARCHITECTURE.md` (components, data model, request flow) ·
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·
-`docs/DEMO.md` (10-minute walkthrough) ·
+`docs/DEMO.md` (cross-account sandbox recording script) ·
 `backend/README.md` (API reference) · `deploy/README.md` (container/Lambda + Stripe).

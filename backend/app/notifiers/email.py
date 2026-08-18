@@ -36,7 +36,7 @@ class EmailNotifier(Notifier):
     def format(self, alerts: list[Alert]) -> tuple[str, str]:
         """Build (subject, plain-text body)."""
         critical = sum(1 for a in alerts if a.severity.value == "CRITICAL")
-        subject = f"Cloud Lab Cleanup: {len(alerts)} alert(s)"
+        subject = f"Shut It Down: {len(alerts)} alert(s)"
         if critical:
             subject += f" ({critical} critical)"
 

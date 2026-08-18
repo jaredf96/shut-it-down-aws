@@ -1,51 +1,103 @@
-# Cloud Lab Cleanup Dashboard
+# Shut It Down
 
 [![CI](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Find the AWS resources quietly draining your wallet after a tutorial — and clean them up safely.**
+**Find AWS lab resources that may still be costing you money.**
 
-Cloud Lab Cleanup Dashboard scans an AWS account (read-only), flags the things
-that commonly get left running after labs and courses — NAT Gateways, unattached
-EBS volumes, idle Elastic IPs, forgotten RDS instances — and explains, in plain
-English, **why each one costs money, roughly how much, and what to do about it.**
+A multi-account AWS cost-exposure scanner. It reads an account (never writes),
+flags the things commonly left running after a tutorial — NAT Gateways,
+unattached EBS volumes, idle Elastic IPs, forgotten RDS instances — and explains
+in plain English **why each one costs money, roughly how much, and what to do
+about it.**
 
-It started as a beginner-friendly portfolio scanner and grew into a small,
-real **multi-tenant SaaS**: teams, per-account scanning, cost estimates,
-Slack/email alerts, scan history & diffing, opt-in guided cleanup, and Stripe
-billing — all with a test suite and a deployment path.
+![Dashboard — risk-ranked findings, cost exposure, alerts, and scan history](docs/img/dashboard.png)
 
-> 🔒 **Safe by design.** Scanning is **100% read-only**. The one mutating
-> feature (guided cleanup) is **off by default** and guarded six ways over — see
-> [Safety](#-safety-around-cleanup-actions). Nothing in this app deletes or
-> changes AWS resources unless you explicitly opt in, confirm, and execute.
+---
 
-## 📦 Project status
+## 🔍 Try it
 
-> **SaaS MVP scaffold — not production-ready for real customer AWS
-> accounts yet.**
+```bash
+npm --prefix frontend install && npm --prefix frontend run dev:demo
+```
 
-This is a complete, tested vertical slice of a product: every feature works
-end-to-end and is covered by an offline test suite (126 tests). It is built to
-demonstrate cloud-engineering and product thinking, **not** to be pointed at
-paying customers' AWS accounts as-is. Before that, you'd close the items in
-[Production gaps](docs/SECURITY.md#production-gaps) and
-[What's next](#-whats-next) — real auth (Cognito/Auth0), a hardened Terraform
-deployment, rate limiting, secrets management, and webhook idempotency.
+That runs the dashboard against curated fixture data — no AWS account, no
+credentials, nothing to configure. A hosted version is coming (see
+[What's next](#-whats-next)).
+
+> **The public demo is deliberately isolated from the privileged control plane.**
+> It is a static build with fixture data: it makes no AWS calls and holds no
+> credentials, and the API client is *tree-shaken out of the bundle entirely* —
+> there are no endpoints in it to call. That separation is the point, not a
+> limitation: an app that can assume roles into cloud accounts should not be
+> wired to an anonymous public page.
+
+To run it against a **real** AWS account, see [Quickstart](#-quickstart).
+
+---
+
+## 📦 Status
+
+**A production-oriented proof of concept**, not a production service. Everything
+below is honest about which category it falls into.
+
+<details open>
+<summary><b>Implemented</b> — in the repo, covered by tests</summary>
+
+- Seven read-only scanners: EC2, EBS, Elastic IPs, NAT Gateways, Load Balancers
+  (ALB/NLB/Classic), RDS, S3
+- Concurrent multi-region sweeps (a 17-region scan runs in ~12s)
+- Cross-account access via **STS assume-role**, with per-account tagging
+- Cost estimates — static price map, optional live AWS Pricing API refinement
+- Risk levels + plain-English cost explanation and suggested action
+- Alert rule engine (new billable resource, risk increase, standing high risk)
+- Scan history and diffing, persisted to DynamoDB
+- Slack and email notifications
+- Guarded cleanup: opt-in, admin-only, typed confirmation, dry-run default,
+  live precondition re-check, full audit trail
+- Multi-tenancy with SHA-256-hashed API keys; teams and roles
+- Liveness/readiness split, structured `503`s, request correlation IDs
+- 144 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
+- Stripe test integration (deliberately not a headline feature)
+
+</details>
+
+<details>
+<summary><b>Demonstrated publicly</b> — what the fixture demo shows</summary>
+
+Scan workflow · risk-ranked resource table · cost summary · account filtering ·
+scan history · changes between scans · alert presentation.
+
+Team management, billing, and cleanup execution are **not** exposed in the demo.
+
+</details>
+
+<details>
+<summary><b>Planned hardening</b> — designed, not built</summary>
+
+OIDC authentication · fail-closed hosted account targeting · queue-based scan
+workers · full Terraform deployment · WAF and server-side quotas · customer
+CloudFormation onboarding · a separate narrowly-scoped cleanup role · production
+observability.
+
+</details>
+
+**What the findings actually are:** a cost-exposure inventory with heuristic risk
+levels, based on resource *state* rather than utilization. A running EC2 instance
+is flagged without knowing whether it is busy; S3 cost is unknown without object
+metrics. Adding utilization evidence and confidence scoring is on the roadmap —
+it is not claimed today.
 
 ---
 
 ## 📸 Screenshots
 
-> _Placeholder — add real screenshots/GIFs here once you run it against your account._
+| Dashboard | Scan comparison |
+| --- | --- |
+| ![Dashboard](docs/img/dashboard.png) | ![Diff between two scans](docs/img/history-diff.png) |
 
-| Dashboard (scan + cost + alerts) | Scan history & diff | Guided cleanup (dry-run) |
-| --- | --- | --- |
-| _`docs/img/dashboard.png`_ | _`docs/img/history-diff.png`_ | _`docs/img/cleanup.png`_ |
-
-Capture suggestions: the alerts panel after a scan, the "vs previous" history
-badges, the diff view, and the cleanup panel mid dry-run. A 20–30s GIF of a full
-scan → alert → compare → cleanup makes a great README hero.
+_Both captured from the fixture demo, so no real account or resource identifiers
+appear._
 
 ---
 
@@ -62,7 +114,6 @@ flowchart LR
         Scanners --> Pricing[Pricing<br/>static map + live API]
         Scanners --> Alerts[Alert rule engine]
         API --> Cleanup[Guided cleanup<br/>opt-in · audited]
-        API --> Billing[Billing: plans + Stripe]
     end
 
     Scanners -- assume-role --> AWS[(AWS accounts)]
@@ -71,55 +122,21 @@ flowchart LR
     Alerts --> Notify[Notifiers]
     Notify --> Slack[Slack]
     Notify --> Email[Email / SMTP]
-    Billing <--> Stripe[Stripe]
 ```
 
 **Request lifecycle:** `Frontend → API (auth → tenant) → scanners (assume-role) →
-pricing + alerts → persistence (DynamoDB) → notifications → billing`.
+pricing + alerts → persistence (DynamoDB) → notifications`.
+
+The frontend never imports the HTTP client directly. It talks to a **scan
+provider** (`frontend/src/data/`), which is either the API client or the fixture
+provider, chosen at build time — that is what makes a credential-free public
+demo possible without conditionals scattered through the UI.
+
 Full write-up in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
-## ✨ Features
-
-**Scanning & cost**
-- Read-only scanners for **EC2, EBS, Elastic IPs, NAT Gateways, Load Balancers
-  (ALB/NLB/Classic), RDS, S3**.
-- Risk level per resource: `LOW` / `MEDIUM` / `HIGH` / `REVIEW`, with a
-  plain-English cost explanation and suggested action.
-- **Cost estimates** — `estimated_monthly_cost` per resource + a fleet-wide
-  "~$X/mo" total. Static price map by default; opt-in **live AWS Pricing API**
-  refinement.
-
-**Monitoring**
-- **Risk alerts** — a rule engine flags new billable resources, risk increases,
-  and standing high-risk resources (severities CRITICAL/WARNING/INFO), ranked by
-  spend.
-- **Notifications** — deliver alerts to **Slack** and **email**, automatically
-  on scan or on demand.
-- **Scan history & diffing** — every scan saved (DynamoDB); browse history with
-  "vs previous" badges (`+2 −1 ~3`) and compare any two scans in detail.
-
-**Multi-tenant SaaS**
-- **Tenancy + API-key auth** — every scan/alert scoped to a `tenant_id`
-  (optional; off for local dev).
-- **Teams & roles** — admin/member users per tenant, shared scan history.
-- **Multi-account** — register AWS accounts, scan each via **STS assume-role**,
-  tag every resource by account, filter per account.
-- **Billing** — Free/Pro plans with per-tenant limits; **Stripe** Checkout +
-  signature-verified webhooks (optional).
-
-**Safe cleanup**
-- **Guided cleanup** — opt-in, admin-only, typed confirmation, dry-run default,
-  live precondition checks, full audit log. Tiny safe action set only.
-
-**Engineering**
-- 126 tests (pytest + `moto`, fully offline), `ruff` lint/format, Docker +
-  Compose, Makefile, CI, Lambda adapter + Terraform skeleton.
-
----
-
-## 🚀 Quickstart (local, no AWS account changes)
+## 🚀 Quickstart
 
 Requires **Python 3.10+** (3.12 recommended) and **Node 18+**.
 
@@ -128,7 +145,7 @@ Requires **Python 3.10+** (3.12 recommended) and **Node 18+**.
 cd backend
 python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-aws configure                      # or export AWS_* env vars (read-only creds)
+aws configure                      # read-only credentials are enough
 uvicorn app.main:app --reload --port 8000
 
 # 2. Frontend (second terminal)
@@ -137,17 +154,17 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** and click **Run scan**. API docs live at
+Open **http://localhost:5173** and click **Run scan**. API docs at
 **http://localhost:8000/docs**.
 
 With no extra config the app runs in **single-tenant local mode**: no auth, no
-persistence, scanning your default AWS credentials. Everything else (history,
-teams, billing, cleanup) is opt-in via env vars below.
+persistence, scanning your default AWS credentials. Everything else — history,
+teams, notifications, cleanup — is opt-in via the environment variables below.
 
-### Using the Makefile
+### Makefile shortcuts
 
 ```bash
-make            # list all targets
+make               # list all targets
 make install-dev   # venv + dev deps
 make run           # backend on :8000
 make frontend-run  # frontend on :5173
@@ -155,59 +172,48 @@ make test          # backend tests
 make lint          # ruff check + format check
 ```
 
+### Least-privilege IAM
+
+The scanner needs nine read-only actions — `ec2:DescribeRegions`,
+`ec2:DescribeInstances`, `ec2:DescribeVolumes`, `ec2:DescribeAddresses`,
+`ec2:DescribeNatGateways`, `elasticloadbalancing:DescribeLoadBalancers`,
+`rds:DescribeDBInstances`, `s3:ListAllMyBuckets`, `s3:GetBucketLocation`. The
+exact policy document is in
+[backend/README.md](backend/README.md#required-iam-permissions-read-only).
+
 ---
 
-## 🐳 Docker quickstart
+## 🐳 Docker
 
-Runs the backend **and** a local DynamoDB (so scan history works) with zero
-writes to real AWS for persistence. Your `~/.aws` is mounted read-only for
-scanning.
+Runs the backend plus a local DynamoDB, so scan history works without writing
+anything to real AWS. Your `~/.aws` is mounted read-only for scanning.
 
 ```bash
 docker compose up --build
 # backend → http://localhost:8000   (table auto-created)
 ```
 
-See [docker-compose.yml](docker-compose.yml). For hosting (container or Lambda),
-see **[deploy/README.md](deploy/README.md)**.
+The local DynamoDB is durable across restarts (named volume) and is built with
+placeholder credentials, so persistence keeps working even when your AWS session
+has expired.
 
 ---
 
-## 🧑‍💻 Local dev setup
+## ✅ Testing
+
+All tests run **fully offline** — `moto` mocks AWS, so no real credentials or
+network are used.
 
 ```bash
-cd backend
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt   # runtime + pytest, moto, ruff
-```
-
-- `.python-version` pins 3.12.3 (pyenv). The pydantic models use `X | None`
-  syntax that requires **Python 3.10+** at runtime.
-- The backend is a standard FastAPI app (`app.main:app`); the frontend is
-  Vite/React in `frontend/`.
-- Add a scanner: drop `app/scanners/<svc>_scanner.py` with a
-  `scan(regions, session)` function and register it in `scanners/__init__.py`.
-
-Deep-dive backend docs: **[backend/README.md](backend/README.md)**.
-
----
-
-## ✅ Testing & quality commands
-
-All tests run **fully offline** — `moto` mocks AWS and DynamoDB, so no real
-credentials or network are used. Run from the repo root:
-
-```bash
-make test                  # backend tests (pytest + moto), 126 tests
+make test                  # 144 backend tests (pytest + moto)
 make lint                  # ruff check + format check
-make build                 # production-build the frontend (compile check)
-docker compose up --build  # backend + local DynamoDB end-to-end
+make build                 # production frontend build (compile check)
 ```
 
-CI runs the same checks plus a frontend build and a Docker build on every push
-(`.github/workflows/ci.yml`). Tests cover scanners, pricing, alerts,
-notifications, persistence, diffing, tenancy/roles, multi-account, cleanup
-safety, and billing.
+CI runs the same checks plus a frontend build and a Docker build on every push.
+Coverage spans scanners, pricing, alerts, notifications, persistence, diffing,
+tenancy/roles, multi-account, cleanup safety, billing, and the fail-closed
+behavior of the persistence layer.
 
 ---
 
@@ -220,11 +226,11 @@ Everything is **off by default** — set only what you need. Full annotated list
 | --- | --- |
 | `AWS_REGION` / `AWS_*` | AWS region + credentials (standard boto3 chain) |
 | **Persistence** | |
-| `DYNAMODB_TABLE_NAME` | Enables scan history / teams / billing (set to enable) |
+| `DYNAMODB_TABLE_NAME` | Enables scan history / teams (set to enable) |
 | `DYNAMODB_ENDPOINT_URL` | Point at local DynamoDB (e.g. `http://localhost:8001`) |
 | `DYNAMODB_AUTO_CREATE` | Auto-create the table on startup (dev) |
 | **Auth / tenancy** | |
-| `AUTH_REQUIRED` | Require an API key on every request (SaaS mode) |
+| `AUTH_REQUIRED` | Require an API key on every request |
 | `DEFAULT_TENANT_ID` | Tenant used in local mode (default `default`) |
 | `ADMIN_TOKEN` | Gate `POST /tenants` behind this token |
 | **Notifications** | |
@@ -236,130 +242,107 @@ Everything is **off by default** — set only what you need. Full annotated list
 | `ENABLE_LIVE_PRICING` | Use the live AWS Pricing API (needs `pricing:GetProducts`) |
 | **Cleanup (mutating!)** | |
 | `ENABLE_CLEANUP_ACTIONS` | **Master safety switch — off by default** |
-| **Billing** | |
-| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` | Stripe billing |
-| `BILLING_SUCCESS_URL` / `BILLING_CANCEL_URL` | Checkout redirect URLs |
+| **Billing (optional)** | |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` | Stripe test integration |
+
+Frontend builds use `VITE_API_BASE_URL` (API mode) or `VITE_DEMO_MODE=true`
+(fixture demo, see [.env.demo](frontend/.env.demo)). Note that Vite inlines every
+`VITE_*` variable into public JavaScript — never put a secret in one.
 
 ---
 
-## 🛡️ Safety around cleanup actions
+## 🛡️ Safety around cleanup
 
-The scanner never mutates AWS. The **only** feature that can is guided cleanup,
-and it must clear **six independent gates**:
+Scanning never mutates AWS. The **only** feature that can is guided cleanup, and
+it must clear **six independent gates**:
 
 1. **Off by default** — `POST /cleanup/execute` returns
    `403 "Cleanup actions are disabled in this environment."` unless
    `ENABLE_CLEANUP_ACTIONS=true`.
 2. **Admin only** — members get `403`.
-3. **Typed confirmation** — you must submit the exact resource ID
+3. **Typed confirmation** — the exact resource ID must be resubmitted
    (`confirm_resource_id == resource_id`).
-4. **Dry-run by default** — you must explicitly send `dry_run: false` to mutate.
-5. **Live precondition re-check** — state is verified against AWS at execution
-   time (an EIP must still be unassociated; an EBS volume still unattached).
-6. **Audited** — every attempt (refused, failed, dry-run, executed) is logged.
+4. **Dry-run by default** — mutating requires an explicit `dry_run: false`.
+5. **Live precondition re-check** — state is re-verified against AWS at execution
+   time; the client is never trusted.
+6. **Audited** — every attempt is logged, including refusals and failures.
 
-The automated action set is intentionally tiny and reversible-leaning: **Stop**
-EC2 (not terminate), **release** unassociated Elastic IPs, **delete** unattached
-EBS volumes. Terminating EC2 and deleting S3/RDS/NAT are **not** automated.
-Details: [docs/SECURITY.md](docs/SECURITY.md) ·
-[backend/README.md](backend/README.md#guided-cleanup-the-only-mutating-feature).
+The automated action set is intentionally tiny and reversible-leaning: **stop**
+EC2 (never terminate), **release** unassociated Elastic IPs, **delete**
+unattached EBS volumes. Terminating instances and deleting S3/RDS/NAT are
+deliberately excluded and listed as unsupported.
 
-More on credentials, least-privilege IAM, assume-role, and webhook verification:
+A seventh gate sits outside the application: the scanner role is granted only
+read-only IAM permissions, so even with every in-app gate passed, AWS itself
+refuses the mutation. That is the intended production posture — cleanup requires
+a separate, narrowly-scoped role.
+
+More on credentials, least-privilege IAM, and assume-role:
 **[docs/SECURITY.md](docs/SECURITY.md)**.
-
----
-
-## 💼 SaaS / product positioning
-
-**Who it's for:** students and bootcamps burning credits on forgotten lab
-resources; instructors running AWS classrooms; small teams who want a dead-simple
-"what's costing us money and can we kill it" view without a heavyweight FinOps
-platform.
-
-**Why it's different:** opinionated and *safe* — it explains risk in plain
-English, estimates spend, and treats deletion as a careful, audited checklist
-rather than one-click automation. It's multi-tenant and classroom-ready out of
-the box (per-student AWS accounts, shared dashboards, roles).
-
-**Monetization:** Free/Pro plans gated by per-tenant limits (AWS accounts + team
-members), billed through Stripe. The plan model and webhook handling are built
-and tested; wiring a real Stripe product is a config step.
-
-**Deliberately *not*:** a full FinOps/CSPM suite. Cost estimates are credible
-ballparks, scanners cover the common lab offenders, and cleanup is intentionally
-conservative. See [Production gaps](docs/SECURITY.md#production-gaps) for what
-you'd harden before charging real money.
-
-A guided **[demo script](docs/DEMO.md)** walks the whole story in ~10 minutes.
 
 ---
 
 ## 🔭 What's next
 
-The roadmap that took this from a scanner to a SaaS MVP is complete; the next
-tranche is about making it production-grade and broadening coverage:
+**Public demo** — deploy the static fixture build; validate fixtures against the
+backend Pydantic models in CI so the demo can never drift from the real schema.
 
-- **Production Terraform deployment** — flesh out `deploy/terraform/` with the
-  Lambda function (container image), API Gateway / Function URL, IAM role, and
-  remote state.
-- **Cognito / Auth0 authentication** — replace long-lived API keys with managed
-  auth, real sign-up, and session/JWT handling.
-- **Per-tenant notification channels** — store each tenant's Slack webhook /
-  email targets instead of a single global config.
-- **Alert deduplication and snooze** — only notify on *new* or *escalated*
-  alerts, with acknowledge/snooze, before enabling `NOTIFY_ON_SCAN` in prod.
-- **More scanners** — Lambda functions, ECS/EKS, unused snapshots, idle log
-  groups, Elastic Beanstalk environments.
-- **Cleanup approval workflows** — a second approver and soft-delete/snapshot-
-  first for destructive actions.
-- **Public landing page** — marketing site, pricing page, and self-serve sign-up
-  funneling into Stripe Checkout.
+**Repository correctness** — an explicit `DEPLOYMENT_MODE` (`local` | `hosted`).
+Local keeps today's zero-config behavior; hosted fails closed, rejecting missing,
+unknown, or unverified account targets and never falling back to platform
+credentials.
 
-See also [Production gaps](docs/SECURITY.md#production-gaps) for the security
-hardening checklist.
+**Then** — queue-based async scans with real progress, OIDC authentication,
+customer onboarding via CloudFormation/Terraform with a generated external ID,
+full infrastructure-as-code, and scanner intelligence (utilization evidence,
+confidence scores, measured false-positive rates).
 
 ---
 
 ## 📚 Docs
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — components, data model, request flow
-- **[docs/SECURITY.md](docs/SECURITY.md)** — credentials, IAM, cleanup safety, webhooks, production gaps
-- **[docs/DEMO.md](docs/DEMO.md)** — step-by-step demo script
-- **[backend/README.md](backend/README.md)** — API reference, every feature in depth
-- **[deploy/README.md](deploy/README.md)** — hosting (container / Lambda) + Stripe setup
+| Doc | What's in it |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, request flow |
+| [docs/SECURITY.md](docs/SECURITY.md) | Credentials, IAM, cleanup gates, production gaps |
+| [docs/DEMO.md](docs/DEMO.md) | Cross-account sandbox walkthrough script |
+| [backend/README.md](backend/README.md) | API reference, endpoints, IAM policy |
+| [deploy/README.md](deploy/README.md) | Container / Lambda deployment notes |
 
-## Tech stack
+---
 
-**Backend:** Python 3.12 · FastAPI · boto3 · pydantic · DynamoDB (single-table) ·
-Stripe · Mangum (Lambda) · pytest + moto · ruff
-**Frontend:** React 18 · Vite
-**Ops:** Docker + Compose · Makefile · GitHub Actions · Terraform (skeleton)
+## 🧰 Tech stack
 
-## Project structure
+**Backend** FastAPI · boto3 · pydantic · DynamoDB · pytest + moto · ruff
+**Frontend** React · Vite · plain CSS design tokens (light/dark)
+**Infra** Docker · GitHub Actions · Terraform (skeleton) · Mangum (Lambda)
+
+---
+
+## 📁 Project structure
 
 ```
 shut-it-down-aws/
-  backend/
-    app/
-      main.py              FastAPI app + routes
-      config.py            env-driven settings (all feature toggles)
-      auth.py              API key → principal (tenant + user + role)
-      aws/session.py       default + assume-role boto3 sessions
-      scanners/            one read-only scanner per AWS service
-      models/              Resource, Alert, Account, Cleanup
-      services/            scan, diff, history, alerts, notification,
-                           multi_account, cleanup, billing
-      pricing/             static + live AWS Pricing estimates
-      notifiers/           Slack + email delivery
-      repositories/        scan, tenant, user, account, audit, billing
-      lambda_handler.py    AWS Lambda entrypoint (Mangum)
-    scripts/create_table.py  idempotent DynamoDB table creation
-  deploy/                  Terraform skeleton + deployment guide
-  docs/                    architecture, security, demo
-  frontend/src/
-    api/client.js          backend API client
-    components/            Resource/Alerts/History/Diff/Accounts/Users/
-                           Cleanup/Billing panels
-    pages/Dashboard.jsx    main screen
-  Makefile · docker-compose.yml · README.md
+├── backend/
+│   ├── app/
+│   │   ├── scanners/       one read-only scanner per AWS service
+│   │   ├── services/       scan, diff, alerts, notify, cleanup, billing
+│   │   ├── repositories/   DynamoDB access (single table)
+│   │   ├── pricing/        static price map + live Pricing API
+│   │   └── notifiers/      Slack + email
+│   └── tests/              144 offline tests (moto)
+├── frontend/
+│   └── src/
+│       ├── data/           scan provider: api | demo fixtures
+│       ├── components/     one panel per feature
+│       └── pages/
+├── demo-data/              curated fixtures for the public demo
+├── deploy/                 Terraform skeleton + deployment notes
+└── docs/
 ```
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).

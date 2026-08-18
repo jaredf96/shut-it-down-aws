@@ -1,4 +1,4 @@
-# Convenience shortcuts for the Cloud Lab Cleanup Dashboard.
+# Convenience shortcuts for Shut It Down.
 #
 # Backend commands create/use a virtualenv at backend/.venv. The Python version
 # is pinned by backend/.python-version (3.12.3); with pyenv installed, the bare
@@ -19,7 +19,7 @@ BIN    := $(VENV)/bin
         docker-build docker-up clean
 
 help: ## Show this help
-	@echo "Cloud Lab Cleanup Dashboard — make targets:"
+	@echo "Shut It Down — make targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'

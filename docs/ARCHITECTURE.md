@@ -1,7 +1,40 @@
 # Architecture
 
-How the Cloud Lab Cleanup Dashboard is put together: the components, how a
+How Shut It Down is put together: the components, how a
 request flows through them, and how data is stored.
+
+## Two deployment surfaces, one codebase
+
+The application can assume IAM roles into AWS accounts. That capability must not
+sit behind an anonymous public page, so the project ships as **two separate
+deployments** built from the same source:
+
+| Surface | Data source | Credentials | Reachability |
+| --- | --- | --- | --- |
+| **Public demo** | `demo-data/` fixtures | none | static files; no route to the API |
+| **Authenticated app** | live API + AWS | scanner role via STS | private |
+
+The frontend never imports the HTTP client directly. Components depend on a
+**scan provider** (`frontend/src/data/`), and the build selects one:
+
+```
+scanProvider.js  ──selects at build time (VITE_DEMO_MODE)──┐
+                                                            ├─► apiScanProvider  → api/client.js → API
+                                                            └─► demoScanProvider → demo-data/*.json
+```
+
+Two consequences worth noting:
+
+- Because the mode is a build-time constant, the bundler **tree-shakes the API
+  client out of the demo bundle entirely** — the published demo contains no
+  endpoints and no credential handling, not merely a disabled path.
+- Providers publish a `capabilities` map (`liveScan`, `history`,
+  `accountsAdmin`, `team`, `billing`, `cleanupExecute`), so panels ask *"may I
+  offer this?"* rather than testing for demo mode. Adding a surface means adding
+  a provider, not threading conditionals through the component tree.
+
+Isolation is therefore a property of the deployment and of the artifact, not of
+a runtime flag.
 
 ## High-level
 

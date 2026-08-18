@@ -1,6 +1,6 @@
 # Security
 
-How the Cloud Lab Cleanup Dashboard handles credentials, permissions, mutating
+How Shut It Down handles credentials, permissions, mutating
 actions, and money — and an honest list of what you'd harden before running it
 as a real paid service.
 

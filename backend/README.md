@@ -1,4 +1,4 @@
-# Backend — Cloud Lab Cleanup Dashboard
+# Backend — Shut It Down
 
 FastAPI + boto3 service that **read-only** scans an AWS account for resources
 commonly left running after labs and tutorials.

@@ -1,5 +1,5 @@
 /* =========================================================================
-   Cloud Lab Cleanup Dashboard — design system
+   Shut It Down — design system
    "Bold observability" aesthetic (Datadog/Grafana-adjacent), themeable.
    All color/spacing/type flows through tokens. Light is the default; dark is
    applied via prefers-color-scheme AND an explicit :root[data-theme] override
@@ -174,7 +174,9 @@ code,
 /* --- Page shell ---------------------------------------------------------- */
 
 .page {
-  max-width: 1240px;
+  /* Wide enough that a multi-account scan table (9 columns, two of them prose)
+     fits beside the history sidebar without horizontal scrolling. */
+  max-width: 1480px;
   margin: 0 auto;
   padding: 28px 24px 72px;
 }
@@ -284,6 +286,13 @@ h1::before {
   border-radius: var(--radius);
   font-size: 0.88rem;
   color: var(--text);
+}
+
+/* Demo builds get a distinct amber treatment so sample data is never mistaken
+   for a reading of the visitor's own AWS account. */
+.notice--demo {
+  background: color-mix(in oklab, var(--warning) 12%, var(--surface));
+  border-color: color-mix(in oklab, var(--warning) 38%, transparent);
 }
 
 .error {
@@ -658,6 +667,10 @@ h1::before {
 
 .resource-table {
   width: 100%;
+  /* Nine columns (the ACCOUNT column appears in multi-account scans) crush the
+     two prose columns to unreadable slivers if the table is allowed to shrink
+     to its container. Hold a floor and let .table-wrapper scroll instead. */
+  min-width: 1080px;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -704,6 +717,7 @@ h1::before {
 }
 
 .cell-text {
+  min-width: 190px;
   max-width: 280px;
   color: var(--text-muted);
 }

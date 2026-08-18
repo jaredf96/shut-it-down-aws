@@ -10,7 +10,7 @@ import ScanHistory from "../components/ScanHistory.jsx";
 import ScanProgress from "../components/ScanProgress.jsx";
 import ThemeToggle from "../components/ThemeToggle.jsx";
 import UsersPanel from "../components/UsersPanel.jsx";
-import { capabilities, scanProvider } from "../data/scanProvider.js";
+import { capabilities, isDemoMode, scanProvider } from "../data/scanProvider.js";
 
 const RISK_ORDER = { HIGH: 0, REVIEW: 1, MEDIUM: 2, LOW: 3 };
 
@@ -189,9 +189,9 @@ export default function Dashboard() {
     <div className="page">
       <header className="page__header">
         <div>
-          <h1>Cloud Lab Cleanup Dashboard</h1>
+          <h1>Shut It Down</h1>
           <p className="subtitle">
-            Read-only scan for AWS resources that may be costing money after labs and tutorials.
+            Find AWS lab resources that may still be costing you money.
           </p>
         </div>
         <div className="page__header-actions">
@@ -202,11 +202,20 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="notice">
-        🔒 Scanning is strictly read-only — it only issues Describe/List/Get calls and
-        never modifies your account. Guided cleanup is a separate, opt-in feature that is
-        disabled by default and requires explicit per-resource confirmation.
-      </div>
+      {isDemoMode ? (
+        <div className="notice notice--demo">
+          🧪 <strong>Demo mode</strong> — every figure below is representative sample data.
+          This build makes no AWS calls and holds no credentials. The scanners, cross-account
+          STS access, and cleanup safeguards are real; see the source and the sandbox
+          walkthrough.
+        </div>
+      ) : (
+        <div className="notice">
+          🔒 Scanning is strictly read-only — it only issues Describe/List/Get calls and
+          never modifies your account. Guided cleanup is a separate, opt-in feature that is
+          disabled by default and requires explicit per-resource confirmation.
+        </div>
+      )}
 
       {loading && <ScanProgress />}
 

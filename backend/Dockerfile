@@ -1,4 +1,4 @@
-# Backend container for the Cloud Lab Cleanup Dashboard.
+# Backend container for Shut It Down.
 # Read-only AWS scanner served by FastAPI/uvicorn.
 
 FROM python:3.12-slim

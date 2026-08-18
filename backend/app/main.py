@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the Cloud Lab Cleanup Dashboard.
+"""FastAPI entrypoint for Shut It Down.
 
 Scanning is read-only. Mutating cleanup actions exist only under `/cleanup/*`
 and are OFF by default — they require `ENABLE_CLEANUP_ACTIONS=true`, an admin
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cloud Lab Cleanup Dashboard",
+    title="Shut It Down",
     description="Read-only scanner that finds AWS resources left over from labs and tutorials.",
     version="0.1.0",
     lifespan=lifespan,

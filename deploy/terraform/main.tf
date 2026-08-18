@@ -1,4 +1,4 @@
-# Minimal infrastructure skeleton for the Cloud Lab Cleanup Dashboard.
+# Minimal infrastructure skeleton for Shut It Down.
 #
 # This provisions the single DynamoDB table the app uses. It is a STARTING
 # POINT — extend it with the Lambda function (container image), API Gateway /
