@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { executeCleanup, getCleanupActions, getCleanupAudit } from "../api/client.js";
+import { scanProvider } from "../data/scanProvider.js";
 
 // Guided, auditable cleanup. Admin-only. Designed as a careful checklist:
 // pick an action, type the exact resource id to confirm, dry-run first.
@@ -17,14 +17,14 @@ export default function CleanupPanel({ isAdmin }) {
 
   async function load() {
     try {
-      const data = await getCleanupActions();
+      const data = await scanProvider.getCleanupActions();
       setCatalog(data);
       if (!action && data.actions.length) setAction(data.actions[0].key);
     } catch {
       setCatalog(null);
     }
     try {
-      setAudit((await getCleanupAudit()).entries);
+      setAudit((await scanProvider.getCleanupAudit()).entries);
     } catch {
       setAudit([]);
     }
@@ -45,7 +45,7 @@ export default function CleanupPanel({ isAdmin }) {
     setError(null);
     setResult(null);
     try {
-      const res = await executeCleanup({
+      const res = await scanProvider.executeCleanup({
         action,
         resource_id: resourceId.trim(),
         confirm_resource_id: confirmId.trim(),

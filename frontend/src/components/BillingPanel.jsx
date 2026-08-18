@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getBilling, setPlan, startCheckout } from "../api/client.js";
+import { scanProvider } from "../data/scanProvider.js";
 
 // Plan, usage, and upgrade. Admin-only. When Stripe is configured, upgrading
 // opens Checkout; otherwise (dev) an admin can switch plans directly.
@@ -10,7 +10,7 @@ export default function BillingPanel({ isAdmin }) {
 
   async function load() {
     try {
-      setBilling(await getBilling());
+      setBilling(await scanProvider.getBilling());
     } catch {
       setBilling(null);
     }
@@ -29,7 +29,7 @@ export default function BillingPanel({ isAdmin }) {
     setBusy(true);
     setError(null);
     try {
-      const { url } = await startCheckout();
+      const { url } = await scanProvider.startCheckout();
       window.location.href = url;
     } catch (e) {
       setError(e.message);
@@ -42,7 +42,7 @@ export default function BillingPanel({ isAdmin }) {
     setBusy(true);
     setError(null);
     try {
-      await setPlan(next);
+      await scanProvider.setPlan(next);
       load();
     } catch (e) {
       setError(e.message);

@@ -1,17 +1,4 @@
 import { useEffect, useState } from "react";
-import {
-  createAccount,
-  createUser,
-  deleteAccount,
-  deleteUser,
-  getDiff,
-  getMe,
-  getScan,
-  listAccounts,
-  listScans,
-  listUsers,
-  scanAll,
-} from "../api/client.js";
 import AccountsPanel from "../components/AccountsPanel.jsx";
 import AlertsPanel from "../components/AlertsPanel.jsx";
 import BillingPanel from "../components/BillingPanel.jsx";
@@ -23,6 +10,7 @@ import ScanHistory from "../components/ScanHistory.jsx";
 import ScanProgress from "../components/ScanProgress.jsx";
 import ThemeToggle from "../components/ThemeToggle.jsx";
 import UsersPanel from "../components/UsersPanel.jsx";
+import { capabilities, scanProvider } from "../data/scanProvider.js";
 
 const RISK_ORDER = { HIGH: 0, REVIEW: 1, MEDIUM: 2, LOW: 3 };
 
@@ -61,7 +49,7 @@ export default function Dashboard() {
 
   async function refreshHistory() {
     try {
-      const data = await listScans();
+      const data = await scanProvider.listScans();
       setScans(data.scans);
       return data.scans;
     } catch {
@@ -73,7 +61,7 @@ export default function Dashboard() {
 
   async function refreshAccounts() {
     try {
-      const data = await listAccounts();
+      const data = await scanProvider.listAccounts();
       setAccounts(data.accounts);
     } catch {
       setAccounts(null); // persistence disabled — hide the panel
@@ -81,18 +69,22 @@ export default function Dashboard() {
   }
 
   async function addAccount(account) {
-    await createAccount(account);
+    await scanProvider.createAccount(account);
     refreshAccounts();
   }
 
   async function removeAccount(accountId) {
-    await deleteAccount(accountId);
+    await scanProvider.deleteAccount(accountId);
     refreshAccounts();
   }
 
   async function refreshUsers() {
+    if (!capabilities.team) {
+      setUsers(null); // the demo has no team management
+      return;
+    }
     try {
-      const data = await listUsers();
+      const data = await scanProvider.listUsers();
       setUsers(data.users);
     } catch {
       setUsers(null); // persistence disabled — hide the panel
@@ -100,18 +92,21 @@ export default function Dashboard() {
   }
 
   async function addUser(user) {
-    const created = await createUser(user);
+    const created = await scanProvider.createUser(user);
     refreshUsers();
     return created; // contains the one-time api_key
   }
 
   async function removeUser(userId) {
-    await deleteUser(userId);
+    await scanProvider.deleteUser(userId);
     refreshUsers();
   }
 
   useEffect(() => {
-    getMe().then(setMe).catch(() => setMe(null));
+    scanProvider
+      .getMe()
+      .then(setMe)
+      .catch(() => setMe(null));
     refreshHistory();
     refreshAccounts();
     refreshUsers();
@@ -129,7 +124,7 @@ export default function Dashboard() {
     setComparing(true);
     setError(null);
     try {
-      const result = await getDiff(compareFrom, compareTo);
+      const result = await scanProvider.compareScans(compareFrom, compareTo);
       setDiff(result);
     } catch (e) {
       setError(e.message);
@@ -142,7 +137,7 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await scanAll();
+      const data = await scanProvider.runScan();
       setResources(sortByRisk(data.resources));
       setSummary(data.summary);
       setAlerts(data.alerts || []);
@@ -151,8 +146,9 @@ export default function Dashboard() {
       setViewingMeta(null);
       refreshHistory(); // a saved scan may have just been added
     } catch (e) {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       setError(
-        `${e.message}. Is the backend running on http://localhost:8000 and are your AWS credentials configured?`
+        `${e.message}. Is the API reachable at ${apiBase}, and are its AWS credentials configured?`
       );
     } finally {
       setLoading(false);
@@ -163,7 +159,7 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const record = await getScan(scanId);
+      const record = await scanProvider.getScan(scanId);
       setResources(sortByRisk(record.resources));
       setSummary(record.summary);
       setAlerts([]); // alerts reflect the latest live scan, not a historical view
@@ -312,7 +308,7 @@ export default function Dashboard() {
 
       {/* Configuration panels sit below the findings: a visitor should see what the
           scan found before meeting any account, team, or cleanup controls. */}
-      <BillingPanel isAdmin={isAdmin} />
+      {capabilities.billing && <BillingPanel isAdmin={isAdmin} />}
 
       {users !== null && (
         <UsersPanel
@@ -327,7 +323,7 @@ export default function Dashboard() {
       {accounts !== null && (
         <AccountsPanel
           accounts={accounts}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin && capabilities.accountsAdmin}
           onAdd={addAccount}
           onDelete={removeAccount}
         />

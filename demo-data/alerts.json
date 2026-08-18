@@ -1,0 +1,16 @@
+{
+  "alerts": [
+    {
+      "id": "new_billable_resource:Elastic IP:us-east-1:eipalloc-0a1b2c3d4e5f60718",
+      "severity": "CRITICAL",
+      "rule": "new_billable_resource",
+      "title": "New billable resource: Elastic IP in us-east-1",
+      "message": "AWS charges hourly for every public IPv4 address, and this one is not even attached to a running resource.",
+      "resource_type": "Elastic IP",
+      "resource_id": "eipalloc-0a1b2c3d4e5f60718",
+      "region": "us-east-1",
+      "risk_level": "HIGH",
+      "estimated_monthly_cost": 3.65
+    }
+  ]
+}

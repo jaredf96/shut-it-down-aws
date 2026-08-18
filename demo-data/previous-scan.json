@@ -1,0 +1,43 @@
+{
+  "scan_id": "2026-08-14T08:12:44.201Z_7c1e93af",
+  "created_at": "2026-08-14T08:12:44.201Z",
+  "summary": {
+    "total_resources": 2,
+    "by_risk_level": { "MEDIUM": 1, "LOW": 1 },
+    "estimated_monthly_cost": 3.73
+  },
+  "resources": [
+    {
+      "resource_type": "EBS Volume",
+      "resource_id": "vol-0c9d8e7f6a5b40312",
+      "name": "tutorial-scratch-volume",
+      "region": "us-east-1",
+      "status": "available",
+      "risk_level": "MEDIUM",
+      "monthly_cost_risk": "Unattached volumes still cost money per GB-month even though nothing is using them.",
+      "suggested_action": "Review this orphaned volume. If it holds no data you need, snapshot it (optional) and delete it manually.",
+      "account_id": "111122223333",
+      "account_label": "sandbox-lab",
+      "details": { "size_gb": 1, "volume_type": "gp3" },
+      "estimated_monthly_cost": 0.08,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    },
+    {
+      "resource_type": "Elastic IP",
+      "resource_id": "eipalloc-0e5d4c3b2a1908f7d",
+      "name": "bastion-address",
+      "region": "us-west-2",
+      "status": "associated",
+      "risk_level": "LOW",
+      "monthly_cost_risk": "Since February 2024 AWS charges hourly for all public IPv4 addresses, including Elastic IPs attached to an instance.",
+      "suggested_action": "Keep while the attached resource is in use.",
+      "account_id": "444455556666",
+      "account_label": "training-account",
+      "details": null,
+      "estimated_monthly_cost": 3.65,
+      "cost_currency": "USD",
+      "cost_source": "static"
+    }
+  ]
+}
