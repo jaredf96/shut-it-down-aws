@@ -168,8 +168,88 @@ describe("the demo cannot reach the network", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("refuses write operations with an explanatory error", async () => {
-    await expect(demoScanProvider.executeCleanup({})).rejects.toThrow(/not available in the demo/i);
+  it("refuses account and team writes with an explanatory error", async () => {
     await expect(demoScanProvider.createAccount({})).rejects.toThrow(/not available in the demo/i);
+    await expect(demoScanProvider.listUsers()).rejects.toThrow(/not available in the demo/i);
+  });
+});
+
+describe("demo cleanup preview walks the real gates", () => {
+  // An unassociated Elastic IP is the one fixture eligible for release.
+  const eligible = currentScan.resources.find(
+    (r) => r.resource_type === "Elastic IP" && r.status === "unassociated"
+  );
+  const associated = currentScan.resources.find(
+    (r) => r.resource_type === "Elastic IP" && r.status === "associated"
+  );
+
+  const request = (over = {}) => ({
+    action: "release_elastic_ip",
+    resource_id: eligible.resource_id,
+    confirm_resource_id: eligible.resource_id,
+    region: eligible.region,
+    dry_run: true,
+    ...over,
+  });
+
+  it("returns a dry-run result for an eligible resource", async () => {
+    const res = await demoScanProvider.executeCleanup(request());
+    expect(res.status).toBe("dry_run");
+    expect(res.dry_run).toBe(true);
+    expect(res.detail).toMatch(/^Would release unassociated Elastic IP/);
+  });
+
+  it("rejects an unknown action before checking confirmation", async () => {
+    // Matches the backend's ordering: catalog lookup precedes confirmation.
+    await expect(
+      demoScanProvider.executeCleanup(request({ action: "nuke_everything", confirm_resource_id: "x" }))
+    ).rejects.toThrow(/Unsupported cleanup action/);
+  });
+
+  it("rejects a confirmation that does not match", async () => {
+    await expect(
+      demoScanProvider.executeCleanup(request({ confirm_resource_id: "not-the-id" }))
+    ).rejects.toThrow(/Confirmation does not match/);
+  });
+
+  it("rejects a resource that is not in the scan", async () => {
+    await expect(
+      demoScanProvider.executeCleanup(
+        request({ resource_id: "eipalloc-000000000000", confirm_resource_id: "eipalloc-000000000000" })
+      )
+    ).rejects.toThrow(/not found/);
+  });
+
+  it("rejects a resource whose live state fails the precondition", async () => {
+    await expect(
+      demoScanProvider.executeCleanup(
+        request({
+          resource_id: associated.resource_id,
+          confirm_resource_id: associated.resource_id,
+        })
+      )
+    ).rejects.toThrow(/associated with a running resource/);
+  });
+
+  it("cannot execute for real, even with every other gate passed", async () => {
+    await expect(demoScanProvider.executeCleanup(request({ dry_run: false }))).rejects.toThrow(
+      /holds no AWS credentials/
+    );
+  });
+
+  it("audits every attempt, including the refusals", async () => {
+    const before = (await demoScanProvider.getCleanupAudit()).entries.length;
+    await demoScanProvider.executeCleanup(request()).catch(() => {});
+    await demoScanProvider.executeCleanup(request({ confirm_resource_id: "no" })).catch(() => {});
+
+    const { entries } = await demoScanProvider.getCleanupAudit();
+    expect(entries.length).toBe(before + 2);
+    expect(entries[0].status).toBe("confirmation_mismatch"); // newest first
+    expect(entries[1].status).toBe("dry_run");
+
+    // Only the two just recorded — the audit is shared module state, and an
+    // earlier test legitimately logged a dry_run:false attempt (that refusal
+    // is recorded as what it was: an attempt to execute for real).
+    expect(entries.slice(0, 2).every((e) => e.dry_run === true)).toBe(true);
   });
 });

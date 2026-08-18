@@ -1,9 +1,21 @@
 import { useEffect, useState } from "react";
-import { scanProvider } from "../data/scanProvider.js";
+import { capabilities, scanProvider } from "../data/scanProvider.js";
 
-// Guided, auditable cleanup. Admin-only. Designed as a careful checklist:
-// pick an action, type the exact resource id to confirm, dry-run first.
-export default function CleanupPanel({ isAdmin }) {
+// Which finding is eligible for which action — the same preconditions the
+// backend re-checks against live AWS before it will act.
+const ELIGIBLE = {
+  stop_ec2_instance: (r) => r.resource_type === "EC2 Instance" && r.status === "running",
+  release_elastic_ip: (r) => r.resource_type === "Elastic IP" && r.status === "unassociated",
+  delete_unattached_ebs_volume: (r) =>
+    r.resource_type === "EBS Volume" && r.status === "available",
+};
+
+// Guided, auditable cleanup. Designed as a careful checklist: pick an action,
+// type the exact resource id to confirm, dry-run first.
+//
+// Surfaces that may only preview (the public demo) still render the whole
+// workflow — walking the gates is the point — but cannot execute.
+export default function CleanupPanel({ isAdmin, resources = [] }) {
   const [catalog, setCatalog] = useState(null); // {enabled, actions, not_supported}
   const [audit, setAudit] = useState([]);
   const [action, setAction] = useState("");
@@ -34,10 +46,24 @@ export default function CleanupPanel({ isAdmin }) {
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isAdmin || catalog === null) return null;
+  const mayPreview = isAdmin || capabilities.cleanupPreview;
+  if (!mayPreview || catalog === null) return null;
 
   const selected = catalog.actions.find((a) => a.key === action);
   const confirmOk = resourceId.trim() !== "" && resourceId.trim() === confirmId.trim();
+
+  // Findings this action could actually apply to, so nobody has to invent an ID.
+  const eligible = resources.filter((r) => ELIGIBLE[action]?.(r));
+  const previewOnly = !capabilities.cleanupExecute;
+
+  function pickResource(id) {
+    const match = resources.find((r) => r.resource_id === id);
+    setResourceId(id);
+    setConfirmId(""); // confirmation is always retyped by hand
+    setResult(null);
+    setError(null);
+    if (match) setRegion(match.region);
+  }
 
   async function run(e) {
     e.preventDefault();
@@ -50,7 +76,7 @@ export default function CleanupPanel({ isAdmin }) {
         resource_id: resourceId.trim(),
         confirm_resource_id: confirmId.trim(),
         region: region.trim(),
-        dry_run: dryRun,
+        dry_run: previewOnly ? true : dryRun,
       });
       setResult(res);
       load();
@@ -65,16 +91,28 @@ export default function CleanupPanel({ isAdmin }) {
     <section className="cleanup">
       <div className="cleanup__header">
         <h2>🧹 Guided cleanup</h2>
-        <span className={`cleanup__flag ${catalog.enabled ? "is-on" : "is-off"}`}>
-          {catalog.enabled ? "enabled" : "disabled in this environment"}
+        <span
+          className={`cleanup__flag ${catalog.enabled && !previewOnly ? "is-on" : "is-off"}`}
+        >
+          {previewOnly ? "preview only" : catalog.enabled ? "enabled" : "disabled in this environment"}
         </span>
       </div>
 
-      {!catalog.enabled && (
+      {previewOnly ? (
         <p className="cleanup__note">
-          Mutating actions are off. Set <code>ENABLE_CLEANUP_ACTIONS=true</code> on the
-          backend to enable them. You can still review the supported actions below.
+          Walk the real safety checks — action catalog, typed confirmation, and a live
+          precondition re-check — and see the dry-run each would produce. Execution is
+          unavailable here: this build holds no AWS credentials and targets no account.
+          Every attempt that reaches the service is audited below, refusals included —
+          try a resource ID that was not in the scan to see one.
         </p>
+      ) : (
+        !catalog.enabled && (
+          <p className="cleanup__note">
+            Mutating actions are off. Set <code>ENABLE_CLEANUP_ACTIONS=true</code> on the
+            backend to enable them. You can still review the supported actions below.
+          </p>
+        )
       )}
 
       <form className="cleanup__form" onSubmit={run}>
@@ -94,6 +132,21 @@ export default function CleanupPanel({ isAdmin }) {
             {selected.destructive ? "⚠️ Irreversible. " : "↩️ Reversible. "}
             {selected.description}
           </p>
+        )}
+
+        {eligible.length > 0 && (
+          <label>
+            Eligible findings from the last scan
+            <select value="" onChange={(e) => e.target.value && pickResource(e.target.value)}>
+              <option value="">Choose a finding…</option>
+              {eligible.map((r) => (
+                <option key={r.resource_id} value={r.resource_id}>
+                  {r.name || r.resource_id} · {r.region}
+                  {r.account_label ? ` · ${r.account_label}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         <div className="cleanup__row">
@@ -121,16 +174,22 @@ export default function CleanupPanel({ isAdmin }) {
         </label>
 
         <label className="cleanup__dry">
-          <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={dryRun || previewOnly}
+            disabled={previewOnly}
+            onChange={(e) => setDryRun(e.target.checked)}
+          />
           Dry run (preview only — does not change anything)
+          {previewOnly && <span className="cleanup__audit-dry">locked in this build</span>}
         </label>
 
         <button
           type="submit"
-          className={dryRun ? "cleanup__btn" : "cleanup__btn cleanup__btn--live"}
-          disabled={busy || !confirmOk || !catalog.enabled}
+          className={dryRun || previewOnly ? "cleanup__btn" : "cleanup__btn cleanup__btn--live"}
+          disabled={busy || !confirmOk || (!catalog.enabled && !previewOnly)}
         >
-          {busy ? "Working…" : dryRun ? "Preview" : "Execute cleanup"}
+          {busy ? "Working…" : dryRun || previewOnly ? "Preview cleanup" : "Execute cleanup"}
         </button>
         {!confirmOk && confirmId !== "" && (
           <span className="cleanup__hint">Confirmation must match the resource ID exactly.</span>

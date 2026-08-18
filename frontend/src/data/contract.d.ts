@@ -113,6 +113,38 @@ export interface ScanDiff {
   summary: DiffCounts;
 }
 
+/** Mirrors backend `app/models/cleanup.py::CleanupRequest`. */
+export interface CleanupRequest {
+  action: string;
+  resource_id: string;
+  /** Must equal resource_id exactly — the typed-confirmation gate. */
+  confirm_resource_id: string;
+  region: string;
+  account_id?: string | null;
+  /** Defaults to true server-side; mutating requires an explicit false. */
+  dry_run?: boolean;
+}
+
+/** One audited cleanup attempt, returned on 200 and stored either way. */
+export interface CleanupResult {
+  action: string;
+  resource_id: string;
+  region: string;
+  account_id: string | null;
+  dry_run: boolean;
+  user_id: string;
+  status:
+    | "success"
+    | "dry_run"
+    | "confirmation_mismatch"
+    | "unsupported_action"
+    | "precondition_failed"
+    | "error";
+  detail: string;
+  created_at: string;
+  id: string;
+}
+
 export interface AwsAccount {
   account_id: string;
   name: string;
@@ -132,6 +164,9 @@ export interface Capabilities {
   accountsAdmin: boolean;
   team: boolean;
   billing: boolean;
+  /** May the surface walk through a dry run? True in the demo. */
+  cleanupPreview: boolean;
+  /** May the surface actually mutate AWS? Never true in the demo. */
   cleanupExecute: boolean;
 }
 
@@ -159,6 +194,7 @@ export interface ScanProvider {
   startCheckout(): Promise<{ url: string }>;
 
   getCleanupActions(): Promise<{ enabled: boolean; actions: unknown[]; not_supported: unknown[] }>;
-  getCleanupAudit(limit?: number): Promise<{ entries: unknown[] }>;
-  executeCleanup(request: unknown): Promise<unknown>;
+  getCleanupAudit(limit?: number): Promise<{ entries: CleanupResult[] }>;
+  /** Rejects (non-200 from the API) for every refusal; resolves on dry_run/success. */
+  executeCleanup(request: CleanupRequest): Promise<CleanupResult>;
 }

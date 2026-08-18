@@ -343,7 +343,9 @@ export default function Dashboard() {
         />
       )}
 
-      <CleanupPanel isAdmin={isAdmin} />
+      {/* Findings are passed in so an operator can pick an eligible resource
+          rather than transcribing an id by hand. */}
+      <CleanupPanel isAdmin={isAdmin} resources={resources} />
     </div>
   );
 }

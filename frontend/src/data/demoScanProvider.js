@@ -75,6 +75,35 @@ function diff(fromScan, toScan) {
   };
 }
 
+// Mirrors backend/app/services/cleanup_actions.py: the same three actions, the
+// same preconditions, and the same wording, so the preview matches what the
+// real service would say.
+const CLEANUP_ACTIONS = {
+  stop_ec2_instance: {
+    resourceType: "EC2 Instance",
+    requiredStatus: "running",
+    wrongStatus: (s) => `Instance is '${s}', not 'running' — nothing to stop.`,
+    wouldDo: (id) => `Would stop running instance ${id} (reversible).`,
+  },
+  release_elastic_ip: {
+    resourceType: "Elastic IP",
+    requiredStatus: "unassociated",
+    wrongStatus: () => "Elastic IP is associated with a running resource — refusing to release.",
+    wouldDo: (id) => `Would release unassociated Elastic IP ${id}.`,
+  },
+  delete_unattached_ebs_volume: {
+    resourceType: "EBS Volume",
+    requiredStatus: "available",
+    wrongStatus: (s) =>
+      `Volume is '${s}', not 'available' (unattached) — refusing to delete.`,
+    wouldDo: (id) => `Would delete unattached volume ${id} (irreversible data loss).`,
+  },
+};
+
+// Attempts accumulate in memory so the audit trail visibly fills as a visitor
+// experiments — including the refusals, which is the point.
+const demoAudit = [];
+
 function notAvailable(what) {
   return () =>
     Promise.reject(new Error(`${what} is not available in the demo. View the source for the real implementation.`));
@@ -92,6 +121,9 @@ export const demoScanProvider = {
     accountsAdmin: false,
     team: false,
     billing: false,
+    // The demo walks through the safety checks but can never mutate: there is
+    // no account to act on and no credential to act with.
+    cleanupPreview: true,
     cleanupExecute: false,
   },
 
@@ -191,7 +223,79 @@ export const demoScanProvider = {
     };
   },
   async getCleanupAudit() {
-    return { entries: [] };
+    return { entries: [...demoAudit].reverse() }; // newest first, like the API
   },
-  executeCleanup: notAvailable("Cleanup execution"),
+
+  /**
+   * Walks the same gates the backend enforces, in the same order, against the
+   * fixture resources — so the preview teaches the real safety model rather
+   * than printing a canned string. Execution is impossible by construction:
+   * there is no account to act on. See `cleanup_service.py`.
+   */
+  async executeCleanup(request) {
+    await delay(400); // enough to read as work, not enough to feel broken
+    const { action, resource_id, confirm_resource_id, region, dry_run = true } = request;
+
+    const record = (status, detail) => {
+      const entry = {
+        action,
+        resource_id,
+        region,
+        account_id: null,
+        dry_run: dry_run !== false,
+        user_id: "demo",
+        status,
+        detail,
+        created_at: new Date().toISOString(),
+        id: `${new Date().toISOString()}_${Math.random().toString(16).slice(2, 10)}`,
+      };
+      demoAudit.push(entry); // every attempt is audited, including refusals
+      return entry;
+    };
+
+    // Gate 1: the action must be in the catalog (checked before confirmation,
+    // matching the backend's order).
+    const spec = CLEANUP_ACTIONS[action];
+    if (!spec) {
+      throw new Error(record("unsupported_action", `Unsupported cleanup action: ${action}.`).detail);
+    }
+
+    // Gate 2: typed confirmation must match exactly.
+    if (!resource_id || resource_id !== confirm_resource_id) {
+      throw new Error(
+        record("confirmation_mismatch", "Confirmation does not match the resource id.").detail
+      );
+    }
+
+    // Gate 3: live precondition re-check. The client is never trusted, so the
+    // resource is looked up and its current state verified.
+    const found = currentScan.resources.find(
+      (r) => r.resource_id === resource_id && r.resource_type === spec.resourceType
+    );
+    if (!found) {
+      throw new Error(
+        record(
+          "precondition_failed",
+          `${spec.resourceType} ${resource_id} not found in ${region}.`
+        ).detail
+      );
+    }
+    if (found.status !== spec.requiredStatus) {
+      throw new Error(record("precondition_failed", spec.wrongStatus(found.status)).detail);
+    }
+
+    // Gate 4: mutating requires a credential this build does not have.
+    if (dry_run === false) {
+      throw new Error(
+        record(
+          "error",
+          "Execution is unavailable in the demo: this build holds no AWS credentials " +
+            "and targets no account. In a real deployment the scanner role is read-only, " +
+            "so cleanup requires a separate, narrowly scoped role."
+        ).detail
+      );
+    }
+
+    return record("dry_run", spec.wouldDo(resource_id));
+  },
 };

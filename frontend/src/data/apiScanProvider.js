@@ -34,6 +34,7 @@ export const apiScanProvider = {
     accountsAdmin: true,
     team: true,
     billing: true,
+    cleanupPreview: true,
     cleanupExecute: true,
   },
 
