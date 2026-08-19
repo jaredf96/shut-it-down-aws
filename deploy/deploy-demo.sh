@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build and publish the public fixture demo.
 #
-#   deploy/deploy-demo.sh [aws-profile]
+#   deploy/deploy-demo.sh <aws-profile>      (or set AWS_PROFILE)
 #
 # Two upload passes, because the caching rules differ:
 #
@@ -14,7 +14,13 @@
 # The CloudFront invalidation then clears edge copies of the short-lived files.
 set -euo pipefail
 
-PROFILE="${1:-admin}"
+# No default profile. Guessing one means deploying with whatever credentials
+# happen to be lying around, against whatever account they belong to.
+PROFILE="${1:-${AWS_PROFILE:-}}"
+if [[ -z "$PROFILE" ]]; then
+  echo "Usage: $0 <aws-profile> or set AWS_PROFILE" >&2
+  exit 2
+fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="$ROOT/deploy/terraform/demo"
 
