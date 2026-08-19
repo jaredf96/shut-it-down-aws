@@ -203,3 +203,8 @@ mutating master switch) · `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` /
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·
 `docs/DEMO.md` (cross-account sandbox recording script) ·
 `backend/README.md` (API reference) · `deploy/README.md` (container/Lambda + Stripe).
+
+Read `deploy/terraform/demo/README.md` before touching `deploy/` — it carries
+the demo stack's design rationale and the operational hazards that have caught
+people out (the pricing plan's restrictions, the bucket policy as kill switch,
+edge caches surviving a grant removal, failed applies writing state).
