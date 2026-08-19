@@ -32,6 +32,12 @@ provider "aws" {
 
 locals {
   bucket_name = "${var.name_prefix}-demo-${data.aws_caller_identity.current.account_id}"
+
+  # The Free-plan distribution, created by the CloudFront console wizard and not
+  # managed here yet. Its read grant is declared below so that a plan stops
+  # trying to delete it — see the README in this directory. This local goes
+  # away once the distribution itself is imported and can be referenced directly.
+  plan_distribution_id = "E1QS09B3Q03DT4"
 }
 
 data "aws_caller_identity" "current" {}
@@ -100,7 +106,15 @@ resource "aws_cloudfront_response_headers_policy" "demo" {
 }
 
 resource "aws_cloudfront_distribution" "demo" {
-  enabled             = true
+  # Kept disabled rather than deleted. Its bucket
+  # grant was already removed, so it was serving 403; this stops it serving at
+  # all. NOT deleted — deliberately kept so the cutover stays reversible. Set
+  # back to true and apply to bring it back, then invalidate before reading any
+  # status code as meaningful.
+  enabled = false
+  # Without this, a request for "/" maps to the bucket root. Origin Access
+  # Control cannot list a bucket, so S3 answers 403 and the site looks broken
+  # while every explicit path works fine.
   default_root_object = "index.html"
   comment             = "Shut It Down — public fixture demo"
   price_class         = "PriceClass_100" # NA + EU: cheapest that still feels fast
@@ -149,8 +163,17 @@ resource "aws_s3_bucket_policy" "demo" {
 }
 
 data "aws_iam_policy_document" "demo_bucket" {
+  # E2V4IQWD851CWI's grant was removed here to cut it over — step one of its
+  # retirement. It keeps serving whatever is still cached at the edge until an
+  # invalidation clears it, so removing this alone does not prove the cut
+  # landed; invalidate the distribution and wait before reading a 403 as
+  # success. Restoring the statement and applying is the rollback.
+
+  # The Free-plan distribution's grant, added by the console wizard and adopted
+  # here so that a plan stops proposing to delete it. This is now the only path
+  # from the bucket to the internet.
   statement {
-    sid       = "AllowCloudFrontRead"
+    sid       = "AllowCloudFrontServicePrincipal"
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.demo.arn}/*"]
 
@@ -160,9 +183,9 @@ data "aws_iam_policy_document" "demo_bucket" {
     }
 
     condition {
-      test     = "StringEquals"
+      test     = "ArnLike"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.demo.arn]
+      values   = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${local.plan_distribution_id}"]
     }
   }
 }
