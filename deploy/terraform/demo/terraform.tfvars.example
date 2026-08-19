@@ -13,7 +13,6 @@ budget_alert_email = "you@example.com"
 # name_prefix        = "shut-it-down"
 # monthly_budget_usd = "5"
 
-
 # Name of the Web ACL the CloudFront pricing plan generated for the canonical
 # distribution. It is account-specific, so this placeholder will not match
 # yours. Read the real one from the console, or:

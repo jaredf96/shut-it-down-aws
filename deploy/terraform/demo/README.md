@@ -5,11 +5,11 @@ CloudFront, reachable only through Origin Access Control.
 
 ```bash
 cd deploy/terraform/demo
-AWS_PROFILE=admin terraform init
-AWS_PROFILE=admin terraform apply
+AWS_PROFILE=your-profile terraform init
+AWS_PROFILE=your-profile terraform apply
 
 # then publish the built demo
-../../deploy-demo.sh admin
+../../deploy-demo.sh your-profile
 ```
 
 ## Why it is shaped this way
@@ -133,7 +133,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 ## Teardown
 
 ```bash
-AWS_PROFILE=admin terraform destroy
+AWS_PROFILE=your-profile terraform destroy
 ```
 
 The bucket is versioned, so `destroy` will refuse until object versions are
