@@ -212,6 +212,20 @@ describe("demo cleanup preview walks the real gates", () => {
     ).rejects.toThrow(/Confirmation does not match/);
   });
 
+  it("rejects a real resource id in the wrong region", async () => {
+    // The service calls Describe* against one regional endpoint, so an id from
+    // us-east-1 does not exist in us-west-2. The demo used to ignore region and
+    // happily preview a release in a region the resource was never in — and in
+    // regions that do not exist at all.
+    await expect(
+      demoScanProvider.executeCleanup(request({ region: "us-west-2" }))
+    ).rejects.toThrow(/not found in us-west-2/);
+
+    await expect(
+      demoScanProvider.executeCleanup(request({ region: "us-east-3" }))
+    ).rejects.toThrow(/not found in us-east-3/);
+  });
+
   it("rejects a resource that is not in the scan", async () => {
     await expect(
       demoScanProvider.executeCleanup(

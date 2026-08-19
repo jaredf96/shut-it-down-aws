@@ -269,8 +269,16 @@ export const demoScanProvider = {
 
     // Gate 3: live precondition re-check. The client is never trusted, so the
     // resource is looked up and its current state verified.
+    //
+    // The lookup is scoped by region, because the real service is: it calls
+    // Describe* against that specific regional endpoint, so an id that exists
+    // in us-east-1 is simply absent from us-west-2. Ignoring region here made
+    // the demo *laxer* than the service it is supposed to be demonstrating.
     const found = currentScan.resources.find(
-      (r) => r.resource_id === resource_id && r.resource_type === spec.resourceType
+      (r) =>
+        r.resource_id === resource_id &&
+        r.resource_type === spec.resourceType &&
+        r.region === region
     );
     if (!found) {
       throw new Error(
