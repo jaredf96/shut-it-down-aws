@@ -96,6 +96,30 @@ year. Always invalidate and wait for `Completed`, then verify an **asset** path
 and not just `/` — `index.html` is served `no-cache` and will revalidate
 immediately, which makes the cut look complete when it is not.
 
+## Two things that have actually bitten
+
+**A failed apply can still write state.** Twice, an `UpdateDistribution` was
+rejected by AWS and Terraform recorded the rejected value anyway, leaving state
+claiming something AWS had refused. Nothing was wrong in AWS; the local state
+was simply lying. Re-verify state after *any* errored apply, and repair with
+`terraform apply -refresh-only`, which touches nothing in AWS.
+
+The cheap detector is to run the plan both ways:
+
+```bash
+terraform plan
+terraform plan -refresh=false
+```
+
+They should agree. When they disagree, state holds a value AWS never accepted —
+a refreshed plan hides it, and a `-refresh=false` plan acts on it.
+
+**Disabling a distribution withdraws its DNS.** The hostname stops resolving
+entirely, so a check against it fails to connect rather than returning a status
+code. Do not read a connection error as evidence about the bucket policy; those
+are separate cuts, and re-enabling has to wait for DNS as well as for the
+distribution to redeploy.
+
 ## Verifying a deploy
 
 ```bash
