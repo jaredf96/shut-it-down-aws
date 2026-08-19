@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/jaredf96/shut-it-down-aws/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Live demo](https://img.shields.io/badge/Live%20demo-open-brightgreen.svg)](https://dkhynvqt27enm.cloudfront.net)
 
 **Find AWS lab resources that may still be costing you money.**
 
@@ -17,7 +18,7 @@ about it.**
 
 ## 🔍 Try it
 
-### ▶ **[Live demo](https://dr89rz7ihjs8i.cloudfront.net)**
+### ▶ **[Live demo](https://dkhynvqt27enm.cloudfront.net)**
 
 Click **Run scan**. No AWS account, no credentials, nothing to configure.
 

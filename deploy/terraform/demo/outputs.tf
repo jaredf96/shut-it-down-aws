@@ -1,6 +1,6 @@
 output "demo_url" {
   description = "Public URL of the demo."
-  value       = "https://${aws_cloudfront_distribution.demo.domain_name}"
+  value       = "https://${aws_cloudfront_distribution.canonical.domain_name}"
 }
 
 output "bucket_name" {
@@ -10,15 +10,15 @@ output "bucket_name" {
 
 output "distribution_id" {
   description = "CloudFront distribution id, needed to invalidate after a deploy."
-  value       = aws_cloudfront_distribution.demo.id
+  value       = aws_cloudfront_distribution.canonical.id
 }
 
 output "deploy_command" {
-  description = "Copy the built demo up and invalidate the cache."
+  description = "Rough equivalent of deploy/deploy-demo.sh; prefer the script, which uploads in two passes with the right cache headers."
   value       = <<-EOT
     npm --prefix frontend run build:demo
     aws s3 sync frontend/dist s3://${aws_s3_bucket.demo.id} --delete
     aws cloudfront create-invalidation \
-      --distribution-id ${aws_cloudfront_distribution.demo.id} --paths '/*'
+      --distribution-id ${aws_cloudfront_distribution.canonical.id} --paths '/*'
   EOT
 }
