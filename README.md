@@ -58,10 +58,17 @@ below is honest about which category it falls into.
 - Slack and email notifications
 - Guarded cleanup: opt-in, admin-only, typed confirmation, dry-run default,
   live precondition re-check, full audit trail
-- Multi-tenancy with SHA-256-hashed API keys; teams and roles
+- Multi-tenant backend with API-key RBAC: tenant-scoped data, admin/member
+  roles, SHA-256-hashed keys issued once, tenant-scoped AWS accounts with
+  assume-role isolation, and audit attribution. The browser client reads
+  `VITE_API_KEY` at build time, so the UI is an operator scaffold rather than a
+  production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 144 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
-- Stripe test integration (deliberately not a headline feature)
+- 159 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
+- Stripe Checkout/webhook **prototype** — quotas, checkout sessions, webhook
+  parsing and server-side plan state, with eleven tests. Deliberately not a
+  headline feature, and not a complete billing system: no webhook idempotency
+  or replay handling, no payment-failure states, no customer portal
 
 </details>
 
@@ -259,7 +266,7 @@ Everything is **off by default** — set only what you need. Full annotated list
 | **Cleanup (mutating!)** | |
 | `ENABLE_CLEANUP_ACTIONS` | **Master safety switch — off by default** |
 | **Billing (optional)** | |
-| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` | Stripe test integration |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` | Stripe Checkout/webhook prototype — set all three or none |
 
 Frontend builds use `VITE_API_BASE_URL` (API mode) or `VITE_DEMO_MODE=true`
 (fixture demo, see [.env.demo](frontend/.env.demo)). Note that Vite inlines every
@@ -343,7 +350,7 @@ shut-it-down-aws/
 │   │   ├── repositories/   DynamoDB access (single table)
 │   │   ├── pricing/        static price map + live Pricing API
 │   │   └── notifiers/      Slack + email
-│   └── tests/              144 offline tests (moto)
+│   └── tests/              159 offline tests (moto)
 ├── frontend/
 │   └── src/
 │       ├── data/           scan provider: api | demo fixtures

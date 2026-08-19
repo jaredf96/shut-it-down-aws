@@ -8,7 +8,7 @@ A read-only AWS scanner that finds resources left running after labs/tutorials
 (EC2, EBS, Elastic IPs, NAT Gateways, ELB, RDS, S3), explains in plain English
 why each costs money and roughly how much, and alerts on new risks. Includes
 teams/roles, multi-account assume-role scanning, scan history + diffing,
-Slack/email notifications, a Stripe test integration, and one carefully guarded
+Slack/email notifications, a Stripe Checkout/webhook prototype, and one guarded
 opt-in cleanup feature. Status: **tested proof-of-concept scaffold, not
 production-hardened** (see `docs/SECURITY.md` → Production gaps).
 
@@ -27,7 +27,7 @@ Run from the repo root (Makefile drives everything):
 
 ```bash
 make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 144 backend tests — pytest + moto, fully offline, no AWS creds needed
+make test          # 159 backend tests — pytest + moto, fully offline, no AWS creds needed
 make lint          # ruff check + ruff format --check
 make format        # auto-fix lint + reformat (run before committing)
 make run           # backend on :8000 (uvicorn, reload)

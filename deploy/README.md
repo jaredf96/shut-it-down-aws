@@ -46,6 +46,13 @@ The same image runs on Lambda via the Mangum adapter
 
 ## 3. Stripe billing setup
 
+> **This is a prototype, not a billing system.** It creates Checkout sessions,
+> verifies webhook signatures and keeps plan state server-side, but it has no
+> webhook idempotency or replay handling, no payment-failure states and no
+> customer portal. Note also that `billing_enabled()` only checks for
+> `STRIPE_SECRET_KEY`, so setting that without `STRIPE_PRICE_ID` and
+> `STRIPE_WEBHOOK_SECRET` leaves it half-configured. Set all three or none.
+
 1. Create a Product + recurring Price in Stripe; set `STRIPE_PRICE_ID`.
 2. Add a webhook endpoint pointing at `POST /billing/webhook`; set
    `STRIPE_WEBHOOK_SECRET`.
