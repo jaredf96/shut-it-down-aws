@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AccountsPanel from "../components/AccountsPanel.jsx";
 import AlertsPanel from "../components/AlertsPanel.jsx";
 import BillingPanel from "../components/BillingPanel.jsx";
@@ -25,6 +25,9 @@ export default function Dashboard() {
   const [resources, setResources] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [hasScanned, setHasScanned] = useState(false);
+
+  // Top of the results region; a finished scan scrolls here.
+  const resultsRef = useRef(null);
 
   // Team. `me` is the current principal; `users = null` hides the panel.
   const [me, setMe] = useState(null);
@@ -110,7 +113,13 @@ export default function Dashboard() {
     refreshHistory();
     refreshAccounts();
     refreshUsers();
-  }, []);
+
+    // The demo populates itself. A visitor should never meet an empty
+    // dashboard wondering what this is — the findings are the pitch. Live
+    // builds still wait for an explicit scan, because scanning a real account
+    // is not something to do to someone unasked.
+    if (!capabilities.liveScan) runScan({ revealResults: false });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Default the compare selectors to (older, newest) once history loads.
   useEffect(() => {
@@ -133,7 +142,7 @@ export default function Dashboard() {
     }
   }
 
-  async function runScan() {
+  async function runScan({ revealResults = true } = {}) {
     setLoading(true);
     setError(null);
     try {
@@ -145,6 +154,20 @@ export default function Dashboard() {
       setActiveScanId(null);
       setViewingMeta(null);
       refreshHistory(); // a saved scan may have just been added
+
+      // Results render below the alerts and compare bar, so on most screens a
+      // completed scan lands entirely below the fold: the progress bar simply
+      // vanishes and nothing appears to have happened. Take the user to them.
+      if (revealResults) {
+        requestAnimationFrame(() =>
+          resultsRef.current?.scrollIntoView({
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "auto"
+              : "smooth",
+            block: "start",
+          })
+        );
+      }
     } catch (e) {
       // The demo has no API, so pointing a visitor at one would be nonsense —
       // and would leak a localhost URL into the public bundle.
@@ -201,7 +224,7 @@ export default function Dashboard() {
         </div>
         <div className="page__header-actions">
           <ThemeToggle />
-          <button className="scan-button" onClick={runScan} disabled={loading}>
+          <button className="scan-button" onClick={() => runScan()} disabled={loading}>
             {loading ? "Scanning…" : "Run scan"}
           </button>
         </div>
@@ -226,13 +249,16 @@ export default function Dashboard() {
 
       {error && <div className="error">{error}</div>}
 
+      {/* Scroll target for a completed scan — the top of the results region. */}
+      <div ref={resultsRef} />
+
       {viewingLive && <AlertsPanel alerts={alerts} />}
 
       {!viewingLive && viewingMeta && (
         <div className="banner">
           📜 Viewing a saved scan from{" "}
           <strong>{new Date(viewingMeta.created_at).toLocaleString()}</strong>. Click
-          <button className="banner__link" onClick={runScan}>
+          <button className="banner__link" onClick={() => runScan()}>
             Run scan
           </button>
           for a fresh one.
