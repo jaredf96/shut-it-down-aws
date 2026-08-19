@@ -26,8 +26,13 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([]);
   const [hasScanned, setHasScanned] = useState(false);
 
+  // The progress bar outlives `loading` by one completion beat, so it can fill
+  // to 100% instead of vanishing mid-fill.
+  const [progress, setProgress] = useState(null); // null | {done, reveal}
+
   // Top of the results region; a finished scan scrolls here.
   const resultsRef = useRef(null);
+  const diffRef = useRef(null);
 
   // Team. `me` is the current principal; `users = null` hides the panel.
   const [me, setMe] = useState(null);
@@ -135,6 +140,8 @@ export default function Dashboard() {
     try {
       const result = await scanProvider.compareScans(compareFrom, compareTo);
       setDiff(result);
+      // The diff replaces the results area, which now sits above this control.
+      scrollTo(diffRef);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -142,9 +149,21 @@ export default function Dashboard() {
     }
   }
 
+  function scrollTo(ref) {
+    requestAnimationFrame(() =>
+      ref.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      })
+    );
+  }
+
   async function runScan({ revealResults = true } = {}) {
     setLoading(true);
     setError(null);
+    setProgress({ done: false, reveal: revealResults });
     try {
       const data = await scanProvider.runScan();
       setResources(sortByRisk(data.resources));
@@ -154,20 +173,8 @@ export default function Dashboard() {
       setActiveScanId(null);
       setViewingMeta(null);
       refreshHistory(); // a saved scan may have just been added
-
-      // Results render below the alerts and compare bar, so on most screens a
-      // completed scan lands entirely below the fold: the progress bar simply
-      // vanishes and nothing appears to have happened. Take the user to them.
-      if (revealResults) {
-        requestAnimationFrame(() =>
-          resultsRef.current?.scrollIntoView({
-            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-              ? "auto"
-              : "smooth",
-            block: "start",
-          })
-        );
-      }
+      // Let the bar finish; the reveal happens when it dismisses itself.
+      setProgress((p) => (p ? { ...p, done: true } : p));
     } catch (e) {
       // The demo has no API, so pointing a visitor at one would be nonsense —
       // and would leak a localhost URL into the public bundle.
@@ -178,6 +185,9 @@ export default function Dashboard() {
               import.meta.env.VITE_API_BASE_URL || "the configured base URL"
             }, and are its AWS credentials configured?`
       );
+      // Drop the bar immediately on failure — the error banner is the message,
+      // and a bar animating to "complete" would contradict it.
+      setProgress(null);
     } finally {
       setLoading(false);
     }
@@ -245,7 +255,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      {loading && <ScanProgress />}
+      {progress && (
+        <ScanProgress
+          done={progress.done}
+          onDone={() => {
+            const shouldReveal = progress.reveal;
+            setProgress(null);
+            if (shouldReveal) scrollTo(resultsRef);
+          }}
+        />
+      )}
 
       {error && <div className="error">{error}</div>}
 
@@ -265,22 +284,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {scans !== null && scans.length >= 2 && (
-        <CompareBar
-          scans={scans}
-          fromId={compareFrom}
-          toId={compareTo}
-          onChangeFrom={setCompareFrom}
-          onChangeTo={setCompareTo}
-          onCompare={runCompare}
-          busy={comparing}
-        />
-      )}
-
       <div className={scans !== null ? "layout layout--with-history" : "layout"}>
         <main className="layout__main">
           {diff ? (
-            <DiffView diff={diff} onClose={() => setDiff(null)} />
+            <div ref={diffRef}>
+              <DiffView diff={diff} onClose={() => setDiff(null)} />
+            </div>
           ) : (
             <>
               {summary && (
@@ -345,6 +354,21 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Comparison sits *below* the findings. Above them it read as a filter
+          governing what you were looking at — visitors thought they were being
+          shown an old scan. It is a secondary, historical action. */}
+      {scans !== null && scans.length >= 2 && (
+        <CompareBar
+          scans={scans}
+          fromId={compareFrom}
+          toId={compareTo}
+          onChangeFrom={setCompareFrom}
+          onChangeTo={setCompareTo}
+          onCompare={runCompare}
+          busy={comparing}
+        />
+      )}
 
       {/* Configuration panels sit below the findings: a visitor should see what the
           scan found before meeting any account, team, or cleanup controls. */}

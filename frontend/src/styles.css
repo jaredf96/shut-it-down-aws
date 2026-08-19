@@ -379,6 +379,18 @@ h1::before {
   position: relative;
 }
 
+/* Completed: settle to green and stop the shimmer, so the last frame the user
+   sees is unambiguously "finished" rather than "still working". */
+.scan-progress__fill.is-complete {
+  background: var(--success);
+  transition: width 0.35s ease, background 0.2s ease;
+}
+
+.scan-progress__fill.is-complete::after {
+  animation: none;
+  opacity: 0;
+}
+
 /* Moving highlight so the bar reads as "alive" between width steps. */
 .scan-progress__fill::after {
   content: "";
@@ -1524,11 +1536,22 @@ h1::before {
   padding: 13px 16px;
 }
 
+.compare-bar__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 8px;
+  align-self: center;
+}
+
 .compare-bar__title {
   font-weight: 650;
-  align-self: center;
-  margin-right: 4px;
   font-size: 0.9rem;
+}
+
+.compare-bar__sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .compare-bar__field {
