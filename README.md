@@ -64,7 +64,7 @@ below is honest about which category it falls into.
   `VITE_API_KEY` at build time, so the UI is an operator scaffold rather than a
   production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 159 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
+- 160 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
 - Stripe Checkout/webhook **prototype** — quotas, checkout sessions, webhook
   parsing and server-side plan state, with eleven tests. Deliberately not a
   headline feature, and not a complete billing system: no webhook idempotency
@@ -350,7 +350,7 @@ shut-it-down-aws/
 │   │   ├── repositories/   DynamoDB access (single table)
 │   │   ├── pricing/        static price map + live Pricing API
 │   │   └── notifiers/      Slack + email
-│   └── tests/              159 offline tests (moto)
+│   └── tests/              160 offline tests (moto)
 ├── frontend/
 │   └── src/
 │       ├── data/           scan provider: api | demo fixtures

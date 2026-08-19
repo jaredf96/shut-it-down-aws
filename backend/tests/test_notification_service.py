@@ -59,3 +59,18 @@ def test_no_notifiers_configured_is_noop():
     result = notify([_alert(AlertSeverity.CRITICAL, "a")], notifiers=[])
     assert result["channels"] == []
     assert result["sent_count"] == 0
+
+
+def test_all_channels_failing_reports_nothing_delivered():
+    """sent_count must reflect delivery, not intent.
+
+    Every channel is down, so nothing reached anyone. Reporting the alert
+    count here would tell a caller their alerts went out when none did.
+    """
+    down = [_RecordingNotifier(name="a", fail=True), _RecordingNotifier(name="b", fail=True)]
+    alerts = [_alert(AlertSeverity.CRITICAL, "x"), _alert(AlertSeverity.CRITICAL, "y")]
+
+    result = notify(alerts, notifiers=down, min_severity="INFO")
+
+    assert result["sent_count"] == 0
+    assert [c["status"] for c in result["channels"]] == ["error", "error"]

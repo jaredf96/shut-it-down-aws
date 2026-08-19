@@ -45,6 +45,11 @@ def notify(
 
     Returns a per-channel result summary; channels that fail are reported with
     status "error" rather than raising.
+
+    `sent_count` counts alerts that actually reached at least one channel. If
+    every channel fails it is 0, not the number of alerts we tried to send —
+    the per-channel statuses were always accurate, but this field previously
+    reported attempts as if they were deliveries.
     """
     notifiers = notifiers if notifiers is not None else notifiers_from_env()
     min_severity = min_severity or config.notify_min_severity()
@@ -65,8 +70,10 @@ def notify(
         except Exception as exc:  # one channel failing must not break the rest
             channels.append({"channel": notifier.name, "status": "error", "detail": str(exc)})
 
+    delivered = any(c["status"] == "sent" for c in channels)
+
     return {
-        "sent_count": len(relevant) if notifiers else 0,
+        "sent_count": len(relevant) if delivered else 0,
         "min_severity": min_severity,
         "channels": channels,
     }

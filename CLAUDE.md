@@ -27,7 +27,7 @@ Run from the repo root (Makefile drives everything):
 
 ```bash
 make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 159 backend tests — pytest + moto, fully offline, no AWS creds needed
+make test          # 160 backend tests — pytest + moto, fully offline, no AWS creds needed
 make lint          # ruff check + ruff format --check
 make format        # auto-fix lint + reformat (run before committing)
 make run           # backend on :8000 (uvicorn, reload)

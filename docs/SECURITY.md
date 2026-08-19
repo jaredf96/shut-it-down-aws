@@ -153,6 +153,15 @@ This is a portfolio-grade MVP. Before charging real customers, harden at least:
 - **Secrets in env.** Move `STRIPE_*`, SMTP creds, etc. to a secrets manager
   (AWS Secrets Manager / SSM) rather than plain environment variables.
 - **Cleanup blast radius.** Even the safe actions are irreversible for EIP/EBS.
+- **Outbound notifications are unthrottled.** There is no deduplication,
+  cooldown, or send-rate limit, so a persistent finding re-alerts on every scan
+  and a noisy account can flood a channel. Delivery is also synchronous: a slow
+  or hanging SMTP server adds its timeout (up to ~10s) to the request.
+- **`POST /notify` is not admin-gated.** It resolves the caller with
+  `get_current_tenant`, so any authenticated member of a tenant can trigger
+  outbound messages to that tenant's configured Slack/email channels. Whether
+  sending should be admin-only is a product decision, deliberately left open —
+  but it is an abuse vector worth closing before untrusted members exist.
   Consider soft-delete/snapshot-first, per-tenant allow-lists, and a second
   approver for destructive actions.
 - **Billing edge cases.** Proration, failed payments
