@@ -12,3 +12,11 @@ budget_alert_email = "you@example.com"
 # region             = "us-east-1"
 # name_prefix        = "shut-it-down"
 # monthly_budget_usd = "5"
+
+
+# Name of the Web ACL the CloudFront pricing plan generated for the canonical
+# distribution. It is account-specific, so this placeholder will not match
+# yours. Read the real one from the console, or:
+#
+#   aws wafv2 list-web-acls --scope CLOUDFRONT --region us-east-1
+plan_web_acl_name = "CreatedByCloudFront-xxxxxxxx"

@@ -25,3 +25,16 @@ variable "budget_alert_email" {
   type        = string
   default     = ""
 }
+
+variable "plan_web_acl_name" {
+  description = <<-EOT
+    Name of the CLOUDFRONT-scope Web ACL that the pricing plan created and
+    enrolled, which the canonical distribution attaches.
+
+    Deliberately has no default. The name is generated per account when the plan
+    is activated, so there is no sensible fallback, and an empty string would
+    silently detach the WAF rather than fail. Kept out of version control
+    because it is account-specific — see terraform.tfvars.example.
+  EOT
+  type        = string
+}
