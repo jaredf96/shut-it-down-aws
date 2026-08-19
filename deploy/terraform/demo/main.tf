@@ -32,12 +32,6 @@ provider "aws" {
 
 locals {
   bucket_name = "${var.name_prefix}-demo-${data.aws_caller_identity.current.account_id}"
-
-  # The Free-plan distribution, created by the CloudFront console wizard and not
-  # managed here yet. Its read grant is declared below so that a plan stops
-  # trying to delete it — see the README in this directory. This local goes
-  # away once the distribution itself is imported and can be referenced directly.
-  plan_distribution_id = "E1QS09B3Q03DT4"
 }
 
 data "aws_caller_identity" "current" {}
@@ -106,11 +100,11 @@ resource "aws_cloudfront_response_headers_policy" "demo" {
 }
 
 resource "aws_cloudfront_distribution" "demo" {
-  # Kept disabled rather than deleted. Its bucket
-  # grant was already removed, so it was serving 403; this stops it serving at
-  # all. NOT deleted — deliberately kept so the cutover stays reversible. Set
-  # back to true and apply to bring it back, then invalidate before reading any
-  # status code as meaningful.
+  # An earlier pay-as-you-go distribution, kept disabled rather than deleted: it
+  # costs nothing, serves nothing, has no bucket grant, and is the cheapest way
+  # back if the demo ever has to leave the Free plan. Re-enabling means setting
+  # this true, applying, and invalidating before any status code from it means
+  # anything — disabling withdraws DNS, so it does not even resolve today.
   enabled = false
   # Without this, a request for "/" maps to the bucket root. Origin Access
   # Control cannot list a bucket, so S3 answers 403 and the site looks broken
@@ -156,22 +150,19 @@ data "aws_cloudfront_cache_policy" "optimized" {
   name = "Managed-CachingOptimized"
 }
 
-# Only this distribution may read the bucket.
+# The bucket's only door to the internet: a single grant, to the distribution
+# that serves the demo.
 resource "aws_s3_bucket_policy" "demo" {
   bucket = aws_s3_bucket.demo.id
   policy = data.aws_iam_policy_document.demo_bucket.json
 }
 
 data "aws_iam_policy_document" "demo_bucket" {
-  # E2V4IQWD851CWI's grant was removed here to cut it over — step one of its
-  # retirement. It keeps serving whatever is still cached at the edge until an
-  # invalidation clears it, so removing this alone does not prove the cut
-  # landed; invalidate the distribution and wait before reading a 403 as
-  # success. Restoring the statement and applying is the rollback.
-
-  # The Free-plan distribution's grant, added by the console wizard and adopted
-  # here so that a plan stops proposing to delete it. This is now the only path
-  # from the bucket to the internet.
+  # Adding or removing a statement here is how a distribution is cut over, and
+  # it is reversible. But removing one does not purge edge caches: invalidate
+  # the distribution and wait for Completed before reading a 403 as proof, and
+  # check an asset path rather than just "/" — index.html is served no-cache and
+  # revalidates immediately, while fingerprinted assets stay cached for a year.
   statement {
     sid       = "AllowCloudFrontServicePrincipal"
     actions   = ["s3:GetObject"]
@@ -185,7 +176,7 @@ data "aws_iam_policy_document" "demo_bucket" {
     condition {
       test     = "ArnLike"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${local.plan_distribution_id}"]
+      values   = [aws_cloudfront_distribution.canonical.arn]
     }
   }
 }

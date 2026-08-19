@@ -1,15 +1,16 @@
-# --- Canonical distribution (migration in progress) ----------------------
+# --- Canonical distribution ----------------------------------------------
 #
-# E1QS09B3Q03DT4 was created by the CloudFront console wizard together with its
-# own Web ACL, its own OAC, and the second bucket statement, and it is the
-# distribution enrolled in the Free flat-rate plan — see the README in this
-# directory. That plan is what gives the demo a $0 ceiling with no overage
-# billing, and the subscription names this distribution's ARN specifically, so
-# the plan cannot be moved onto the Terraform-created distribution.
+# Serves the public demo, and is the distribution enrolled in the CloudFront
+# Free flat-rate plan — which is what gives the demo a $0 ceiling with no
+# overage billing.
 #
-# Hence the migration promotes this one to canonical and retires the other,
-# rather than the other way round. Everything below is written to match what is
-# already live, so that importing it proposes no surprises.
+# It was created outside Terraform by the CloudFront console wizard, together
+# with its own Web ACL and OAC, and adopted here by import. The plan's
+# subscription names this distribution's ARN specifically and cannot be moved to
+# another one, so the plan is kept where it is rather than recreated.
+#
+# The README in this directory covers what the plan restricts — notably that a
+# custom response headers policy is rejected outright.
 
 data "aws_wafv2_web_acl" "plan" {
   name  = var.plan_web_acl_name
