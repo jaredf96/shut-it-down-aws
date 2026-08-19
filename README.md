@@ -359,3 +359,8 @@ shut-it-down-aws/
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+**Development note:** This project was built with assistance from Claude Code;
+all changes were reviewed and verified by the maintainer.
