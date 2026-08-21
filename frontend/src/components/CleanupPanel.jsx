@@ -10,6 +10,32 @@ const ELIGIBLE = {
     r.resource_type === "EBS Volume" && r.status === "available",
 };
 
+// Which accounts the last scan actually saw, as select options.
+//
+// Cleanup resolves credentials from the named account, and the service cannot
+// infer which account a bare resource id lives in — it is handed an id and a
+// region, not a scan. So the account has to travel with the request, and it has
+// to be visible: an operator confirming an irreversible action should be able to
+// read which account it lands in.
+function accountOptions(resources) {
+  const named = new Map();
+  // Offer the host account only when the scan actually read it. In a purely
+  // multi-account deployment there is nothing there to clean up, and offering
+  // it is exactly how a request silently falls through to default credentials.
+  let hostAccountSeen = resources.length === 0;
+
+  for (const r of resources) {
+    if (r.account_id) named.set(r.account_id, r.account_label || r.account_id);
+    else hostAccountSeen = true;
+  }
+
+  const options = [...named].map(([id, label]) => ({ id, label: `${label} · ${id}` }));
+  if (hostAccountSeen) {
+    options.unshift({ id: "", label: "Default credentials (this server's own account)" });
+  }
+  return options;
+}
+
 // Guided, auditable cleanup. Designed as a careful checklist: pick an action,
 // type the exact resource id to confirm, dry-run first.
 //
@@ -22,6 +48,7 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
   const [resourceId, setResourceId] = useState("");
   const [confirmId, setConfirmId] = useState("");
   const [region, setRegion] = useState("us-east-1");
+  const [accountId, setAccountId] = useState("");
   const [dryRun, setDryRun] = useState(true);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -56,13 +83,24 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
   const eligible = resources.filter((r) => ELIGIBLE[action]?.(r));
   const previewOnly = !capabilities.cleanupExecute;
 
+  // Derived, not stored, so the value can never name an account the current
+  // scan does not offer — a stale selection would resolve to whichever
+  // credentials the server happens to hold.
+  const accounts = accountOptions(resources);
+  const targetAccount = accounts.some((a) => a.id === accountId)
+    ? accountId
+    : (accounts[0]?.id ?? "");
+
   function pickResource(id) {
     const match = resources.find((r) => r.resource_id === id);
     setResourceId(id);
     setConfirmId(""); // confirmation is always retyped by hand
     setResult(null);
     setError(null);
-    if (match) setRegion(match.region);
+    if (match) {
+      setRegion(match.region);
+      setAccountId(match.account_id ?? "");
+    }
   }
 
   async function run(e) {
@@ -76,6 +114,7 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         resource_id: resourceId.trim(),
         confirm_resource_id: confirmId.trim(),
         region: region.trim(),
+        account_id: targetAccount || null,
         dry_run: previewOnly ? true : dryRun,
       });
       setResult(res);
@@ -149,6 +188,19 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
           </label>
         )}
 
+        {accounts.length > 1 && (
+          <label>
+            AWS account
+            <select value={targetAccount} onChange={(e) => setAccountId(e.target.value)}>
+              {accounts.map((a) => (
+                <option key={a.id || "default"} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <div className="cleanup__row">
           <label>
             Resource ID
@@ -213,6 +265,9 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
                 <span className="cleanup__audit-action">
                   {e.action} {e.resource_id}
                 </span>
+                {e.account_id && (
+                  <span className="cleanup__audit-account">acct {e.account_id}</span>
+                )}
                 {e.dry_run && <span className="cleanup__audit-dry">dry-run</span>}
                 <span className="cleanup__audit-time">
                   {new Date(e.created_at).toLocaleString()}

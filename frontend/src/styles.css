@@ -1577,6 +1577,13 @@ h1::before {
   color: var(--text-subtle);
 }
 
+.cleanup__audit-account {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
 .cleanup__audit-time {
   margin-left: auto;
   color: var(--text-subtle);

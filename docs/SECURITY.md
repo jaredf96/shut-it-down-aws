@@ -91,6 +91,12 @@ clears seven independent gates:
    tenant-scoped, so this is not a cross-tenant boundary; what it prevents is
    the service falling back to its own default credentials and running the
    action against the host account while reporting success.
+
+   Omitting `account_id` remains a valid request meaning "use the server's own
+   credentials", so the gate cannot close the case on its own — the service is
+   handed a resource id and a region, and no lookup tells it which account that
+   id lives in. The dashboard therefore sends the account of the finding it is
+   acting on, and shows it in the form (`frontend/src/components/CleanupPanel.jsx`).
 6. **Live precondition re-check** — state is verified against AWS at execution
    time and never trusts the client (an Elastic IP must still be unassociated; an
    EBS volume still unattached). Failing the check returns `409` and changes

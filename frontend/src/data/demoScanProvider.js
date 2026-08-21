@@ -238,14 +238,21 @@ export const demoScanProvider = {
    */
   async executeCleanup(request) {
     await delay(400); // enough to read as work, not enough to feel broken
-    const { action, resource_id, confirm_resource_id, region, dry_run = true } = request;
+    const {
+      action,
+      resource_id,
+      confirm_resource_id,
+      region,
+      account_id = null,
+      dry_run = true,
+    } = request;
 
     const record = (status, detail) => {
       const entry = {
         action,
         resource_id,
         region,
-        account_id: null,
+        account_id,
         dry_run: dry_run !== false,
         user_id: "demo",
         status,
@@ -274,21 +281,25 @@ export const demoScanProvider = {
     // Gate 3: live precondition re-check. The client is never trusted, so the
     // resource is looked up and its current state verified.
     //
-    // The lookup is scoped by region, because the real service is: it calls
-    // Describe* against that specific regional endpoint, so an id that exists
-    // in us-east-1 is simply absent from us-west-2. Ignoring region here made
-    // the demo *laxer* than the service it is supposed to be demonstrating.
+    // The lookup is scoped by region *and* account, because the real service is:
+    // it resolves credentials from the named account and calls Describe* against
+    // that specific regional endpoint, so an id that exists in us-east-1 is
+    // simply absent from us-west-2, and an id in one account is absent from
+    // another. Ignoring either made the demo *laxer* than the service it is
+    // supposed to be demonstrating.
     const found = currentScan.resources.find(
       (r) =>
         r.resource_id === resource_id &&
         r.resource_type === spec.resourceType &&
-        r.region === region
+        r.region === region &&
+        (r.account_id ?? null) === account_id
     );
     if (!found) {
       throw new Error(
         record(
           "precondition_failed",
-          `${spec.resourceType} ${resource_id} not found in ${region}.`
+          `${spec.resourceType} ${resource_id} not found in ${region}` +
+            `${account_id ? ` for account ${account_id}` : ""}.`
         ).detail
       );
     }

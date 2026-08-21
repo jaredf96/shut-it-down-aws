@@ -188,11 +188,14 @@ describe("demo cleanup preview walks the real gates", () => {
     (r) => r.resource_type === "Elastic IP" && r.status === "associated"
   );
 
+  // Every fixture resource lives in a registered account, so a well-formed
+  // request names one. The panel fills this in from the selected finding.
   const request = (over = {}) => ({
     action: "release_elastic_ip",
     resource_id: eligible.resource_id,
     confirm_resource_id: eligible.resource_id,
     region: eligible.region,
+    account_id: eligible.account_id,
     dry_run: true,
     ...over,
   });
@@ -231,6 +234,24 @@ describe("demo cleanup preview walks the real gates", () => {
     ).rejects.toThrow(/not found in us-east-3/);
   });
 
+  it("rejects a real resource id under the wrong account", async () => {
+    // Same reasoning as region: the service resolves credentials from the named
+    // account and describes the resource there. An id from the sandbox account
+    // does not exist in the training account — and naming no account at all
+    // means default credentials, which is a third account again.
+    const other = currentScan.resources.find(
+      (r) => r.account_id && r.account_id !== eligible.account_id
+    );
+
+    await expect(
+      demoScanProvider.executeCleanup(request({ account_id: other.account_id }))
+    ).rejects.toThrow(new RegExp(`not found in .* for account ${other.account_id}`));
+
+    await expect(
+      demoScanProvider.executeCleanup(request({ account_id: null }))
+    ).rejects.toThrow(/not found in us-east-1\./);
+  });
+
   it("rejects a resource that is not in the scan", async () => {
     await expect(
       demoScanProvider.executeCleanup(
@@ -265,6 +286,10 @@ describe("demo cleanup preview walks the real gates", () => {
     expect(entries.length).toBe(before + 2);
     expect(entries[0].status).toBe("confirmation_mismatch"); // newest first
     expect(entries[1].status).toBe("dry_run");
+
+    // The account the attempt targeted, not a hardcoded null. An audit trail
+    // that cannot say which account was acted on is not an audit trail.
+    expect(entries[1].account_id).toBe(eligible.account_id);
 
     // Only the two just recorded — the audit is shared module state, and an
     // earlier test legitimately logged a dry_run:false attempt (that refusal
