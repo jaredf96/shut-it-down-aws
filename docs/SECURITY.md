@@ -78,7 +78,7 @@ The Terraform skeleton emits a least-privilege policy document
 ## Cleanup actions are disabled by default
 
 The single mutating feature is **off unless explicitly enabled**, and even then
-clears six independent gates:
+clears seven independent gates:
 
 1. **Env flag** — without `ENABLE_CLEANUP_ACTIONS=true`, `POST /cleanup/execute`
    returns `403 "Cleanup actions are disabled in this environment."`
@@ -86,11 +86,16 @@ clears six independent gates:
 3. **Typed confirmation** — `confirm_resource_id` must equal `resource_id`.
 4. **Dry-run by default** — the request body defaults `dry_run: true`; you must
    send `dry_run: false` to mutate.
-5. **Live precondition re-check** — state is verified against AWS at execution
+5. **Target account ownership** — a request naming an `account_id` the tenant
+   has not registered returns `404` and does nothing. The lookup is
+   tenant-scoped, so this is not a cross-tenant boundary; what it prevents is
+   the service falling back to its own default credentials and running the
+   action against the host account while reporting success.
+6. **Live precondition re-check** — state is verified against AWS at execution
    time and never trusts the client (an Elastic IP must still be unassociated; an
    EBS volume still unattached). Failing the check returns `409` and changes
    nothing.
-6. **Audit** — every attempt is recorded (next section).
+7. **Audit** — every attempt is recorded (next section).
 
 The action catalog is deliberately tiny and conservative: **Stop** EC2 (not
 terminate), **release** unassociated Elastic IPs, **delete** unattached EBS
@@ -104,8 +109,8 @@ Every cleanup attempt — refused, failed, dry-run, or executed — produces an
 audit entry (`app/repositories/audit_repository.py`,
 `app/services/cleanup_service.py`) capturing **who** (tenant + user), **what**
 (action, resource, region, account), the **outcome** (`success` / `dry_run` /
-`confirmation_mismatch` / `unsupported_action` / `precondition_failed` /
-`error`), a detail message, and a timestamp.
+`confirmation_mismatch` / `unsupported_action` / `unknown_account` /
+`precondition_failed` / `error`), a detail message, and a timestamp.
 
 - Durable entries live in DynamoDB (`AUDIT#<tenant>`), tenant-scoped and
   time-sortable; `GET /cleanup/audit` lists them newest-first.

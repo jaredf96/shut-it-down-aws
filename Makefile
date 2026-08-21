@@ -15,7 +15,7 @@ BIN    := $(VENV)/bin
 .DEFAULT_GOAL := help
 
 .PHONY: help install install-dev run test demo-fixtures lint format build create-table \
-        frontend-install frontend-run frontend-build \
+        frontend-install frontend-run frontend-build demo-bundle-check \
         docker-build docker-up clean
 
 help: ## Show this help
@@ -66,6 +66,9 @@ frontend-build: ## Production build of the frontend
 	cd frontend && npm run build
 
 build: frontend-build ## Build the deployable frontend bundle (compile check)
+
+demo-bundle-check: ## Build the public demo and assert it carries no API client
+	cd frontend && npm run build:demo && bash scripts/check-demo-bundle.sh
 
 # --- Docker --------------------------------------------------------------
 

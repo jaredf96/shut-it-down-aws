@@ -72,6 +72,14 @@ jobs:
       - name: Build (public demo profile)
         run: npm run build:demo
 
+      # The demo's isolation is a property of the artifact, not of a flag: the
+      # API client is tree-shaken out because VITE_DEMO_MODE is a build-time
+      # constant. One component importing `api/client.js` directly undoes that
+      # silently, and the built bundle is the only place it shows. Building the
+      # demo profile without inspecting the output verified nothing.
+      - name: Verify the demo bundle carries no API client
+        run: bash scripts/check-demo-bundle.sh
+
   docker:
     name: Backend Docker image builds
     runs-on: ubuntu-latest

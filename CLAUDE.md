@@ -27,12 +27,13 @@ Run from the repo root (Makefile drives everything):
 
 ```bash
 make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 160 backend tests — pytest + moto, fully offline, no AWS creds needed
+make test          # 172 backend tests — pytest + moto, fully offline, no AWS creds needed
 make lint          # ruff check + ruff format --check
 make format        # auto-fix lint + reformat (run before committing)
 make run           # backend on :8000 (uvicorn, reload)
 make frontend-run  # frontend on :5173 (vite)
 make build         # production frontend build (compile check)
+make demo-bundle-check  # build the public demo + assert no API client leaked in
 docker compose up --build   # backend + local DynamoDB end-to-end
 ```
 
@@ -90,8 +91,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 2. **Cleanup safety gates** (`services/cleanup_service.py` + routes): env flag
    `ENABLE_CLEANUP_ACTIONS` off by default (403 with exact message "Cleanup
    actions are disabled in this environment."), admin-only, `confirm_resource_id`
-   must equal `resource_id`, `dry_run` defaults to true, live precondition
-   re-check against AWS (never trust the client), **every attempt audited**
+   must equal `resource_id`, `dry_run` defaults to true, a named `account_id`
+   must be one the tenant registered (never fall back to default credentials —
+   that runs the action against the host account), live precondition re-check
+   against AWS (never trust the client), **every attempt audited**
    (including refusals/failures). Action catalog stays tiny: stop EC2, release
    unassociated EIP, delete unattached EBS. Terminate/S3/RDS/NAT deletion are
    deliberately NOT in the catalog — listed in `NOT_SUPPORTED` instead. No bulk ops.
@@ -182,12 +185,15 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   and return `scan_regions(lambda r: _scan_region(r, session), regions, session,
   failed_regions=failed_regions)` (build clients via `make_client`). Let
   per-region errors propagate out of `_scan_region` so `scan_regions` can record
-  them; catching them there reports an unreadable region as an empty one. Register in `scanners/__init__.py` SCANNERS
-  dict → the aggregate scan picks it up. There is deliberately **no**
-  per-service endpoint: one existed for each scanner and bypassed the
-  multi-account path, answering with the server's own inventory. Add risk levels + plain-English
-  `monthly_cost_risk`/`suggested_action`; populate `details` if cost-estimable;
-  add a static price entry in `pricing/static_prices.py`; write moto tests.
+  them; catching them there reports an unreadable region as an empty one.
+  Register in `scanners/__init__.py` SCANNERS dict → the aggregate scan picks it
+  up. Add risk levels + plain-English `monthly_cost_risk`/`suggested_action`;
+  set `created_at` from whatever launch/creation time the API already returns;
+  populate `details` if cost-estimable; add a static price entry in
+  `pricing/static_prices.py`; write moto tests.
+  There is deliberately **no** per-service endpoint. One used to come free with
+  registration, bypassed the multi-account path, and answered with the server's
+  own inventory while `/scan` answered with the tenant's.
 - **New cleanup action:** add to `ACTIONS` in `services/cleanup_actions.py`
   with a live precondition check and dry-run message. Only reversible-leaning,
   single-resource actions; anything data-destructive beyond unattached EBS

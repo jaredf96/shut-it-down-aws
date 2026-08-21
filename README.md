@@ -56,6 +56,9 @@ below is honest about which category it falls into.
   processing, RDS storage, and S3 storage are unpriced, so the real bill is
   higher, never lower
 - Risk levels + plain-English cost explanation and suggested action
+- Resource age from the AWS API's own launch/creation time, so a scan reads as a
+  finding ("oldest running 87 days") rather than an inventory
+- Regions the scan could not read are reported, never rendered as empty ones
 - Alert rule engine (new billable resource, risk increase, standing high risk)
 - Scan history and diffing, persisted to DynamoDB
 - Slack and email notifications
@@ -67,7 +70,7 @@ below is honest about which category it falls into.
   `VITE_API_KEY` at build time, so the UI is an operator scaffold rather than a
   production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 160 offline tests (pytest + `moto`), CI, Docker, Lambda adapter
+- 172 offline backend tests + 54 frontend tests, CI, Docker, Lambda adapter
 - Stripe Checkout/webhook **prototype** — quotas, checkout sessions, webhook
   parsing and server-side plan state, with eleven tests. Deliberately not a
   headline feature, and not a complete billing system: no webhook idempotency
@@ -78,8 +81,9 @@ below is honest about which category it falls into.
 <details>
 <summary><b>Demonstrated publicly</b> — what the fixture demo shows</summary>
 
-Scan workflow · risk-ranked resource table · cost summary · account filtering ·
-scan history · changes between scans · alert presentation.
+Scan workflow · risk-ranked resource table with resource age · minimum-cost
+summary · account filtering · scan history · changes between scans · alert
+presentation.
 
 Team management, billing, and cleanup execution are **not** exposed in the demo.
 
@@ -218,17 +222,18 @@ All tests run **fully offline** — `moto` mocks AWS, so no real credentials or
 network are used.
 
 ```bash
-make test                  # 159 backend tests (pytest + moto)
+make test                  # 172 backend tests (pytest + moto)
 make lint                  # ruff check + format check
 make demo-fixtures         # regenerate demo-data/ from the real scanners
 
 cd frontend
-npm test                   # 19 frontend tests (vitest + Testing Library)
+npm test                   # 54 frontend tests (vitest + Testing Library)
 npm run typecheck          # provider-boundary types (tsc)
 ```
 
-CI runs all of it on every push, plus both frontend build profiles and a Docker
-build. Backend coverage spans scanners, pricing, alerts, notifications,
+CI runs all of it on every push, plus both frontend build profiles, a Docker
+build, and a grep over the built demo bundle asserting it carries no API
+endpoints and no credential handling (`make demo-bundle-check` locally). Backend coverage spans scanners, pricing, alerts, notifications,
 persistence, diffing, tenancy/roles, multi-account, cleanup safety, billing, and
 the fail-closed behavior of the persistence layer.
 
@@ -280,7 +285,7 @@ Frontend builds use `VITE_API_BASE_URL` (API mode) or `VITE_DEMO_MODE=true`
 ## 🛡️ Safety around cleanup
 
 Scanning never mutates AWS. The **only** feature that can is guided cleanup, and
-it must clear **six independent gates**:
+it must clear **seven independent gates**:
 
 1. **Off by default** — `POST /cleanup/execute` returns
    `403 "Cleanup actions are disabled in this environment."` unless
@@ -289,16 +294,19 @@ it must clear **six independent gates**:
 3. **Typed confirmation** — the exact resource ID must be resubmitted
    (`confirm_resource_id == resource_id`).
 4. **Dry-run by default** — mutating requires an explicit `dry_run: false`.
-5. **Live precondition re-check** — state is re-verified against AWS at execution
+5. **Target account ownership** — an `account_id` the tenant has not registered
+   is refused with `404`. There is no fallback to the server's own credentials,
+   which would run the action against the wrong account entirely.
+6. **Live precondition re-check** — state is re-verified against AWS at execution
    time; the client is never trusted.
-6. **Audited** — every attempt is logged, including refusals and failures.
+7. **Audited** — every attempt is logged, including refusals and failures.
 
 The automated action set is intentionally tiny and reversible-leaning: **stop**
 EC2 (never terminate), **release** unassociated Elastic IPs, **delete**
 unattached EBS volumes. Terminating instances and deleting S3/RDS/NAT are
 deliberately excluded and listed as unsupported.
 
-A seventh gate sits outside the application: the scanner role is granted only
+An eighth gate sits outside the application: the scanner role is granted only
 read-only IAM permissions, so even with every in-app gate passed, AWS itself
 refuses the mutation. That is the intended production posture — cleanup requires
 a separate, narrowly-scoped role.
@@ -353,7 +361,7 @@ shut-it-down-aws/
 │   │   ├── repositories/   DynamoDB access (single table)
 │   │   ├── pricing/        static price map + live Pricing API
 │   │   └── notifiers/      Slack + email
-│   └── tests/              160 offline tests (moto)
+│   └── tests/              172 offline tests (moto)
 ├── frontend/
 │   └── src/
 │       ├── data/           scan provider: api | demo fixtures
