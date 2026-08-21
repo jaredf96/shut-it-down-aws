@@ -5,7 +5,8 @@ credentials and every resource is tagged with its account. Otherwise we fall
 back to a single scan using the server's own credentials (local / default).
 
 A failure assuming one account's role never breaks the others — it is collected
-in `account_errors`.
+in `account_errors`. Regions an account was scanned with but could not be read
+are collected in `regions_failed`, stamped with the account they belong to.
 """
 
 from __future__ import annotations
@@ -16,9 +17,19 @@ from app.repositories import account_repository
 from app.services.scan_service import scan_all, summarize
 
 
+def _label(account: dict) -> str:
+    return account.get("name") or account["account_id"]
+
+
 def _tag(resource: Resource, account: dict) -> Resource:
-    label = account.get("name") or account["account_id"]
-    return resource.model_copy(update={"account_id": account["account_id"], "account_label": label})
+    return resource.model_copy(
+        update={"account_id": account["account_id"], "account_label": _label(account)}
+    )
+
+
+def _tag_failure(failure: dict, account: dict) -> dict:
+    """Attribute an unreadable region to the account it was unreadable in."""
+    return {**failure, "account_id": account["account_id"], "account_label": _label(account)}
 
 
 def scan_accounts(tenant_id: str | None = None) -> dict:
@@ -30,6 +41,7 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
         return scan_all()
 
     all_resources: list[Resource] = []
+    regions_failed: list[dict] = []
     scanned: list[dict] = []
     errors: list[dict] = []
 
@@ -38,6 +50,9 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
             session = session_for_account(account)
             result = scan_all(regions=account.get("regions"), session=session)
             all_resources.extend(_tag(r, account) for r in result["resources"])
+            regions_failed.extend(
+                _tag_failure(f, account) for f in result.get("regions_failed", [])
+            )
             scanned.append({"account_id": account["account_id"], "name": account.get("name")})
         except Exception as exc:  # one bad account must not break the rest
             errors.append(
@@ -51,6 +66,7 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
     return {
         "summary": summarize(all_resources),
         "resources": all_resources,
+        "regions_failed": regions_failed,
         "accounts_scanned": scanned,
         "account_errors": errors,
     }

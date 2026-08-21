@@ -71,19 +71,32 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
     # v2 and classic are billed and queried independently: a failure in one
     # (e.g. an endpoint not present in a region) must not hide the other.
     resources: list[Resource] = []
-    try:
-        resources.extend(_scan_v2(region, session))
-    except (BotoCoreError, ClientError):
-        pass
-    try:
-        resources.extend(_scan_classic(region, session))
-    except (BotoCoreError, ClientError):
-        pass
+    failures: list[Exception] = []
+    for query in (_scan_v2, _scan_classic):
+        try:
+            resources.extend(query(region, session))
+        except (BotoCoreError, ClientError) as exc:
+            failures.append(exc)
+
+    # Both halves failing is not a partial result — the region could not be
+    # read at all. Swallowing that here would report it upward as empty, which
+    # is exactly the confusion `scan_regions`' failure tracking exists to stop.
+    if len(failures) == 2:
+        raise failures[0]
     return resources
 
 
-def scan(regions: list[str] | None = None, session: boto3.Session | None = None) -> list[Resource]:
+def scan(
+    regions: list[str] | None = None,
+    session: boto3.Session | None = None,
+    failed_regions: dict[str, str] | None = None,
+) -> list[Resource]:
     """Return all load balancers (ALB/NLB/Classic) as Resource objects."""
     session = session or boto3.Session()
     regions = regions or get_regions(session)
-    return scan_regions(lambda region: _scan_region(region, session), regions, session)
+    return scan_regions(
+        lambda region: _scan_region(region, session),
+        regions,
+        session,
+        failed_regions=failed_regions,
+    )

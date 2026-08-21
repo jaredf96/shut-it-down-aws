@@ -20,15 +20,35 @@ from app.utils import get_regions
 logger = logging.getLogger("app.scan")
 
 
-def scan_one(scanner_key: str, regions: list[str] | None = None, session=None) -> list[Resource]:
+def scan_one(
+    scanner_key: str,
+    regions: list[str] | None = None,
+    session=None,
+    failed_regions: dict[str, str] | None = None,
+) -> list[Resource]:
     """Run a single scanner by its key (e.g. "ec2"). Raises KeyError if unknown.
 
     `session` is an optional boto3 Session, used to scan a specific
-    (assumed-role) account; None uses the default credential chain. Returned
+    (assumed-role) account; None uses the default credential chain. Pass
+    `failed_regions` to collect the regions the sweep could not read. Returned
     resources are stamped with cost estimates.
     """
     scanner = SCANNERS[scanner_key]
-    return pricing_service.annotate(scanner.scan(regions, session=session))
+    return pricing_service.annotate(
+        scanner.scan(regions, session=session, failed_regions=failed_regions)
+    )
+
+
+def region_failures(failed: dict[str, str]) -> list[dict[str, object]]:
+    """Render collected region failures as the API's `regions_failed` entries.
+
+    `account_id`/`account_label` mirror `Resource`: None in single-account mode,
+    stamped by `multi_account_service` when a tenant has registered accounts.
+    """
+    return [
+        {"region": region, "reason": reason, "account_id": None, "account_label": None}
+        for region, reason in sorted(failed.items())
+    ]
 
 
 def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object]:
@@ -42,13 +62,17 @@ def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object
     regions = regions or get_regions(session)
 
     all_resources: list[Resource] = []
+    # Shared across scanners: a disabled or unpermitted region fails for all of
+    # them, and the caller wants "regions I could not read", not one list per
+    # scanner.
+    failed_regions: dict[str, str] = {}
     logger.info("scan start: %d region(s) across %d scanners", len(regions), len(SCANNERS))
     started = time.perf_counter()
 
     for key in SCANNERS:
         t0 = time.perf_counter()
         try:
-            found = scan_one(key, regions, session=session)
+            found = scan_one(key, regions, session=session, failed_regions=failed_regions)
         except Exception:
             # One failing scanner should never break the whole scan.
             logger.exception("scanner %s failed", key)
@@ -56,12 +80,21 @@ def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object
         all_resources.extend(found)
         logger.info("  %-14s %3d resource(s) in %6.2fs", key, len(found), time.perf_counter() - t0)
 
+    if failed_regions:
+        logger.warning(
+            "scan could not read %d of %d region(s): %s",
+            len(failed_regions),
+            len(regions),
+            ", ".join(f"{r} ({reason})" for r, reason in sorted(failed_regions.items())),
+        )
+
     logger.info(
         "scan done: %d resource(s) in %.2fs", len(all_resources), time.perf_counter() - started
     )
     return {
         "summary": summarize(all_resources),
         "resources": all_resources,
+        "regions_failed": region_failures(failed_regions),
     }
 
 

@@ -1,7 +1,9 @@
 import boto3
+from botocore.exceptions import ClientError
 
-from app.models import Resource
+from app.models import Resource, RiskLevel
 from app.services import scan_all, scan_one
+from app.utils.concurrency import scan_regions
 from tests.conftest import REGION
 
 
@@ -22,7 +24,8 @@ def test_scan_all_aggregates_and_summarizes():
 
     result = scan_all()
 
-    assert set(result.keys()) == {"summary", "resources"}
+    assert set(result.keys()) == {"summary", "resources", "regions_failed"}
+    assert result["regions_failed"] == []  # nothing was unreadable
     assert all(isinstance(r, Resource) for r in result["resources"])
 
     summary = result["summary"]
@@ -30,3 +33,83 @@ def test_scan_all_aggregates_and_summarizes():
     # Running EC2 (MEDIUM) and S3 bucket (REVIEW) should both be counted.
     assert summary["by_risk_level"].get("MEDIUM", 0) >= 1
     assert summary["by_risk_level"].get("REVIEW", 0) >= 1
+
+
+# --- Regions we could not read -------------------------------------------
+#
+# A disabled, throttled, or unpermitted region returns no resources, which is
+# byte-for-byte what a genuinely empty region returns. For a tool whose claim is
+# "here is what you have running", reporting "couldn't see" as "nothing there"
+# is the worst answer it can give, so the sweep has to say which regions it
+# failed to read.
+
+
+def _fake(region: str) -> Resource:
+    return Resource(
+        resource_type="EC2 Instance",
+        resource_id=f"i-{region}",
+        region=region,
+        status="running",
+        risk_level=RiskLevel.MEDIUM,
+        monthly_cost_risk="x",
+        suggested_action="y",
+    )
+
+
+def _denied(code: str = "AuthFailure") -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": "not authorized"}}, "DescribeInstances")
+
+
+def test_scan_regions_records_an_unreadable_region_in_the_pooled_path():
+    failed: dict[str, str] = {}
+
+    def scan_region(region: str):
+        if region == "us-west-1":
+            raise _denied()
+        return [_fake(region)]
+
+    found = scan_regions(
+        scan_region, ["us-east-1", "us-west-1"], boto3.Session(), failed_regions=failed
+    )
+
+    assert [r.region for r in found] == ["us-east-1"]
+    assert failed == {"us-west-1": "AuthFailure"}
+
+
+def test_scan_regions_records_an_unreadable_region_in_the_single_region_path():
+    failed: dict[str, str] = {}
+
+    def scan_region(region: str):
+        raise _denied("UnauthorizedOperation")
+
+    assert scan_regions(scan_region, [REGION], boto3.Session(), failed_regions=failed) == []
+    assert failed == {REGION: "UnauthorizedOperation"}
+
+
+def test_scan_regions_without_a_collector_still_swallows_the_failure():
+    """The out-parameter is optional; omitting it keeps the old behavior."""
+
+    def scan_region(region: str):
+        raise _denied()
+
+    assert scan_regions(scan_region, [REGION], boto3.Session()) == []
+
+
+def test_scan_all_reports_the_region_it_could_not_read(monkeypatch):
+    from app.scanners import ec2_scanner
+
+    def boom(region, session):
+        raise _denied("UnauthorizedOperation")
+
+    monkeypatch.setattr(ec2_scanner, "_scan_region", boom)
+
+    result = scan_all(regions=[REGION])
+
+    assert result["regions_failed"] == [
+        {
+            "region": REGION,
+            "reason": "UnauthorizedOperation",
+            "account_id": None,
+            "account_label": None,
+        }
+    ]

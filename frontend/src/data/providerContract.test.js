@@ -43,7 +43,12 @@ function stubApi() {
     const path = String(url).replace(/^https?:\/\/[^/]+/, "");
     let body;
     if (path.startsWith("/scan?") || path === "/scan") {
-      body = { ...currentScan, alerts: alertsFixture.alerts, persisted: false };
+      body = {
+        ...currentScan,
+        alerts: alertsFixture.alerts,
+        persisted: false,
+        regions_failed: [],
+      };
     } else if (path.startsWith("/scans/diff")) {
       body = expectedDiff;
     } else if (path.startsWith("/scans/")) {

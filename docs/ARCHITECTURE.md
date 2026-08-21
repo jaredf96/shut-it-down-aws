@@ -212,7 +212,7 @@ sequenceDiagram
     API->>DB: previous scan (for change-aware alerts)
     API->>AL: evaluate(resources, previous)
     API->>DB: save scan (tenant-scoped)
-    API-->>FE: { summary, resources, alerts, scan_id }
+    API-->>FE: { summary, resources, regions_failed, alerts, scan_id }
 ```
 
 ## Deployment shape

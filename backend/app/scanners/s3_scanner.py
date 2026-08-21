@@ -20,11 +20,16 @@ def _bucket_region(s3, bucket_name: str) -> str:
         return "unknown"
 
 
-def scan(regions: list[str] | None = None, session: boto3.Session | None = None) -> list[Resource]:
+def scan(
+    regions: list[str] | None = None,
+    session: boto3.Session | None = None,
+    failed_regions: dict[str, str] | None = None,
+) -> list[Resource]:
     """Return all S3 buckets as Resource objects.
 
-    `regions` is accepted for a uniform scanner signature but ignored, since
-    list_buckets is global.
+    `regions` and `failed_regions` are accepted for a uniform scanner signature
+    but unused: list_buckets is global, so there is no per-region sweep that
+    could partially fail.
     """
     session = session or boto3.Session()
     resources: list[Resource] = []

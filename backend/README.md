@@ -93,6 +93,14 @@ boto3 picks up credentials automatically from any of:
 
 `GET /scan` accepts `?save=false` to skip persistence for that call.
 
+Every `GET /scan` response carries a **`regions_failed`** array: the regions the
+sweep could not fully read (disabled, throttled, or not permitted), each with the
+API error code and — in multi-account mode — the account it belongs to. Such a
+region returns no resources, which is indistinguishable from an empty one, so a
+scan that could not see three regions has to say so rather than present a partial
+inventory as a clean bill of health. It is empty when everything was read, and is
+not stored with a saved scan.
+
 ### Tenancy & auth
 
 Every scan and alert is scoped to a `tenant_id`, so the app is multi-tenant
@@ -226,6 +234,8 @@ credentials are used (single-account / local — unchanged).
 
 - Per-account failures (e.g. a role that can't be assumed) are collected in
   `account_errors` and never break the other accounts.
+- Unreadable regions are collected in `regions_failed`, stamped with the account
+  they occurred in — "us-west-1 failed" means little without saying whose.
 - Resource identity for diffs/alerts includes `account_id`, so the same id in
   two accounts is never conflated.
 

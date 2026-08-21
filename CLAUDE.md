@@ -63,7 +63,10 @@ backend/app/
 
 Rules that keep this maintainable:
 - **Scanners are account-agnostic and read-only.** Uniform contract:
-  `scan(regions: list[str] | None = None, session=None) -> list[Resource]`.
+  `scan(regions=None, session=None, failed_regions=None) -> list[Resource]`.
+  `failed_regions` is an optional `dict[str, str]` the sweep fills with
+  `region -> reason` for regions it could not read; the return type stays a
+  plain list so nothing downstream has to unpack a tuple.
   Everything tenant-aware lives in services/repositories via an explicit,
   **optional** `tenant_id=` kwarg (default = local single-tenant mode).
 - **Routes never contain business logic.** They resolve the principal, call a
@@ -118,7 +121,9 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   helper. boto3 client construction goes through `make_client` (lock-guarded —
   the botocore client factory isn't safe to call concurrently on a shared
   Session). Single-region calls (every test) stay on the calling thread, so moto
-  never sees worker threads. Per-region errors are swallowed inside `scan_regions`.
+  never sees worker threads. Per-region errors are swallowed inside `scan_regions`,
+  which records them in the `failed_regions` mapping when one is passed — an
+  unreadable region must never reach the UI looking like an empty one.
 - **moto quirks:** STS assume-role accepts any ARN (handy for multi-account
   tests); us-east-1 `get_bucket_location` returns `None`.
 - **`.gitignore`:** root ignores `.env.*` but negates `!.env.example` — keep the
@@ -174,8 +179,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 
 - **New scanner:** add `app/scanners/<svc>_scanner.py` with the uniform `scan()`
   contract — put the per-region body in a `_scan_region(region, session)` helper
-  and return `scan_regions(lambda r: _scan_region(r, session), regions, session)`
-  (build clients via `make_client`). Register in `scanners/__init__.py` SCANNERS
+  and return `scan_regions(lambda r: _scan_region(r, session), regions, session,
+  failed_regions=failed_regions)` (build clients via `make_client`). Let
+  per-region errors propagate out of `_scan_region` so `scan_regions` can record
+  them; catching them there reports an unreadable region as an empty one. Register in `scanners/__init__.py` SCANNERS
   dict → per-service endpoint and aggregate scan come free. Add risk levels + plain-English
   `monthly_cost_risk`/`suggested_action`; populate `details` if cost-estimable;
   add a static price entry in `pricing/static_prices.py`; write moto tests.

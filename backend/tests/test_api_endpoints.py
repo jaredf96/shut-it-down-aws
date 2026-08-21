@@ -35,6 +35,24 @@ def test_scan_all_endpoint_shape():
     body = res.json()
     assert "summary" in body and "resources" in body
     assert body["summary"]["total_resources"] >= 1
+    # Always present, so a caller can tell "saw everything" from "saw nothing".
+    assert body["regions_failed"] == []
+
+
+def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
+    from botocore.exceptions import ClientError
+
+    from app.scanners import ec2_scanner
+
+    def boom(region, session):
+        raise ClientError({"Error": {"Code": "AuthFailure"}}, "DescribeInstances")
+
+    monkeypatch.setattr(ec2_scanner, "_scan_region", boom)
+
+    body = client.get("/scan").json()
+    assert body["regions_failed"] == [
+        {"region": REGION, "reason": "AuthFailure", "account_id": None, "account_label": None}
+    ]
 
 
 def test_unknown_scan_path_is_404():
@@ -309,6 +327,39 @@ def test_scan_tags_resources_when_accounts_registered(dynamo_table, monkeypatch)
     body = client.get("/scan").json()
     assert body["accounts_scanned"][0]["account_id"] == "111111111111"
     assert all(r["account_id"] == "111111111111" for r in body["resources"])
+
+
+def test_unreadable_regions_are_attributed_to_their_account(dynamo_table, monkeypatch):
+    """With several accounts registered, "us-west-1 failed" is meaningless
+    without saying whose us-west-1."""
+    import boto3
+    from botocore.exceptions import ClientError
+
+    from app.scanners import ec2_scanner
+
+    client.post(
+        "/accounts",
+        json={"name": "Acct One", "role_arn": "arn:aws:iam::111111111111:role/Read"},
+    )
+    monkeypatch.setattr(
+        "app.services.multi_account_service.session_for_account",
+        lambda account: boto3.Session(),
+    )
+
+    def boom(region, session):
+        raise ClientError({"Error": {"Code": "AuthFailure"}}, "DescribeInstances")
+
+    monkeypatch.setattr(ec2_scanner, "_scan_region", boom)
+
+    body = client.get("/scan").json()
+    assert body["regions_failed"] == [
+        {
+            "region": REGION,
+            "reason": "AuthFailure",
+            "account_id": "111111111111",
+            "account_label": "Acct One",
+        }
+    ]
 
 
 # --- Team / users / roles ------------------------------------------------

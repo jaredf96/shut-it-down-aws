@@ -5,6 +5,7 @@ import BillingPanel from "../components/BillingPanel.jsx";
 import CleanupPanel from "../components/CleanupPanel.jsx";
 import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
+import RegionFailures from "../components/RegionFailures.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
 import ScanHistory from "../components/ScanHistory.jsx";
 import ScanProgress from "../components/ScanProgress.jsx";
@@ -24,6 +25,9 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [resources, setResources] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  // Regions this scan could not read. Live scans only — a saved scan does not
+  // record them, so viewing history clears it rather than showing a stale one.
+  const [regionsFailed, setRegionsFailed] = useState([]);
   const [hasScanned, setHasScanned] = useState(false);
 
   // The progress bar outlives `loading` by one completion beat, so it can fill
@@ -169,6 +173,7 @@ export default function Dashboard() {
       setResources(sortByRisk(data.resources));
       setSummary(data.summary);
       setAlerts(data.alerts || []);
+      setRegionsFailed(data.regions_failed || []);
       setHasScanned(true);
       setActiveScanId(null);
       setViewingMeta(null);
@@ -201,6 +206,7 @@ export default function Dashboard() {
       setResources(sortByRisk(record.resources));
       setSummary(record.summary);
       setAlerts([]); // alerts reflect the latest live scan, not a historical view
+      setRegionsFailed([]); // not recorded with a saved scan
       setHasScanned(true);
       setActiveScanId(scanId);
       setViewingMeta({ created_at: record.created_at });
@@ -270,6 +276,10 @@ export default function Dashboard() {
 
       {/* Scroll target for a completed scan — the top of the results region. */}
       <div ref={resultsRef} />
+
+      {/* Above the summary tiles on purpose: "these totals are incomplete" has
+          to be read before the totals are. */}
+      {viewingLive && <RegionFailures failures={regionsFailed} />}
 
       {viewingLive && <AlertsPanel alerts={alerts} />}
 

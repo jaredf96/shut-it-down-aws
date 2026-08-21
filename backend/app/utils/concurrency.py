@@ -36,28 +36,57 @@ def make_client(session: boto3.Session, service: str, region: str):
         return session.client(service, region_name=region)
 
 
+def failure_reason(exc: Exception) -> str:
+    """A short, stable label for why a region could not be read.
+
+    The API's own error code (``AuthFailure``, ``UnauthorizedOperation``,
+    ``RequestLimitExceeded``…) says what happened without pasting a full
+    botocore message — which is long and can carry ARNs — into an API response.
+    """
+    if isinstance(exc, ClientError):
+        code = exc.response.get("Error", {}).get("Code")
+        if code:
+            return str(code)
+    return type(exc).__name__
+
+
 def scan_regions(
     scan_region: Callable[[str], list[Resource]],
     regions: list[str],
     session: boto3.Session,
     *,
     max_workers: int = _MAX_WORKERS,
+    failed_regions: dict[str, str] | None = None,
 ) -> list[Resource]:
     """Call ``scan_region(region)`` for every region and flatten the results.
 
-    A region that errors (disabled, or lacking permission) is skipped, matching
-    the previous per-region try/except behavior. Output preserves ``regions``
-    order regardless of which threads finish first, so scans stay deterministic.
+    A region that errors (disabled, throttled, or lacking permission) yields no
+    resources. Pass ``failed_regions`` to find out which ones: each failure is
+    recorded there as ``region -> reason``. Without it an unreadable region is
+    indistinguishable from an empty one, which for an inventory tool is the
+    most damaging thing it can get wrong — "couldn't see" reported as "nothing
+    there". The mapping is an out-parameter so scanners keep returning a plain
+    ``list[Resource]``.
+
+    Output preserves ``regions`` order regardless of which threads finish
+    first, so scans stay deterministic.
     """
     if not regions:
         return []
+
+    def record(region: str, exc: Exception) -> None:
+        # First failure wins: a disabled region fails the same way for every
+        # scanner, and the first reason is as informative as the seventh.
+        if failed_regions is not None:
+            failed_regions.setdefault(region, failure_reason(exc))
 
     # Single region (notably every test, pinned to one region): stay on the
     # calling thread — no pool, no thread-safety concerns, identical behavior.
     if len(regions) == 1:
         try:
             return list(scan_region(regions[0]))
-        except (BotoCoreError, ClientError):
+        except (BotoCoreError, ClientError) as exc:
+            record(regions[0], exc)
             return []
 
     # Freeze credentials once before fanning out.
@@ -74,8 +103,9 @@ def scan_regions(
             region = futures[future]
             try:
                 by_region[region] = future.result()
-            except (BotoCoreError, ClientError):
+            except (BotoCoreError, ClientError) as exc:
                 by_region[region] = []  # region disabled or not permitted
+                record(region, exc)
 
     resources: list[Resource] = []
     for region in regions:

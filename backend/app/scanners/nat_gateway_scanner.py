@@ -48,8 +48,17 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
     return resources
 
 
-def scan(regions: list[str] | None = None, session: boto3.Session | None = None) -> list[Resource]:
+def scan(
+    regions: list[str] | None = None,
+    session: boto3.Session | None = None,
+    failed_regions: dict[str, str] | None = None,
+) -> list[Resource]:
     """Return all NAT Gateways as Resource objects."""
     session = session or boto3.Session()
     regions = regions or get_regions(session)
-    return scan_regions(lambda region: _scan_region(region, session), regions, session)
+    return scan_regions(
+        lambda region: _scan_region(region, session),
+        regions,
+        session,
+        failed_regions=failed_regions,
+    )

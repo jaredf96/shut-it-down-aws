@@ -65,10 +65,30 @@ export interface Scan {
   resources: Resource[];
 }
 
+/**
+ * One region a scan could not fully read — disabled, throttled, or not
+ * permitted. Such a region returns no resources, which is byte-for-byte what an
+ * empty region returns, so it has to be reported separately or "couldn't see"
+ * silently renders as "nothing there".
+ */
+export interface RegionFailure {
+  region: string;
+  /** The API's own error code (e.g. "AuthFailure"), or the exception class name. */
+  reason: string;
+  /** Set when scanning a tenant's registered accounts; null in single-account mode. */
+  account_id: string | null;
+  account_label: string | null;
+}
+
 /** `GET /scan` — a scan plus the alerts derived from it. */
 export interface ScanResult extends Scan {
   alerts?: Alert[];
   persisted?: boolean;
+  /**
+   * Always present on a live scan; empty when every region was read. Not stored
+   * with a saved scan, so `getScan()` does not carry it.
+   */
+  regions_failed?: RegionFailure[];
 }
 
 export interface DiffCounts {
