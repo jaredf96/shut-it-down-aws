@@ -1424,6 +1424,7 @@ h1::before {
 .cleanup__result.is-error,
 .cleanup__result.is-precondition_failed,
 .cleanup__result.is-confirmation_mismatch,
+.cleanup__result.is-unknown_account,
 .cleanup__result.is-unsupported_action {
   background: color-mix(in oklab, var(--critical) 12%, transparent);
   border-color: color-mix(in oklab, var(--critical) 30%, transparent);
@@ -1485,6 +1486,7 @@ h1::before {
 
 .cleanup__status--precondition_failed,
 .cleanup__status--confirmation_mismatch,
+.cleanup__status--unknown_account,
 .cleanup__status--unsupported_action,
 .cleanup__status--error {
   background: color-mix(in oklab, var(--critical) 14%, transparent);

@@ -138,6 +138,8 @@ export interface CleanupResult {
     | "dry_run"
     | "confirmation_mismatch"
     | "unsupported_action"
+    /** The named account is not registered to this tenant — refused, never retargeted. */
+    | "unknown_account"
     | "precondition_failed"
     | "error";
   detail: string;

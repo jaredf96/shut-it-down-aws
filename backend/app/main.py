@@ -270,6 +270,7 @@ _CLEANUP_STATUS_CODE = {
     "dry_run": 200,
     "confirmation_mismatch": 400,
     "unsupported_action": 400,
+    "unknown_account": 404,
     "precondition_failed": 409,
     "error": 502,
 }
@@ -298,6 +299,8 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_a
 
     Hard-gated by `ENABLE_CLEANUP_ACTIONS`. Requires `confirm_resource_id` to
     equal `resource_id`. Defaults to a dry run; pass `dry_run=false` to mutate.
+    An `account_id` the tenant has not registered is refused (404), never run
+    against the server's own credentials.
     """
     if not config.cleanup_enabled():
         raise HTTPException(

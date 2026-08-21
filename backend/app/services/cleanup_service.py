@@ -6,9 +6,11 @@ calling this; this layer adds the rest):
   1. The action must be in the supported catalog (terminate/delete-S3/RDS/NAT
      are simply absent, so they are refused).
   2. `confirm_resource_id` must exactly equal `resource_id`.
-  3. The action re-checks live AWS state (precondition) before mutating.
-  4. `dry_run` (default True at the API) reports what *would* happen.
-  5. Every attempt — refused, failed, dry-run, or executed — is audited.
+  3. A named `account_id` must be one this tenant has registered — there is no
+     fallback to the server's own credentials.
+  4. The action re-checks live AWS state (precondition) before mutating.
+  5. `dry_run` (default True at the API) reports what *would* happen.
+  6. Every attempt — refused, failed, dry-run, or executed — is audited.
 """
 
 from __future__ import annotations
@@ -22,12 +24,23 @@ from app.services.cleanup_actions import ACTIONS, PreconditionError
 logger = logging.getLogger(__name__)
 
 
+class UnknownAccountError(Exception):
+    """The caller named an AWS account this tenant has not registered."""
+
+
 def _session(tenant_id: str, account_id: str | None):
-    """Default credentials, or assume-role into a registered account."""
+    """Default credentials, or assume-role into a registered account.
+
+    A named account must resolve to a registration this tenant owns. Falling
+    back to `default_session()` when the lookup misses would point a mutating
+    action at the *server's own* credentials rather than the account the caller
+    asked for — and `execute()` would then audit that misfire as a success.
+    """
     if account_id:
         account = account_repository.get_account(tenant_id, account_id)
-        if account:
-            return session_for_account(account)
+        if account is None:
+            raise UnknownAccountError(f"AWS account {account_id} is not registered.")
+        return session_for_account(account)
     return default_session()
 
 
@@ -55,7 +68,7 @@ def execute(
     """Run one cleanup action. Returns an audited result dict with a `status`:
 
     success | dry_run | confirmation_mismatch | unsupported_action |
-    precondition_failed | error
+    unknown_account | precondition_failed | error
     """
     base = {
         "action": action,
@@ -83,6 +96,10 @@ def execute(
     try:
         session = _session(tenant_id, account_id)
         detail = spec["run"](session, region, resource_id, dry_run)
+    except UnknownAccountError as exc:
+        # Ahead of the broad handler below, and inside this try so an STS
+        # failure while assuming a *registered* role is still audited.
+        return _finish(base, tenant_id, user_id, "unknown_account", str(exc))
     except PreconditionError as exc:
         return _finish(base, tenant_id, user_id, "precondition_failed", str(exc))
     except Exception as exc:  # AWS / unexpected error — still audited

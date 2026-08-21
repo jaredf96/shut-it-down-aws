@@ -212,6 +212,99 @@ def test_delete_unattached_volume_succeeds(dynamo_table, cleanup_on):
     assert ec2.describe_volumes().get("Volumes") == []
 
 
+# --- Account targeting ---------------------------------------------------
+
+
+def test_unregistered_account_is_refused_and_never_uses_default_credentials(
+    dynamo_table, cleanup_on, monkeypatch
+):
+    """A cleanup naming an unregistered account must be refused outright.
+
+    The failure this guards against is not cross-tenant data loss — `get_account`
+    is tenant-scoped, so another tenant's registration is unreachable. It is
+    silent *retargeting*: the lookup missed, the service fell through to the
+    server's own default credentials, and the destructive call landed on the
+    host account while the audit recorded a success.
+    """
+    ec2 = boto3.client("ec2", region_name=REGION)
+    iid = ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)["Instances"][0][
+        "InstanceId"
+    ]
+
+    # Record any attempt to resolve credentials. Reaching either of these at all
+    # means the action was about to run against *some* account.
+    resolved: list[str] = []
+    monkeypatch.setattr(cleanup_service, "default_session", lambda: resolved.append("default"))
+    monkeypatch.setattr(
+        cleanup_service, "session_for_account", lambda account: resolved.append("assumed")
+    )
+
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": iid,
+            "confirm_resource_id": iid,
+            "region": REGION,
+            "account_id": "999999999999",  # never registered by this tenant
+            "dry_run": False,
+        },
+    )
+
+    # Asserted first: against the old code this reads `['default'] == []`, which
+    # names the defect exactly — the host's own credentials were resolved.
+    assert resolved == []
+    assert res.status_code == 404
+
+    # The host account's instance — the one default credentials can see — is untouched.
+    state = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]["State"][
+        "Name"
+    ]
+    assert state == "running"
+
+    entries = client.get("/cleanup/audit").json()["entries"]
+    refusal = next(e for e in entries if e["status"] == "unknown_account")
+    assert refusal["account_id"] == "999999999999"
+    assert refusal["resource_id"] == iid
+
+
+def test_registered_account_still_assumes_its_role(dynamo_table, cleanup_on, monkeypatch):
+    """The refusal must not swallow the legitimate multi-account path."""
+    created = client.post(
+        "/accounts",
+        json={"name": "Sandbox", "role_arn": "arn:aws:iam::111111111111:role/Read"},
+    ).json()
+
+    assumed: list[dict] = []
+
+    def _fake_assume(account):
+        assumed.append(account)
+        return boto3.Session()
+
+    monkeypatch.setattr(cleanup_service, "session_for_account", _fake_assume)
+
+    ec2 = boto3.client("ec2", region_name=REGION)
+    iid = ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)["Instances"][0][
+        "InstanceId"
+    ]
+
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": iid,
+            "confirm_resource_id": iid,
+            "region": REGION,
+            "account_id": created["account_id"],
+            "dry_run": True,
+        },
+    )
+
+    assert res.status_code == 200
+    assert res.json()["status"] == "dry_run"
+    assert [a["account_id"] for a in assumed] == ["111111111111"]
+
+
 # --- Role gating ---------------------------------------------------------
 
 
