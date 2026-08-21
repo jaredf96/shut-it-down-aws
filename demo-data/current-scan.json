@@ -23,6 +23,7 @@
       "suggested_action": "Release this Elastic IP manually if you no longer need a static address. It is likely leftover from a deleted instance.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": null,
       "details": null,
       "estimated_monthly_cost": 3.65,
       "cost_currency": "USD",
@@ -39,6 +40,7 @@
       "suggested_action": "Confirm you still need outbound internet for a private subnet. If this is leftover lab infrastructure, delete it manually.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-07-09T14:05:11.884Z",
       "details": null,
       "estimated_monthly_cost": 32.85,
       "cost_currency": "USD",
@@ -55,6 +57,7 @@
       "suggested_action": "Confirm you still need this database. If it was for a lab, take a final snapshot (optional) and delete it manually.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": "2026-05-13T14:05:11.884Z",
       "details": {
         "instance_class": "db.t3.micro",
         "engine": "postgres"
@@ -74,6 +77,7 @@
       "suggested_action": "Review the contents and size of this bucket. Empty and delete it manually if it only holds leftover tutorial data.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-01-17T14:05:11.884Z",
       "details": null,
       "estimated_monthly_cost": null,
       "cost_currency": "USD",
@@ -90,6 +94,7 @@
       "suggested_action": "Review the contents and size of this bucket. Empty and delete it manually if it only holds leftover tutorial data.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": "2026-03-16T14:05:11.884Z",
       "details": null,
       "estimated_monthly_cost": null,
       "cost_currency": "USD",
@@ -106,6 +111,7 @@
       "suggested_action": "Review this orphaned volume. If it holds no data you need, snapshot it (optional) and delete it manually.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-06-04T14:05:11.884Z",
       "details": {
         "size_gb": 100,
         "volume_type": "gp3"
@@ -125,6 +131,7 @@
       "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-05-22T14:05:11.884Z",
       "details": {
         "instance_type": "t3.micro"
       },
@@ -143,6 +150,7 @@
       "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": "2026-07-25T14:05:11.884Z",
       "details": {
         "instance_type": "t3.medium"
       },
@@ -161,6 +169,7 @@
       "suggested_action": "Review whether any app still sits behind this load balancer. Delete it manually if the backing service is gone.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-06-10T14:05:11.884Z",
       "details": null,
       "estimated_monthly_cost": 16.43,
       "cost_currency": "USD",
@@ -177,6 +186,7 @@
       "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-06-17T14:05:11.884Z",
       "details": {
         "size_gb": 8,
         "volume_type": "gp2"
@@ -196,6 +206,7 @@
       "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-06-17T14:05:11.884Z",
       "details": {
         "size_gb": 8,
         "volume_type": "gp2"
@@ -215,6 +226,7 @@
       "suggested_action": "Keep if the attached instance is still needed. It will be cleaned up when you remove that instance.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": "2026-06-17T14:05:11.884Z",
       "details": {
         "size_gb": 8,
         "volume_type": "gp2"
@@ -234,6 +246,7 @@
       "suggested_action": "Confirm you no longer need this instance. Consider terminating it and deleting unused volumes.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-06-17T14:05:11.884Z",
       "details": {
         "instance_type": "t3.small"
       },
@@ -252,6 +265,7 @@
       "suggested_action": "Keep while the attached resource is in use.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": null,
       "details": null,
       "estimated_monthly_cost": 3.65,
       "cost_currency": "USD",
@@ -268,6 +282,7 @@
       "suggested_action": "Keep while the attached resource is in use.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": null,
       "details": null,
       "estimated_monthly_cost": 3.65,
       "cost_currency": "USD",

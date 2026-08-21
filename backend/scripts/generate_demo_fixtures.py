@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import sys
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import boto3
@@ -45,10 +46,40 @@ from app.services.diff_service import diff_resource_lists  # noqa: E402
 SANDBOX = {"account_id": "111122223333", "label": "sandbox-lab", "region": "us-east-1"}
 TRAINING = {"account_id": "444455556666", "label": "training-account", "region": "us-west-2"}
 
-CURRENT_SCAN_ID = "2026-08-17T14:05:11.884Z_3b9f2ad1"
-CURRENT_AT = "2026-08-17T14:05:11.884Z"
-PREVIOUS_SCAN_ID = "2026-08-14T08:12:44.201Z_7c1e93af"
-PREVIOUS_AT = "2026-08-14T08:12:44.201Z"
+CURRENT_DT = datetime(2026, 8, 17, 14, 5, 11, 884000, tzinfo=UTC)
+PREVIOUS_DT = datetime(2026, 8, 14, 8, 12, 44, 201000, tzinfo=UTC)
+
+
+def _iso(moment: datetime) -> str:
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+CURRENT_AT = _iso(CURRENT_DT)
+CURRENT_SCAN_ID = f"{CURRENT_AT}_3b9f2ad1"
+PREVIOUS_AT = _iso(PREVIOUS_DT)
+PREVIOUS_SCAN_ID = f"{PREVIOUS_AT}_7c1e93af"
+
+# How old each demo resource is at the time of the current scan.
+#
+# The scanners read the real `LaunchTime` / `CreateTime` / `CreationDate`, but
+# moto stamps those with the wall clock at generation time: every fixture
+# resource would be zero days old, and the values would churn on every run,
+# taking the committed screenshots with them. Age is the whole point of the
+# field, so the ages are pinned here — matched on a substring of the resource's
+# name or id, which the seed keeps stable.
+DEMO_AGE_DAYS = {
+    "tutorial-web-server": 87,  # the oldest finding — the demo's headline
+    "tutorial-scratch-volume": 74,
+    "lab-vpc-nat": 39,
+    "lab-alb": 68,
+    "cloud-lab-artifacts-2026": 212,
+    "workshop-node-01": 61,
+    "student-sandbox-07": 23,
+    "training-postgres": 96,
+    "classroom-submissions-archive": 154,
+}
+# Root volumes, which the scanner reports untagged and unnamed.
+DEFAULT_AGE_DAYS = 61
 
 
 def _network(ec2, region: str, azs: list[str]):
@@ -155,6 +186,19 @@ def seed_training(region: str) -> None:
 MOTO_ACCOUNT_ID = "123456789012"
 
 
+def pin_age(item: dict) -> None:
+    """Replace moto's wall-clock timestamp with a fixed, plausible age.
+
+    Left alone when the scanner reported no creation time at all (Elastic IPs),
+    so the fixture keeps showing what a real scan of that service shows.
+    """
+    if not item.get("created_at"):
+        return
+    key = item.get("name") or item["resource_id"]
+    days = next((d for needle, d in DEMO_AGE_DAYS.items() if needle in key), DEFAULT_AGE_DAYS)
+    item["created_at"] = _iso(CURRENT_DT - timedelta(days=days))
+
+
 def scan_account(seed_fn, account: dict) -> list[dict]:
     """Run the real scanners in an isolated moto account and stamp ownership."""
     with mock_aws():
@@ -170,6 +214,7 @@ def scan_account(seed_fn, account: dict) -> list[dict]:
         for field in ("resource_id", "name"):
             if isinstance(item.get(field), str):
                 item[field] = item[field].replace(MOTO_ACCOUNT_ID, account["account_id"])
+        pin_age(item)
         resources.append(item)
     return resources
 
@@ -225,6 +270,7 @@ def derive_previous(current: list[dict]) -> list[dict]:
                 "Review this orphaned volume. If it holds no data you need, "
                 "snapshot it (optional) and delete it manually."
             ),
+            "created_at": _iso(CURRENT_DT - timedelta(days=180)),
             "details": {"size_gb": 50, "volume_type": "gp2"},
             "estimated_monthly_cost": 5.0,
             "cost_source": "static",

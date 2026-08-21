@@ -44,6 +44,8 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
             )
             action = "Keep while the attached resource is in use."
 
+        # No `created_at`: describe_addresses reports no allocation time, so the
+        # age column is genuinely blank for Elastic IPs rather than unpopulated.
         resources.append(
             Resource(
                 resource_type="Elastic IP",

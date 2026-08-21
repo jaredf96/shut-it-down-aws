@@ -56,6 +56,7 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
                         risk_level=risk,
                         monthly_cost_risk=cost,
                         suggested_action=action,
+                        created_at=instance.get("LaunchTime"),
                         details={"instance_type": instance.get("InstanceType")},
                     )
                 )

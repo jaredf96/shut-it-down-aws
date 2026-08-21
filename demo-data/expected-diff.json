@@ -39,6 +39,7 @@
       "suggested_action": "Release this Elastic IP manually if you no longer need a static address. It is likely leftover from a deleted instance.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": null,
       "details": null,
       "estimated_monthly_cost": 3.65,
       "cost_currency": "USD",
@@ -55,6 +56,7 @@
       "suggested_action": "Confirm you still need outbound internet for a private subnet. If this is leftover lab infrastructure, delete it manually.",
       "account_id": "111122223333",
       "account_label": "sandbox-lab",
+      "created_at": "2026-07-09T14:05:11.884Z",
       "details": null,
       "estimated_monthly_cost": 32.85,
       "cost_currency": "USD",
@@ -73,6 +75,7 @@
       "suggested_action": "Review this orphaned volume. If it holds no data you need, snapshot it (optional) and delete it manually.",
       "account_id": "444455556666",
       "account_label": "training-account",
+      "created_at": "2026-02-18T14:05:11.884Z",
       "details": {
         "size_gb": 50,
         "volume_type": "gp2"
@@ -95,6 +98,7 @@
         "suggested_action": "Review whether this instance is still needed. Stop it manually if it is only for a completed tutorial.",
         "account_id": "111122223333",
         "account_label": "sandbox-lab",
+        "created_at": "2026-05-22T14:05:11.884Z",
         "details": {
           "instance_type": "t3.micro"
         },

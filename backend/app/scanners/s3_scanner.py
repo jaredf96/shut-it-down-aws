@@ -55,6 +55,7 @@ def scan(
                         "Review the contents and size of this bucket. Empty and delete it "
                         "manually if it only holds leftover tutorial data."
                     ),
+                    created_at=bucket.get("CreationDate"),
                 )
             )
     except (BotoCoreError, ClientError):

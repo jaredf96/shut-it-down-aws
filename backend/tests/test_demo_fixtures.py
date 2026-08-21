@@ -16,6 +16,7 @@ Regenerate with `make demo-fixtures` if one of these fails.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -136,6 +137,34 @@ def test_diff_between_scans_has_something_in_every_bucket(current, previous):
     assert added, "no resources appear only in the current scan"
     assert removed, "no resources disappeared between scans"
     assert changed, "no resource changed status or risk between scans"
+
+
+def _moment(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def test_demo_resources_carry_a_plausible_age(current):
+    """ "14 idle instances" is inventory; "oldest running 87 days" is a finding.
+
+    The generator pins these ages deliberately — moto stamps the wall clock, so
+    without pinning every demo resource would be zero days old and would churn
+    on every regeneration. This fails if that pinning is ever dropped.
+    """
+    scanned_at = _moment(current["created_at"])
+    ages = {
+        r["resource_id"]: (scanned_at - _moment(r["created_at"])).days
+        for r in current["resources"]
+        if r["created_at"]
+    }
+
+    assert len(ages) >= 10, "most of the demo should show an age"
+    assert all(days > 0 for days in ages.values()), "nothing predates its own creation"
+    assert max(ages.values()) >= 60, "no resource is old enough to look like a finding"
+
+    # The one service whose API reports no creation time at all. A blank age
+    # column there is correct; a blank one anywhere else means it was dropped.
+    undated = {r["resource_type"] for r in current["resources"] if not r["created_at"]}
+    assert undated == {"Elastic IP"}
 
 
 def test_scanner_variety(current):

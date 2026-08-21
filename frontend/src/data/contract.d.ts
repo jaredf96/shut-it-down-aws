@@ -31,6 +31,12 @@ export interface Resource {
   suggested_action: string;
   account_id: string | null;
   account_label: string | null;
+  /**
+   * ISO-8601 creation/launch time as AWS reports it, or null where the API
+   * reports none — `describe_addresses` gives no allocation time for an
+   * Elastic IP, so a blank age there is the answer, not a gap.
+   */
+  created_at: string | null;
   details: Record<string, unknown> | null;
   estimated_monthly_cost: number | null;
   cost_currency: string;

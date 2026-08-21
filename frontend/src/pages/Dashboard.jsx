@@ -53,6 +53,10 @@ export default function Dashboard() {
   const [activeScanId, setActiveScanId] = useState(null); // null => viewing live
   const [viewingMeta, setViewingMeta] = useState(null); // {created_at} when viewing a saved scan
 
+  // When the displayed scan ran, so ages read as of that moment. Null means
+  // "just now" — the live API response carries no timestamp of its own.
+  const [scannedAt, setScannedAt] = useState(null);
+
   // Compare / diff state.
   const [compareFrom, setCompareFrom] = useState("");
   const [compareTo, setCompareTo] = useState("");
@@ -174,6 +178,7 @@ export default function Dashboard() {
       setSummary(data.summary);
       setAlerts(data.alerts || []);
       setRegionsFailed(data.regions_failed || []);
+      setScannedAt(data.created_at || null);
       setHasScanned(true);
       setActiveScanId(null);
       setViewingMeta(null);
@@ -207,6 +212,7 @@ export default function Dashboard() {
       setSummary(record.summary);
       setAlerts([]); // alerts reflect the latest live scan, not a historical view
       setRegionsFailed([]); // not recorded with a saved scan
+      setScannedAt(record.created_at || null);
       setHasScanned(true);
       setActiveScanId(scanId);
       setViewingMeta({ created_at: record.created_at });
@@ -346,7 +352,7 @@ export default function Dashboard() {
               )}
 
               {hasScanned ? (
-                <ResourceTable resources={filteredResources} />
+                <ResourceTable resources={filteredResources} asOf={scannedAt} />
               ) : (
                 <p className="empty">Click “Run scan” to inspect your AWS account.</p>
               )}

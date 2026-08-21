@@ -34,6 +34,7 @@ def _scan_v2(region: str, session: boto3.Session) -> list[Resource]:
                         "Review whether any app still sits behind this load balancer. "
                         "Delete it manually if the backing service is gone."
                     ),
+                    created_at=lb.get("CreatedTime"),
                 )
             )
     return resources
@@ -62,6 +63,7 @@ def _scan_classic(region: str, session: boto3.Session) -> list[Resource]:
                         "Review whether this classic load balancer is still in use. "
                         "Delete it manually if the backing service is gone."
                     ),
+                    created_at=lb.get("CreatedTime"),
                 )
             )
     return resources

@@ -735,6 +735,14 @@ h1::before {
   color: var(--text-muted);
 }
 
+.cell-age {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .cell-cost {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

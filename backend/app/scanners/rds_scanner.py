@@ -35,6 +35,7 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
                         "Confirm you still need this database. If it was for a lab, "
                         "take a final snapshot (optional) and delete it manually."
                     ),
+                    created_at=db.get("InstanceCreateTime"),
                     details={"instance_class": db_class, "engine": engine},
                 )
             )

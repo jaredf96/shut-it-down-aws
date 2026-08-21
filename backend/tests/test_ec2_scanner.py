@@ -43,3 +43,15 @@ def test_stopped_instance_is_low_risk():
 
 def test_no_instances_returns_empty():
     assert ec2_scanner.scan([REGION]) == []
+
+
+def test_instance_carries_its_launch_time():
+    """Age is what separates "14 idle instances" from "14 idle instances, the
+    oldest running 87 days"."""
+    ec2 = boto3.client("ec2", region_name=REGION)
+    ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)
+
+    resource = ec2_scanner.scan([REGION])[0]
+
+    assert resource.created_at is not None
+    assert resource.created_at.tzinfo is not None  # comparable without guessing a zone

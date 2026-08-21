@@ -1,5 +1,25 @@
 import RiskBadge from "./RiskBadge.jsx";
 
+const MS_PER_DAY = 86_400_000;
+
+// Age is measured against the scan, not against now: a saved scan should read
+// the same tomorrow as it did the day it ran, and the demo's fixture ages would
+// otherwise creep upward every day and outrun the committed screenshots.
+function formatAge(r, asOf) {
+  if (!r.created_at) {
+    return { text: "—", title: "This AWS API does not report a creation time." };
+  }
+  const created = new Date(r.created_at);
+  if (Number.isNaN(created.getTime())) {
+    return { text: "—", title: "Unreadable creation time." };
+  }
+  const days = Math.max(0, Math.floor((asOf - created) / MS_PER_DAY));
+  return {
+    text: days < 1 ? "<1d" : `${days}d`,
+    title: `Created ${created.toLocaleString()}`,
+  };
+}
+
 function formatCost(r) {
   if (r.estimated_monthly_cost === null || r.estimated_monthly_cost === undefined) {
     return { text: "—", title: "Cost depends on usage; not estimated." };
@@ -12,12 +32,14 @@ function formatCost(r) {
 
 // Table view of scanned resources. Read-only — no action buttons yet.
 // The Account column only appears when resources are tagged (multi-account).
-export default function ResourceTable({ resources }) {
+// `asOf` is when the scan ran; it defaults to now for a scan that just did.
+export default function ResourceTable({ resources, asOf }) {
   if (!resources || resources.length === 0) {
     return <p className="empty">No resources found. 🎉 Nothing obvious is costing you money.</p>;
   }
 
   const showAccount = resources.some((r) => r.account_label || r.account_id);
+  const scannedAt = asOf ? new Date(asOf) : new Date();
 
   return (
     <div className="table-wrapper">
@@ -29,6 +51,7 @@ export default function ResourceTable({ resources }) {
             {showAccount && <th>Account</th>}
             <th>Region</th>
             <th>Status</th>
+            <th>Age</th>
             <th>Risk</th>
             <th>Est. $/mo</th>
             <th>Why it may cost money</th>
@@ -51,6 +74,9 @@ export default function ResourceTable({ resources }) {
               )}
               <td>{r.region}</td>
               <td>{r.status}</td>
+              <td className="cell-age" title={formatAge(r, scannedAt).title}>
+                {formatAge(r, scannedAt).text}
+              </td>
               <td>
                 <RiskBadge level={r.risk_level} />
               </td>

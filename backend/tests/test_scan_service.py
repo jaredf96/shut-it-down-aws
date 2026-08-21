@@ -113,3 +113,55 @@ def test_scan_all_reports_the_region_it_could_not_read(monkeypatch):
             "account_label": None,
         }
     ]
+
+
+# --- Resource age ---------------------------------------------------------
+
+
+def test_scanners_capture_the_creation_time_their_api_reports():
+    """Every API that reports a creation time must have it carried through.
+
+    An unpopulated `created_at` is indistinguishable from an API that does not
+    report one, so this pins which is which: `describe_addresses` genuinely
+    returns no allocation time for an Elastic IP, and everything else does.
+    """
+    ec2 = boto3.client("ec2", region_name=REGION)
+    _vpc, subnets = _network(ec2)
+    ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)
+    ec2.create_volume(AvailabilityZone=f"{REGION}a", Size=8)
+    alloc = ec2.allocate_address(Domain="vpc")["AllocationId"]
+    ec2.create_nat_gateway(SubnetId=subnets[0], AllocationId=alloc)
+    boto3.client("elbv2", region_name=REGION).create_load_balancer(
+        Name="lab-alb", Subnets=subnets, Type="application", Scheme="internet-facing"
+    )
+    boto3.client("rds", region_name=REGION).create_db_instance(
+        DBInstanceIdentifier="lab-db",
+        DBInstanceClass="db.t3.micro",
+        Engine="postgres",
+        MasterUsername="admin",
+        MasterUserPassword="not-a-real-password",
+        AllocatedStorage=20,
+    )
+    boto3.client("s3", region_name=REGION).create_bucket(Bucket="lab-age-bucket")
+
+    scanned = scan_all(regions=[REGION])["resources"]
+    dated = {r.resource_type.split(" (")[0]: r.created_at for r in scanned}
+
+    for kind in ("EC2 Instance", "EBS Volume", "NAT Gateway", "RDS Database", "S3 Bucket"):
+        assert dated[kind] is not None, kind
+        assert dated[kind].tzinfo is not None, kind
+    assert dated["Load Balancer"] is not None
+
+    # describe_addresses reports no allocation time — blank, not forgotten.
+    assert dated["Elastic IP"] is None
+
+
+def _network(ec2):
+    vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]
+    subnets = [
+        ec2.create_subnet(
+            VpcId=vpc, CidrBlock=f"10.0.{i + 1}.0/24", AvailabilityZone=f"{REGION}{az}"
+        )["Subnet"]["SubnetId"]
+        for i, az in enumerate("ab")
+    ]
+    return vpc, subnets

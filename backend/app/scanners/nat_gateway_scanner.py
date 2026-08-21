@@ -43,6 +43,7 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
                         "subnet. If this is leftover lab infrastructure, delete it "
                         "manually."
                     ),
+                    created_at=nat.get("CreateTime"),
                 )
             )
     return resources

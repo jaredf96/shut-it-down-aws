@@ -133,6 +133,7 @@ def scan(regions=None, session=None, failed_regions=None) -> list[Resource]: ...
 
 Each `Resource` carries: type, id, name, region, status, **risk level**,
 plain-English cost note, suggested action, optional `account_id`/`account_label`,
+`created_at` (the API's own launch/creation time, null where it reports none),
 type-specific `details` (instance type, volume size, …), and the cost estimate.
 
 ## Data model — single DynamoDB table

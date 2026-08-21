@@ -86,6 +86,13 @@ boto3 picks up credentials automatically from any of:
 
 `GET /scan` accepts `?save=false` to skip persistence for that call.
 
+Each resource carries **`created_at`** — the launch or creation time the AWS API
+itself reports (EC2 `LaunchTime`, EBS/NAT `CreateTime`, RDS `InstanceCreateTime`,
+ELB `CreatedTime`, S3 `CreationDate`). It is null for Elastic IPs, whose API
+reports no allocation time at all. Age is what makes a scan a finding rather than
+an inventory: "14 idle instances" versus "14 idle instances, the oldest running
+87 days".
+
 Every `GET /scan` response carries a **`regions_failed`** array: the regions the
 sweep could not fully read (disabled, throttled, or not permitted), each with the
 API error code and — in multi-account mode — the account it belongs to. Such a

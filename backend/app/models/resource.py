@@ -6,6 +6,7 @@ treat all resources uniformly.
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel
@@ -40,6 +41,12 @@ class Resource(BaseModel):
     # Populated when scanning multiple AWS accounts; None for single-account/local.
     account_id: str | None = None
     account_label: str | None = None
+    # When AWS says the resource was created/launched (EC2 LaunchTime, EBS/NAT
+    # CreateTime, RDS InstanceCreateTime, ELB CreatedTime, S3 CreationDate).
+    # None where the API reports none at all — describe_addresses, for instance,
+    # returns no creation time for an Elastic IP. Age is what turns "14 idle
+    # instances" from an inventory into a finding.
+    created_at: datetime | None = None
     # Type-specific inputs used for cost estimation (e.g. instance_type, size_gb).
     details: dict | None = None
     # Rough estimated monthly cost (USD). source: "live" | "static" | "unknown".
