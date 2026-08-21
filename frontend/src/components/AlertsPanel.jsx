@@ -44,7 +44,12 @@ export default function AlertsPanel({ alerts }) {
                 </span>
                 <RiskBadge level={a.risk_level} />
                 {a.estimated_monthly_cost != null && (
-                  <span className="alert__cost">~${a.estimated_monthly_cost.toFixed(2)}/mo</span>
+                  <span
+                    className="alert__cost"
+                    title="Minimum monthly exposure — usage-based charges are not priced."
+                  >
+                    ≥${a.estimated_monthly_cost.toFixed(2)}/mo
+                  </span>
                 )}
               </div>
             </div>

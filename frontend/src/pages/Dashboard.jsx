@@ -312,7 +312,7 @@ export default function Dashboard() {
                 <div className="summary">
                   {summary.estimated_monthly_cost !== undefined && (
                     <SummaryCard
-                      label="Est. $/mo"
+                      label="Min. $/mo"
                       value={`$${Number(summary.estimated_monthly_cost).toFixed(2)}`}
                     />
                   )}
@@ -330,6 +330,17 @@ export default function Dashboard() {
                   />
                   <SummaryCard label="Low" value={summary.by_risk_level?.LOW || 0} tone="LOW" />
                 </div>
+              )}
+
+              {/* Said plainly rather than hidden in a tooltip: the headline
+                  figure is a floor, and a reader who takes it for a forecast
+                  will under-budget. */}
+              {summary && (
+                <p className="summary__caveat">
+                  <strong>Minimum monthly exposure</strong> — hourly rates and EBS storage for
+                  the resources found. NAT data processing, RDS storage, and S3 storage are not
+                  priced, so the real bill is higher, never lower.
+                </p>
               )}
 
               {hasScanned && accountLabels.length > 1 && (

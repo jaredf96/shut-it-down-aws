@@ -81,3 +81,34 @@ describe("ResourceTable age column", () => {
     expect(headers.indexOf("Age")).toBe(headers.indexOf("Status") + 1);
   });
 });
+
+describe("ResourceTable cost column", () => {
+  it("labels the figure as a minimum, not an estimate", () => {
+    render(<ResourceTable resources={[resource()]} asOf={SCANNED_AT} />);
+
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent.trim());
+    expect(headers).toContain("Min. $/mo");
+    expect(headers).not.toContain("Est. $/mo");
+  });
+
+  it("says in the tooltip that the real cost is higher", () => {
+    render(<ResourceTable resources={[resource()]} asOf={SCANNED_AT} />);
+
+    const cell = screen.getByText("$7.59");
+    expect(cell).toHaveAttribute("title", expect.stringMatching(/^At least \$7\.59\/month/));
+    expect(cell).toHaveAttribute("title", expect.stringMatching(/real cost is higher/i));
+  });
+
+  it("distinguishes unpriced from free", () => {
+    render(
+      <ResourceTable
+        resources={[resource({ estimated_monthly_cost: null, cost_source: "unknown" })]}
+        asOf={SCANNED_AT}
+      />
+    );
+
+    const cell = screen.getByTitle(/not priced/i);
+    expect(cell).toHaveTextContent("—");
+    expect(cell).not.toHaveTextContent("$0");
+  });
+});

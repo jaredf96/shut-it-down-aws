@@ -20,13 +20,19 @@ function formatAge(r, asOf) {
   };
 }
 
+// A floor, not a forecast. Only hourly rates and EBS GB-month storage are
+// priced; NAT data processing, RDS allocated storage, and S3 storage are not,
+// so the real bill can only be higher than this. Labelling it an estimate
+// implied a precision the model does not have.
 function formatCost(r) {
   if (r.estimated_monthly_cost === null || r.estimated_monthly_cost === undefined) {
-    return { text: "—", title: "Cost depends on usage; not estimated." };
+    return { text: "—", title: "Not priced — this resource's cost depends on usage we cannot see." };
   }
   return {
     text: `$${r.estimated_monthly_cost.toFixed(2)}`,
-    title: `~${r.cost_source || "static"} estimate / month`,
+    title:
+      `At least $${r.estimated_monthly_cost.toFixed(2)}/month at ${r.cost_source || "static"} ` +
+      "list prices. Usage-based charges are not included, so the real cost is higher.",
   };
 }
 
@@ -53,7 +59,9 @@ export default function ResourceTable({ resources, asOf }) {
             <th>Status</th>
             <th>Age</th>
             <th>Risk</th>
-            <th>Est. $/mo</th>
+            <th title="Minimum monthly exposure — usage-based charges not included.">
+              Min. $/mo
+            </th>
             <th>Why it may cost money</th>
             <th>Suggested action</th>
           </tr>

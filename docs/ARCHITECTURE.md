@@ -83,7 +83,8 @@ Frontend → API → scanners → persistence → alerts → notifications → b
    role via STS (`app/aws/session.py`) and tags resources by account.
 4. **Pricing** (`app/pricing/`) stamps each resource with an
    `estimated_monthly_cost` — static map by default, live AWS Pricing API when
-   enabled (with static fallback).
+   enabled (with static fallback). It is a **floor**: unpriced dimensions (NAT
+   data processing, RDS storage, S3 storage) can only push the real bill up.
 5. **Persistence** (`app/repositories/`) saves each scan to DynamoDB, scoped by
    tenant, and powers history, "vs previous" deltas, and diffing.
 6. **Alerts** (`app/services/alerts_service.py`) derive notification-ready
@@ -134,7 +135,8 @@ def scan(regions=None, session=None, failed_regions=None) -> list[Resource]: ...
 Each `Resource` carries: type, id, name, region, status, **risk level**,
 plain-English cost note, suggested action, optional `account_id`/`account_label`,
 `created_at` (the API's own launch/creation time, null where it reports none),
-type-specific `details` (instance type, volume size, …), and the cost estimate.
+type-specific `details` (instance type, volume size, …), and the monthly cost
+floor.
 
 ## Data model — single DynamoDB table
 
@@ -165,7 +167,7 @@ Key properties:
 every repository call is a safe no-op and history/teams/billing endpoints return
 `503`, while scanning still works.
 
-## Cost estimation
+## Cost floors
 
 ```mermaid
 flowchart LR
@@ -184,6 +186,11 @@ baseline. `app/pricing/live_prices.py` adds live lookups for a small set of
 dimensions (NAT, EBS today) and is best-effort — any failure falls back to
 static. New types are added to live pricing incrementally; the service prefers
 live automatically when present.
+
+Both paths price only fixed hourly rates and EBS GB-month storage, so the result
+is a lower bound. NAT data processing and S3 storage would need byte counts from
+CloudWatch (and the IAM to read them); RDS allocated storage is already in the
+Describe response and is the cheapest missing dimension to add.
 
 ## Alerts → notifications
 

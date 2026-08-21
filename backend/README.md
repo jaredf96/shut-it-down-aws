@@ -205,11 +205,18 @@ curl -X POST localhost:8000/cleanup/execute -H 'Content-Type: application/json' 
 Durable audit needs persistence (DynamoDB); without it, attempts are still
 recorded to the application logger.
 
-### Cost estimates (static + optional live pricing)
+### Minimum monthly cost (static + optional live pricing)
 
-Every scanned resource is stamped with a rough `estimated_monthly_cost` (USD)
-and a `cost_source`, and the scan `summary` carries a fleet total
-(`estimated_monthly_cost`). Alerts are ranked by spend within each severity.
+Every scanned resource is stamped with an `estimated_monthly_cost` (USD) and a
+`cost_source`, and the scan `summary` carries a fleet total. Alerts are ranked by
+spend within each severity.
+
+**Read the number as a floor, not an estimate.** Only fixed hourly rates and EBS
+GB-month storage are priced. NAT Gateway data processing, RDS allocated storage,
+and S3 storage are not, so the figure can only be lower than the real bill. The
+UI says "minimum monthly exposure" for the same reason. (The field keeps the name
+`estimated_monthly_cost`: renaming it would churn persisted scans, the alert
+model, and the provider contract without making it any more accurate.)
 
 - **`static`** (default) — a built-in price map (`app/pricing/static_prices.py`)
   for common lab resources. Credible ballpark, no AWS calls, always available.
@@ -222,7 +229,11 @@ and a `cost_source`, and the scan `summary` carries a fleet total
 
 Live pricing is best-effort: any failure (missing permission, unknown region,
 parse error) silently falls back to static, and results are cached in-process.
-Estimates exclude data-processing/transfer and are explicitly approximate.
+
+Pricing the missing dimensions is the better long-term fix. Data processing and
+S3 storage need byte counts no Describe call returns — that means CloudWatch
+reads and a wider IAM policy. RDS allocated storage is already in
+`describe_db_instances` and is the cheapest one to add next.
 
 ### Multi-account scanning
 

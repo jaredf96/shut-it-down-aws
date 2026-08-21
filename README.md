@@ -51,7 +51,10 @@ below is honest about which category it falls into.
   (ALB/NLB/Classic), RDS, S3
 - Concurrent multi-region sweeps (a 17-region scan runs in ~12s)
 - Cross-account access via **STS assume-role**, with per-account tagging
-- Cost estimates — static price map, optional live AWS Pricing API refinement
+- Minimum monthly exposure per resource — static price map, optional live AWS
+  Pricing API refinement. Deliberately a floor, not a forecast: NAT data
+  processing, RDS storage, and S3 storage are unpriced, so the real bill is
+  higher, never lower
 - Risk levels + plain-English cost explanation and suggested action
 - Alert rule engine (new billable resource, risk increase, standing high risk)
 - Scan history and diffing, persisted to DynamoDB

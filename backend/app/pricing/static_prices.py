@@ -1,9 +1,13 @@
 """Static price baseline (approximate us-east-1, USD).
 
 These are intentionally rough on-demand list prices for common lab resources —
-enough to give a credible "~$X/month" figure. They are the fallback whenever the
-live Pricing API is disabled or doesn't cover a resource type. Prices drift over
-time; treat every estimate as approximate.
+enough to give a credible "at least $X/month" figure. They are the fallback
+whenever the live Pricing API is disabled or doesn't cover a resource type.
+Prices drift over time; treat every figure as approximate.
+
+Note what is *not* here: NAT Gateway data processing, RDS allocated storage, and
+S3 storage. Anything derived from this map is therefore a floor. See
+`pricing_service` for why that matters and which dimension is cheapest to add.
 """
 
 from __future__ import annotations

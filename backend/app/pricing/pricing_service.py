@@ -1,11 +1,25 @@
-"""Cost estimation: static baseline, with optional live Pricing API overrides.
+"""Cost floors: static baseline, with optional live Pricing API overrides.
 
-`estimate(resource)` returns a rough monthly figure and a `source`:
+**What this produces is a minimum, not an estimate.** Only fixed hourly rates
+and EBS GB-month storage are priced. NAT Gateway data processing, RDS allocated
+storage, and S3 storage are all unpriced, so the number returned here can only
+be lower than the real bill — never higher. The UI and docs say "minimum monthly
+exposure" for that reason; the field is still named `estimated_monthly_cost`
+because renaming it would churn the persisted scans, the alert model, and the
+provider contract for no gain in accuracy.
+
+Pricing the missing dimensions properly is the better long-term answer. Two of
+the three need data a Describe call does not return (bytes processed, bytes
+stored), so they would mean CloudWatch reads and a wider IAM policy; RDS
+allocated storage is already in `describe_db_instances` and is the cheapest one
+to add next.
+
+`estimate(resource)` returns the monthly figure and a `source`:
   - "static"  — from the built-in price map
   - "live"    — from the AWS Pricing API (when enabled and it covers the type)
   - "unknown" — cost depends on usage we can't see (e.g. S3, unknown type)
 
-`annotate(resources)` stamps each Resource with the estimate. Live pricing is
+`annotate(resources)` stamps each Resource with the figure. Live pricing is
 opt-in via ENABLE_LIVE_PRICING and degrades gracefully to static.
 """
 
@@ -46,6 +60,7 @@ def _static_estimate(resource: dict) -> float | None:
         return round(size * rate, 2)
 
     if rtype == "NAT Gateway":
+        # Hourly only — data processing ($/GB) needs CloudWatch, so this is a floor.
         return sp.monthly(sp.NAT_GATEWAY_HOURLY)
 
     if rtype == "Elastic IP":
@@ -57,6 +72,7 @@ def _static_estimate(resource: dict) -> float | None:
         return sp.monthly(hourly)
 
     if rtype == "RDS Database":
+        # Compute only — allocated storage is not priced yet, so this is a floor.
         return sp.monthly(sp.RDS_HOURLY.get(details.get("instance_class")))
 
     # S3 buckets and anything else: usage-dependent / unknown.
@@ -82,7 +98,10 @@ def _live_estimate(resource: dict, pricer: LivePricer) -> float | None:
 
 
 def estimate(resource: dict, pricer: LivePricer | None = None) -> dict:
-    """Return {estimated_monthly_cost, cost_currency, cost_source} for a resource."""
+    """Return {estimated_monthly_cost, cost_currency, cost_source} for a resource.
+
+    The amount is a lower bound on the monthly charge, not a prediction of it.
+    """
     amount = _static_estimate(resource)
     source = "static" if amount is not None else "unknown"
 
@@ -99,7 +118,7 @@ def estimate(resource: dict, pricer: LivePricer | None = None) -> dict:
 
 
 def annotate(resources: list) -> list:
-    """Return copies of the resources stamped with cost estimates."""
+    """Return copies of the resources stamped with their monthly cost floor."""
     pricer = _get_pricer()
     annotated = []
     for resource in resources:

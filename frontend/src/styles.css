@@ -573,6 +573,13 @@ h1::before {
   margin: 20px 0 22px;
 }
 
+.summary__caveat {
+  margin: -10px 0 20px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .summary-card {
   position: relative;
   background: var(--surface);
