@@ -5,9 +5,9 @@ enough to give a credible "at least $X/month" figure. They are the fallback
 whenever the live Pricing API is disabled or doesn't cover a resource type.
 Prices drift over time; treat every figure as approximate.
 
-Note what is *not* here: NAT Gateway data processing, RDS allocated storage, and
-S3 storage. Anything derived from this map is therefore a floor. See
-`pricing_service` for why that matters and which dimension is cheapest to add.
+Note what is *not* here: NAT Gateway data processing and S3 storage. Anything
+derived from this map is therefore a floor. See `pricing_service` for why that
+matters and what the remaining two would cost to add.
 """
 
 from __future__ import annotations
@@ -48,6 +48,12 @@ EC2_HOURLY = {
     "m5.xlarge": 0.192,
     "c5.large": 0.085,
 }
+
+# RDS allocated storage, USD per GB-month. General Purpose SSD (gp2 and gp3
+# price the same) — the default for every lab-sized instance. Provisioned IOPS
+# is 0.125 and magnetic 0.10, close enough at lab volumes that a per-type map
+# would be false precision on top of prices that already drift.
+RDS_STORAGE_GB_MONTH = 0.115
 
 # RDS on-demand hourly (single-AZ), common lab instance classes.
 RDS_HOURLY = {

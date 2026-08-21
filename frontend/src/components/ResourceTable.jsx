@@ -20,10 +20,10 @@ function formatAge(r, asOf) {
   };
 }
 
-// A floor, not a forecast. Only hourly rates and EBS GB-month storage are
-// priced; NAT data processing, RDS allocated storage, and S3 storage are not,
-// so the real bill can only be higher than this. Labelling it an estimate
-// implied a precision the model does not have.
+// A floor, not a forecast. Hourly rates, EBS GB-month storage and RDS allocated
+// storage are priced; NAT data processing and S3 storage are not, so the real
+// bill can only be higher than this. Labelling it an estimate implied a
+// precision the model does not have.
 function formatCost(r) {
   if (r.estimated_monthly_cost === null || r.estimated_monthly_cost === undefined) {
     return { text: "—", title: "Not priced — this resource's cost depends on usage we cannot see." };

@@ -46,7 +46,7 @@
       "resource_id": "training-postgres",
       "region": "us-west-2",
       "risk_level": "HIGH",
-      "estimated_monthly_cost": 12.41
+      "estimated_monthly_cost": 14.71
     }
   ]
 }

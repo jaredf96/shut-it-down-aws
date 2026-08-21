@@ -55,6 +55,52 @@ def test_all_eips_cost_the_public_ipv4_rate():
     )
 
 
+def test_rds_prices_compute_and_allocated_storage():
+    res = _res(
+        "RDS Database",
+        status="available",
+        details={"instance_class": "db.t3.micro", "engine": "postgres", "allocated_storage_gb": 20},
+    )
+    est = pricing_service.estimate(res)
+    # 0.017/hr * 730 + 20 GB * $0.115
+    assert est["estimated_monthly_cost"] == round(round(0.017 * 730, 2) + 2.30, 2)
+    assert est["cost_source"] == "static"
+
+
+def test_rds_storage_is_billed_while_the_instance_is_stopped():
+    # Unlike EC2, a stopped RDS instance keeps paying for provisioned storage —
+    # the reason the scanner calls this out as HIGH risk in the first place.
+    stopped = pricing_service.estimate(
+        _res(
+            "RDS Database",
+            status="stopped",
+            details={"instance_class": "db.t3.micro", "allocated_storage_gb": 20},
+        )
+    )
+    assert stopped["estimated_monthly_cost"] == round(round(0.017 * 730, 2) + 2.30, 2)
+
+
+def test_rds_falls_back_to_whichever_half_it_knows():
+    # Either component alone is still a true floor, so report it rather than
+    # dropping the resource to "unknown".
+    unknown_class = pricing_service.estimate(
+        _res(
+            "RDS Database",
+            details={"instance_class": "db.r5.24xlarge", "allocated_storage_gb": 100},
+        )
+    )
+    assert unknown_class["estimated_monthly_cost"] == 11.50  # storage only
+
+    no_storage = pricing_service.estimate(
+        _res("RDS Database", details={"instance_class": "db.t3.micro"})
+    )
+    assert no_storage["estimated_monthly_cost"] == round(0.017 * 730, 2)
+
+    neither = pricing_service.estimate(_res("RDS Database", details={"engine": "postgres"}))
+    assert neither["estimated_monthly_cost"] is None
+    assert neither["cost_source"] == "unknown"
+
+
 def test_s3_and_unknown_type_are_unknown():
     assert pricing_service.estimate(_res("S3 Bucket", status="active"))["cost_source"] == "unknown"
     assert (

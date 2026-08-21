@@ -36,7 +36,12 @@ def _scan_region(region: str, session: boto3.Session) -> list[Resource]:
                         "take a final snapshot (optional) and delete it manually."
                     ),
                     created_at=db.get("InstanceCreateTime"),
-                    details={"instance_class": db_class, "engine": engine},
+                    details={
+                        "instance_class": db_class,
+                        "engine": engine,
+                        # Billed whether the instance is running or stopped.
+                        "allocated_storage_gb": db.get("AllocatedStorage"),
+                    },
                 )
             )
     return resources

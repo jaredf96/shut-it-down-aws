@@ -211,10 +211,10 @@ Every scanned resource is stamped with an `estimated_monthly_cost` (USD) and a
 `cost_source`, and the scan `summary` carries a fleet total. Alerts are ranked by
 spend within each severity.
 
-**Read the number as a floor, not an estimate.** Only fixed hourly rates and EBS
-GB-month storage are priced. NAT Gateway data processing, RDS allocated storage,
-and S3 storage are not, so the figure can only be lower than the real bill. The
-UI says "minimum monthly exposure" for the same reason. (The field keeps the name
+**Read the number as a floor, not an estimate.** Fixed hourly rates, EBS
+GB-month storage and RDS allocated storage are priced. NAT Gateway data
+processing and S3 storage are not, so the figure can only be lower than the real
+bill. The UI says "minimum monthly exposure" for the same reason. (The field keeps the name
 `estimated_monthly_cost`: renaming it would churn persisted scans, the alert
 model, and the provider contract without making it any more accurate.)
 
@@ -230,10 +230,10 @@ model, and the provider contract without making it any more accurate.)
 Live pricing is best-effort: any failure (missing permission, unknown region,
 parse error) silently falls back to static, and results are cached in-process.
 
-Pricing the missing dimensions is the better long-term fix. Data processing and
-S3 storage need byte counts no Describe call returns — that means CloudWatch
-reads and a wider IAM policy. RDS allocated storage is already in
-`describe_db_instances` and is the cheapest one to add next.
+The two dimensions still missing are the expensive ones to fix. Data processing
+and S3 storage need byte counts no Describe call returns — that means CloudWatch
+reads and a wider IAM policy than a read-only scanner should carry. That is a
+scope decision, not an oversight.
 
 ### Multi-account scanning
 

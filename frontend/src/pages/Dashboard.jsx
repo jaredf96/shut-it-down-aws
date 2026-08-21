@@ -337,8 +337,8 @@ export default function Dashboard() {
                   will under-budget. */}
               {summary && (
                 <p className="summary__caveat">
-                  <strong>Minimum monthly exposure</strong> — hourly rates and EBS storage for
-                  the resources found. NAT data processing, RDS storage, and S3 storage are not
+                  <strong>Minimum monthly exposure</strong> — hourly rates, EBS storage and RDS
+                  storage for the resources found. NAT data processing and S3 storage are not
                   priced, so the real bill is higher, never lower.
                 </p>
               )}

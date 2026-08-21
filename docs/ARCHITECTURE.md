@@ -84,7 +84,7 @@ Frontend → API → scanners → persistence → alerts → notifications → b
 4. **Pricing** (`app/pricing/`) stamps each resource with an
    `estimated_monthly_cost` — static map by default, live AWS Pricing API when
    enabled (with static fallback). It is a **floor**: unpriced dimensions (NAT
-   data processing, RDS storage, S3 storage) can only push the real bill up.
+   data processing, S3 storage) can only push the real bill up.
 5. **Persistence** (`app/repositories/`) saves each scan to DynamoDB, scoped by
    tenant, and powers history, "vs previous" deltas, and diffing.
 6. **Alerts** (`app/services/alerts_service.py`) derive notification-ready
@@ -187,10 +187,10 @@ dimensions (NAT, EBS today) and is best-effort — any failure falls back to
 static. New types are added to live pricing incrementally; the service prefers
 live automatically when present.
 
-Both paths price only fixed hourly rates and EBS GB-month storage, so the result
-is a lower bound. NAT data processing and S3 storage would need byte counts from
-CloudWatch (and the IAM to read them); RDS allocated storage is already in the
-Describe response and is the cheapest missing dimension to add.
+Both paths price fixed hourly rates, EBS GB-month storage and RDS allocated
+storage, so the result is still a lower bound. NAT data processing and S3
+storage would need byte counts from CloudWatch, and the IAM to read them —
+a wider policy than a read-only scanner should carry, so they stay unpriced.
 
 ## Alerts → notifications
 

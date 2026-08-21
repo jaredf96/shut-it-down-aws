@@ -24,6 +24,8 @@ def test_rds_instance_is_high_risk():
     assert r.resource_id == "lab-db"
     assert r.risk_level == RiskLevel.HIGH
     assert "postgres" in r.name
+    # Storage is priced, so it has to survive the scan.
+    assert r.details["allocated_storage_gb"] == 20
 
 
 def test_no_databases_returns_empty():

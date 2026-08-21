@@ -53,8 +53,8 @@ below is honest about which category it falls into.
 - Cross-account access via **STS assume-role**, with per-account tagging
 - Minimum monthly exposure per resource — static price map, optional live AWS
   Pricing API refinement. Deliberately a floor, not a forecast: NAT data
-  processing, RDS storage, and S3 storage are unpriced, so the real bill is
-  higher, never lower
+  processing and S3 storage are unpriced, so the real bill is higher, never
+  lower
 - Risk levels + plain-English cost explanation and suggested action
 - Resource age from the AWS API's own launch/creation time, so a scan reads as a
   finding ("oldest running 87 days") rather than an inventory

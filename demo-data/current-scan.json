@@ -9,7 +9,7 @@
       "MEDIUM": 4,
       "LOW": 6
     },
-    "estimated_monthly_cost": 121.0
+    "estimated_monthly_cost": 123.3
   },
   "resources": [
     {
@@ -60,9 +60,10 @@
       "created_at": "2026-05-13T14:05:11.884Z",
       "details": {
         "instance_class": "db.t3.micro",
-        "engine": "postgres"
+        "engine": "postgres",
+        "allocated_storage_gb": 20
       },
-      "estimated_monthly_cost": 12.41,
+      "estimated_monthly_cost": 14.71,
       "cost_currency": "USD",
       "cost_source": "static"
     },

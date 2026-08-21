@@ -1,18 +1,17 @@
 """Cost floors: static baseline, with optional live Pricing API overrides.
 
-**What this produces is a minimum, not an estimate.** Only fixed hourly rates
-and EBS GB-month storage are priced. NAT Gateway data processing, RDS allocated
-storage, and S3 storage are all unpriced, so the number returned here can only
-be lower than the real bill — never higher. The UI and docs say "minimum monthly
+**What this produces is a minimum, not an estimate.** Fixed hourly rates, EBS
+GB-month storage and RDS allocated storage are priced. NAT Gateway data
+processing and S3 storage are not, so the number returned here can only be lower
+than the real bill — never higher. The UI and docs say "minimum monthly
 exposure" for that reason; the field is still named `estimated_monthly_cost`
 because renaming it would churn the persisted scans, the alert model, and the
 provider contract for no gain in accuracy.
 
-Pricing the missing dimensions properly is the better long-term answer. Two of
-the three need data a Describe call does not return (bytes processed, bytes
-stored), so they would mean CloudWatch reads and a wider IAM policy; RDS
-allocated storage is already in `describe_db_instances` and is the cheapest one
-to add next.
+The two that remain unpriced are the expensive ones to fix: both need data a
+Describe call does not return (bytes processed, bytes stored), so both mean
+CloudWatch reads and a wider IAM policy than a read-only scanner should carry.
+That is a scope decision, not an oversight.
 
 `estimate(resource)` returns the monthly figure and a `source`:
   - "static"  — from the built-in price map
@@ -72,8 +71,16 @@ def _static_estimate(resource: dict) -> float | None:
         return sp.monthly(hourly)
 
     if rtype == "RDS Database":
-        # Compute only — allocated storage is not priced yet, so this is a floor.
-        return sp.monthly(sp.RDS_HOURLY.get(details.get("instance_class")))
+        # Compute plus allocated storage. Storage is billed on what is
+        # provisioned, not what is used, and keeps billing while the instance is
+        # stopped — so unlike EC2 it is charged at every status.
+        compute = sp.monthly(sp.RDS_HOURLY.get(details.get("instance_class")))
+        gb = details.get("allocated_storage_gb")
+        storage = round(gb * sp.RDS_STORAGE_GB_MONTH, 2) if gb else None
+        if compute is None and storage is None:
+            return None
+        # Either half alone is still a true floor, which is what this figure is.
+        return round((compute or 0.0) + (storage or 0.0), 2)
 
     # S3 buckets and anything else: usage-dependent / unknown.
     return None
