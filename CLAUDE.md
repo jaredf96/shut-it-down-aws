@@ -183,7 +183,9 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   failed_regions=failed_regions)` (build clients via `make_client`). Let
   per-region errors propagate out of `_scan_region` so `scan_regions` can record
   them; catching them there reports an unreadable region as an empty one. Register in `scanners/__init__.py` SCANNERS
-  dict → per-service endpoint and aggregate scan come free. Add risk levels + plain-English
+  dict → the aggregate scan picks it up. There is deliberately **no**
+  per-service endpoint: one existed for each scanner and bypassed the
+  multi-account path, answering with the server's own inventory. Add risk levels + plain-English
   `monthly_cost_risk`/`suggested_action`; populate `details` if cost-estimable;
   add a static price entry in `pricing/static_prices.py`; write moto tests.
 - **New cleanup action:** add to `ACTIONS` in `services/cleanup_actions.py`

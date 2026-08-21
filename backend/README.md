@@ -79,13 +79,6 @@ boto3 picks up credentials automatically from any of:
 | POST   | `/billing/webhook`     | Stripe webhook (signature-verified)             |
 | POST   | `/notify`              | Send latest scan's alerts to channels (503 if off) |
 | GET    | `/scan`                | Run every scanner; includes `alerts` (saves if on) |
-| GET    | `/scan/ec2`            | EC2 instances                                   |
-| GET    | `/scan/ebs`            | EBS volumes                                      |
-| GET    | `/scan/elastic-ips`    | Elastic IPs                                      |
-| GET    | `/scan/nat-gateways`   | NAT Gateways                                     |
-| GET    | `/scan/load-balancers` | ALB / NLB / Classic load balancers              |
-| GET    | `/scan/rds`            | RDS databases                                    |
-| GET    | `/scan/s3`             | S3 buckets                                       |
 | GET    | `/alerts`              | Alerts from the latest saved scan (503 if off)   |
 | GET    | `/scans`               | List saved scans + `vs_previous` deltas (503 if off) |
 | GET    | `/scans/diff`          | Compare two scans: `?from_id=…&to_id=…`          |

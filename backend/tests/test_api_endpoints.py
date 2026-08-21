@@ -14,18 +14,6 @@ def test_health_does_not_touch_aws():
     assert body["status"] == "ok"
 
 
-def test_scan_ec2_endpoint_returns_resources():
-    ec2 = boto3.client("ec2", region_name=REGION)
-    ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)
-
-    res = client.get("/scan/ec2")
-    assert res.status_code == 200
-    body = res.json()
-    assert body["count"] == 1
-    assert body["resources"][0]["resource_type"] == "EC2 Instance"
-    assert body["resources"][0]["risk_level"] == "MEDIUM"
-
-
 def test_scan_all_endpoint_shape():
     s3 = boto3.client("s3", region_name=REGION)
     s3.create_bucket(Bucket="api-test-bucket")
@@ -55,10 +43,18 @@ def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
     ]
 
 
-def test_unknown_scan_path_is_404():
-    # Not a registered scanner slug.
-    res = client.get("/scan/lambda")
-    assert res.status_code == 404
+def test_there_are_no_per_service_scan_endpoints():
+    """`/scan/<service>` bypassed the multi-account path and answered with the
+    *server's* inventory, while `/scan` returned the tenant's — the same caller
+    got two different accounts' data with nothing to tell them apart.
+
+    The endpoints are gone. Registering a scanner used to make one "come free",
+    so this guards against the registry quietly handing them back.
+    """
+    from app.scanners import SCANNERS
+
+    for slug in [*SCANNERS, "lambda"]:
+        assert client.get(f"/scan/{slug}").status_code == 404, slug
 
 
 # --- Persistence / history endpoints ------------------------------------

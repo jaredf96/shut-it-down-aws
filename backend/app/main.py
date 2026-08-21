@@ -39,7 +39,6 @@ from app.services import (
     list_with_deltas,
     notify,
     scan_accounts,
-    scan_one,
 )
 from app.services.cleanup_actions import NOT_SUPPORTED
 from app.services.cleanup_actions import catalog as cleanup_catalog
@@ -488,47 +487,3 @@ def get_scan(scan_id: str, tenant: str = Depends(get_current_tenant)):
     if record is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return record
-
-
-def _scan_route(key: str):
-    """Shared handler for the per-service scan endpoints."""
-    try:
-        resources = scan_one(key)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Unknown scanner: {key}") from exc
-    return {"count": len(resources), "resources": resources}
-
-
-@app.get("/scan/ec2")
-def scan_ec2(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("ec2")
-
-
-@app.get("/scan/ebs")
-def scan_ebs(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("ebs")
-
-
-@app.get("/scan/elastic-ips")
-def scan_elastic_ips(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("elastic-ips")
-
-
-@app.get("/scan/nat-gateways")
-def scan_nat_gateways(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("nat-gateways")
-
-
-@app.get("/scan/load-balancers")
-def scan_load_balancers(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("load-balancers")
-
-
-@app.get("/scan/rds")
-def scan_rds(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("rds")
-
-
-@app.get("/scan/s3")
-def scan_s3(tenant: str = Depends(get_current_tenant)):
-    return _scan_route("s3")

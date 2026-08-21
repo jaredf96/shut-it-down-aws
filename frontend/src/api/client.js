@@ -39,11 +39,6 @@ export function scanAll() {
   return getJSON("/scan");
 }
 
-// Runs a single scanner by slug, e.g. "ec2". Returns { count, resources }.
-export function scanOne(slug) {
-  return getJSON(`/scan/${slug}`);
-}
-
 // Lists recent saved scans (newest first). Returns { scans: [...] }.
 // Throws if persistence is disabled (backend responds 503).
 export function listScans(limit = 20) {

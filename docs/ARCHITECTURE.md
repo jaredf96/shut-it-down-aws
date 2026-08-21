@@ -121,13 +121,15 @@ scanner code untouched as multi-tenancy and multi-account were added.
 Every scanner exposes:
 
 ```python
-def scan(regions: list[str] | None = None, session=None) -> list[Resource]: ...
+def scan(regions=None, session=None, failed_regions=None) -> list[Resource]: ...
 ```
 
 - `regions=None` → auto-discover (`app/utils/aws_regions.py`).
 - `session=None` → default credentials; otherwise an assumed-role session.
+- `failed_regions` → optional `dict` filled with `region -> reason` for regions
+  the sweep could not read, surfaced as `regions_failed` on the scan result.
 - Registered in `app/scanners/__init__.py` (`SCANNERS` dict), so the service
-  iterates uniformly and the per-service endpoints come for free.
+  iterates uniformly. Scanners are reached only through `GET /scan`.
 
 Each `Resource` carries: type, id, name, region, status, **risk level**,
 plain-English cost note, suggested action, optional `account_id`/`account_label`,
