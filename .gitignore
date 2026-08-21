@@ -34,3 +34,8 @@ frontend/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Working handoff notes. They describe defects that are not fixed yet, which is
+# not something to publish, and they go stale the moment the work lands. Keep
+# them local; force-add only if you have decided a specific one belongs in git.
+docs/HANDOFF*.md
