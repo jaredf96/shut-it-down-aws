@@ -1,6 +1,9 @@
 """Compute the difference between two saved scans.
 
-A resource is identified across scans by (resource_type, region, resource_id).
+A resource is identified across scans by the 4-tuple
+(resource_type, region, resource_id, account_id). The account is part of the
+identity because the same id can legitimately exist in two registered accounts,
+and conflating them would report one account's resource as the other's change.
 Against that identity we classify each resource as:
 
   added     - present in the newer scan, absent from the older one

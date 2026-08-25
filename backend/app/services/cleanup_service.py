@@ -1,16 +1,21 @@
 """Guided cleanup orchestration — safe by construction.
 
-Defense in depth (the route enforces the env flag and admin role *before*
-calling this; this layer adds the rest):
+What this layer contributes to the defense in depth (the route enforces the
+env flag and the admin role *before* calling this; the full end-to-end sequence
+is numbered in README.md and docs/SECURITY.md, and counts a wider scope than
+these):
 
-  1. The action must be in the supported catalog (terminate/delete-S3/RDS/NAT
-     are simply absent, so they are refused).
-  2. `confirm_resource_id` must exactly equal `resource_id`.
-  3. A named `account_id` must be one this tenant has registered — there is no
-     fallback to the server's own credentials.
-  4. The action re-checks live AWS state (precondition) before mutating.
-  5. `dry_run` (default True at the API) reports what *would* happen.
-  6. Every attempt — refused, failed, dry-run, or executed — is audited.
+- **Catalog check** — the action must be in the supported catalog
+  (terminate/delete-S3/RDS/NAT are simply absent, so they are refused).
+- **Typed confirmation** — `confirm_resource_id` must exactly equal
+  `resource_id`.
+- **Target account ownership** — a named `account_id` must be one this tenant
+  has registered; there is no fallback to the server's own credentials.
+- **Live precondition re-check** — the action re-verifies AWS state before
+  mutating; the client is never trusted.
+- **Dry run** — `dry_run` (default True at the API) reports what *would*
+  happen.
+- **Audit** — every attempt, refused, failed, dry-run or executed, is recorded.
 """
 
 from __future__ import annotations

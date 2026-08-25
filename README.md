@@ -71,7 +71,9 @@ below is honest about which category it falls into.
   `VITE_API_KEY` at build time, so the UI is an operator scaffold rather than a
   production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 172 offline backend tests + 54 frontend tests, CI, Docker, Lambda adapter
+- 181 offline backend tests + 64 frontend tests, CI, Docker, Lambda adapter
+  <!-- The only exact test counts in the docs. Everywhere else describes the
+       suites generically, because duplicated totals go stale one at a time. -->
 - Stripe Checkout/webhook **prototype** — quotas, checkout sessions, webhook
   parsing and server-side plan state, with eleven tests. Deliberately not a
   headline feature, and not a complete billing system: no webhook idempotency
@@ -223,12 +225,12 @@ All tests run **fully offline** — `moto` mocks AWS, so no real credentials or
 network are used.
 
 ```bash
-make test                  # 172 backend tests (pytest + moto)
+make test                  # backend suite (pytest + moto)
 make lint                  # ruff check + format check
 make demo-fixtures         # regenerate demo-data/ from the real scanners
 
 cd frontend
-npm test                   # 54 frontend tests (vitest + Testing Library)
+npm test                   # frontend suite (vitest + Testing Library)
 npm run typecheck          # provider-boundary types (tsc)
 ```
 
@@ -362,7 +364,7 @@ shut-it-down-aws/
 │   │   ├── repositories/   DynamoDB access (single table)
 │   │   ├── pricing/        static price map + live Pricing API
 │   │   └── notifiers/      Slack + email
-│   └── tests/              172 offline tests (moto)
+│   └── tests/              offline test suite (moto)
 ├── frontend/
 │   └── src/
 │       ├── data/           scan provider: api | demo fixtures

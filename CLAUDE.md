@@ -140,6 +140,17 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   fixtures — the demo computes its own diff locally and silently diverged once
   already: `changed` entries are `{resource, changes}` keyed by field, **not** a
   flat resource with an array.
+- **`runScan()` returns a provider-normalized `as_of`, never the endpoint's
+  own timestamp.** `GET /scan` sends none — it is modelled honestly as
+  `LiveScanResponse` (nullable `scan_id`, no `created_at`, since a live scan is
+  not a saved one) — so each provider supplies the field the contract requires:
+  the API provider stamps the moment the response lands, the demo returns its
+  fixture's `created_at`. That is what keeps resource ages measured against
+  *when the scan ran*. Letting it fall back to render time would creep the
+  demo's fixture ages upward every day and outrun the committed screenshots in
+  `docs/img/` — the same drift the `asOf` prop on `ResourceTable` exists to
+  prevent. Saved scans are unaffected: they carry their own required
+  `created_at`.
 - **Demo fixtures are generated, never hand-edited.** `make demo-fixtures` runs
   the real scanners over a seeded moto sandbox. The seed matters: without it,
   every regeneration churns all IDs and invalidates the committed screenshots.
@@ -183,6 +194,11 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   branch in `pricing_service._live_estimate` — static remains the fallback.
 
 ## Docs map
+
+**`docs/DECISIONS.md` — read first.** Records which side of each open seam is live
+(product scope, billing, tenancy). Several seams here were deliberately built to
+keep options open; that file says which option was taken, so they stop reading as
+open questions.
 
 `docs/ARCHITECTURE.md` (components, data model, request flow) ·
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·

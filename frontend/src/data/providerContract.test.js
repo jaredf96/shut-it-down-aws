@@ -43,8 +43,17 @@ function stubApi() {
     const path = String(url).replace(/^https?:\/\/[^/]+/, "");
     let body;
     if (path.startsWith("/scan?") || path === "/scan") {
+      // Written out literally, because a stub that borrows saved-scan metadata
+      // is a stub of an endpoint that does not exist. `GET /scan` returns the
+      // scan payload plus the live-result fields and nothing else — no
+      // `created_at`, no `as_of` (the provider normalizes that in), and a null
+      // `scan_id` when the scan was not persisted. Spreading `currentScan`
+      // here made the fake API generous enough to hide the demo provider
+      // doing the same thing.
       body = {
-        ...currentScan,
+        scan_id: null,
+        summary: currentScan.summary,
+        resources: currentScan.resources,
         alerts: alertsFixture.alerts,
         persisted: false,
         regions_failed: [],
@@ -120,6 +129,27 @@ describe("both providers satisfy the same contract", () => {
 
     const api = await apiScanProvider.runScan();
     expect(shapeOf(demo)).toEqual(shapeOf(api));
+
+    // ...and the shape they agree on is a *live* scan, not a saved one. The
+    // regression the old contract allowed, pinned here: the demo spread the
+    // saved fixture, so it returned a real `scan_id` and carried `created_at`
+    // along with it, and `ScanResult extends Scan` said that was correct.
+    // Neither provider ran a scan that was saved, so neither has an id, and
+    // saved-scan metadata belongs to saved scans only.
+    for (const result of [demo, api]) {
+      expect(result.scan_id).toBeNull();
+      expect("created_at" in result).toBe(false);
+      // `as_of` is the normalization that replaces it: required, because ages
+      // have to be measured against when the scan ran. The endpoint sends no
+      // timestamp, so each provider supplies its own.
+      expect(typeof result.as_of).toBe("string");
+      expect(Number.isNaN(Date.parse(result.as_of))).toBe(false);
+    }
+
+    // The demo's answer is its fixture's timestamp, not the current time. This
+    // is what keeps the demo deterministic: stamping now would creep every age
+    // in the table upward daily and outrun the committed screenshots.
+    expect(demo.as_of).toBe(currentScan.created_at);
   });
 });
 

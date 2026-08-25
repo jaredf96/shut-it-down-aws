@@ -1,7 +1,15 @@
 """Read-only AWS resource scanners.
 
-Each scanner module exposes a `scan(regions=None) -> List[Resource]` function.
-The registry below lets the scan service iterate over them uniformly.
+Each scanner module exposes one uniform entry point::
+
+    scan(regions=None, session=None, failed_regions=None) -> list[Resource]
+
+`regions=None` auto-discovers, `session=None` uses the default credential
+chain, and `failed_regions` is an optional dict the sweep fills with
+`region -> reason` for regions it could not read. The registry below lets the
+scan service iterate over them uniformly; the full contract, including why a
+scanner that cannot run raises rather than returning `[]`, is in
+`docs/ARCHITECTURE.md` under "Scanner contract".
 """
 
 from . import (

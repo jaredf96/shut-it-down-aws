@@ -39,7 +39,12 @@ export const apiScanProvider = {
   },
 
   // --- Scans ---
-  runScan: () => scanAll(),
+  // `GET /scan` sends no timestamp of its own, so the provider supplies the
+  // one the contract requires: the moment the response landed, which is the
+  // closest thing to "when this scan ran" that the client can observe. Taken
+  // after the await on purpose — a scan takes seconds, and stamping before it
+  // would date the result to before the resources were read.
+  runScan: async () => ({ ...(await scanAll()), as_of: new Date().toISOString() }),
   listScans: (limit) => listScans(limit),
   getScan: (scanId) => getScan(scanId),
   compareScans: (fromId, toId) => getDiff(fromId, toId),

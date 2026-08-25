@@ -130,8 +130,21 @@ export const demoScanProvider = {
   // --- Scans ---
   async runScan() {
     await delay(SIMULATED_SCAN_MS);
+    // An unsaved live scan, field for field — not the saved fixture. Spreading
+    // `currentScan` in here returned saved-scan metadata (`created_at`, a real
+    // `scan_id`) that `GET /scan` never sends, so the demo was the more
+    // generous of the two providers and the contract drifted to match it.
     return {
-      ...currentScan,
+      // The demo persists nothing, and the live endpoint reports the same null
+      // whenever a scan was not saved.
+      scan_id: null,
+      // The provider-normalized timestamp. The fixture's own `created_at` is
+      // the honest answer for when this scan ran, and using it keeps the ages
+      // in the table frozen at what the committed screenshots show. Stamping
+      // now instead would creep every age upward by a day, every day.
+      as_of: currentScan.created_at,
+      summary: currentScan.summary,
+      resources: currentScan.resources,
       alerts: alertsFixture.alerts,
       persisted: false,
       // The fixtures come from a moto sandbox that read every region it was
@@ -265,21 +278,21 @@ export const demoScanProvider = {
       return entry;
     };
 
-    // Gate 1: the action must be in the catalog (checked before confirmation,
-    // matching the backend's order).
+    // Catalog check: the action must be one the service supports (checked
+    // before confirmation, matching the backend's order).
     const spec = CLEANUP_ACTIONS[action];
     if (!spec) {
       throw new Error(record("unsupported_action", `Unsupported cleanup action: ${action}.`).detail);
     }
 
-    // Gate 2: typed confirmation must match exactly.
+    // Typed confirmation: must match the resource id exactly.
     if (!resource_id || resource_id !== confirm_resource_id) {
       throw new Error(
         record("confirmation_mismatch", "Confirmation does not match the resource id.").detail
       );
     }
 
-    // Gate 3: live precondition re-check. The client is never trusted, so the
+    // Live precondition re-check. The client is never trusted, so the
     // resource is looked up and its current state verified.
     //
     // The lookup is scoped by region *and* account, because the real service is:
@@ -308,7 +321,8 @@ export const demoScanProvider = {
       throw new Error(record("precondition_failed", spec.wrongStatus(found.status)).detail);
     }
 
-    // Gate 4: mutating requires a credential this build does not have.
+    // Execution boundary: mutating requires a credential this build does not
+    // have.
     if (dry_run === false) {
       throw new Error(
         record(

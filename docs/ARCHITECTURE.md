@@ -104,7 +104,7 @@ path — see [SECURITY.md](SECURITY.md).
 | **Routes** | `app/main.py` | HTTP surface, status codes, dependency wiring |
 | **Auth** | `app/auth.py` | API key → principal; `get_current_tenant`, `require_admin` |
 | **Services** | `app/services/` | Orchestration: scan, diff, history, alerts, notification, multi_account, cleanup, billing |
-| **Scanners** | `app/scanners/` | One read-only `scan(regions, session)` per AWS service |
+| **Scanners** | `app/scanners/` | One read-only `scan(regions=None, session=None, failed_regions=None) -> list[Resource]` per AWS service |
 | **Pricing** | `app/pricing/` | Static price map + live Pricing API + estimator |
 | **Notifiers** | `app/notifiers/` | Slack + email channels (`format` vs `send`) |
 | **Repositories** | `app/repositories/` | DynamoDB access, one module per record family |

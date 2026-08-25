@@ -63,12 +63,22 @@ export interface ScanSummary {
   estimated_monthly_cost: number;
 }
 
-/** A saved scan, as `GET /scans/{id}` returns it. */
-export interface Scan {
-  scan_id: string;
-  created_at: string;
+/**
+ * What every scan carries, live or saved: the rollup and the findings.
+ *
+ * Split out from `Scan` because saved-scan metadata is not a property of a
+ * scan — it is a property of having stored one. A live `GET /scan` result has
+ * the payload but no `created_at` and, unless it was persisted, no id.
+ */
+export interface ScanPayload {
   summary: ScanSummary;
   resources: Resource[];
+}
+
+/** A saved scan, as `GET /scans/{id}` returns it. */
+export interface Scan extends ScanPayload {
+  scan_id: string;
+  created_at: string;
 }
 
 /**
@@ -108,20 +118,49 @@ export interface ScannerFailure {
   account_label: string | null;
 }
 
-/** `GET /scan` — a scan plus the alerts derived from it. */
-export interface ScanResult extends Scan {
-  alerts?: Alert[];
-  persisted?: boolean;
+/**
+ * The raw `GET /scan` response, exactly as the endpoint sends it.
+ *
+ * Deliberately **not** a `Scan`. The endpoint returns
+ * `{...scan_all(), alerts, scan_id, persisted}` (`app/main.py::scan_everything`):
+ * it never sends `created_at`, and `scan_id` is null whenever the result was
+ * not persisted — persistence off, or `?save=false`. Modelling this as a saved
+ * scan promised callers a timestamp and a non-null id the live endpoint has
+ * never sent, and the demo provider papered over it by handing back a saved
+ * fixture. This type stays honest about the wire; `ScanResult` is what
+ * providers hand upward.
+ */
+export interface LiveScanResponse extends ScanPayload {
+  /** The id it was saved under, or null when the scan was not persisted. */
+  scan_id: string | null;
+  /** Derived from this scan (and the previous saved one, when there is one). */
+  alerts: Alert[];
+  persisted: boolean;
+  /** Empty when every region was read. Not stored with a saved scan. */
+  regions_failed: RegionFailure[];
+  /** Empty when every scanner ran. Not stored with a saved scan. */
+  scanners_failed: ScannerFailure[];
+}
+
+/**
+ * What `runScan()` returns: the live response, normalized at the provider
+ * boundary with the one field the endpoint cannot supply.
+ *
+ * The wire has no timestamp, but resource ages have to be measured against
+ * *when the scan ran* rather than against render time — otherwise the same
+ * result reads differently every time it is displayed. Each provider is the
+ * only thing that knows its own answer, so each supplies it: the API provider
+ * stamps the moment the response lands, the demo returns its fixture's
+ * `created_at`. Normalizing here keeps `/scan` honestly modelled
+ * (`LiveScanResponse`) while both providers still hand up identical shapes.
+ */
+export interface ScanResult extends LiveScanResponse {
   /**
-   * Always present on a live scan; empty when every region was read. Not stored
-   * with a saved scan, so `getScan()` does not carry it.
+   * ISO-8601 instant the scan is considered to have run at. Required: a
+   * provider that cannot say when its scan ran cannot render ages, and the
+   * fallback — now — is exactly the drift this field exists to prevent.
    */
-  regions_failed?: RegionFailure[];
-  /**
-   * Always present on a live scan; empty when every scanner ran. Not stored
-   * with a saved scan, so `getScan()` does not carry it.
-   */
-  scanners_failed?: ScannerFailure[];
+  as_of: string;
 }
 
 export interface DiffCounts {

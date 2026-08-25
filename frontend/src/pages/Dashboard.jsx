@@ -55,8 +55,9 @@ export default function Dashboard() {
   const [activeScanId, setActiveScanId] = useState(null); // null => viewing live
   const [viewingMeta, setViewingMeta] = useState(null); // {created_at} when viewing a saved scan
 
-  // When the displayed scan ran, so ages read as of that moment. Null means
-  // "just now" — the live API response carries no timestamp of its own.
+  // When the displayed scan ran, so ages read as of that moment: a live scan's
+  // provider-normalized `as_of`, or a saved scan's `created_at`. Null only
+  // before the first scan, where nothing is rendered anyway.
   const [scannedAt, setScannedAt] = useState(null);
 
   // Compare / diff state.
@@ -181,7 +182,10 @@ export default function Dashboard() {
       setAlerts(data.alerts || []);
       setRegionsFailed(data.regions_failed || []);
       setScannersFailed(data.scanners_failed || []);
-      setScannedAt(data.created_at || null);
+      // `as_of`, not `created_at`: `GET /scan` sends no timestamp, so the
+      // provider normalizes one in. Ages then read against when the scan ran
+      // rather than against render time.
+      setScannedAt(data.as_of);
       setHasScanned(true);
       setActiveScanId(null);
       setViewingMeta(null);
