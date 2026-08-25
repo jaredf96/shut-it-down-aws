@@ -174,10 +174,13 @@ code,
 /* --- Page shell ---------------------------------------------------------- */
 
 .page {
-  /* Wide enough that a multi-account scan table (9 columns, two of them prose)
+  /* Wide enough that a multi-account scan table (10 columns, two of them prose)
      fits beside the history sidebar without horizontal scrolling. Narrower
-     viewports still work — .table-wrapper scrolls. */
-  max-width: 1660px;
+     viewports still work — .table-wrapper scrolls.
+     The table's min-content width is 1342px next to the 288px sidebar; 1720
+     clears that with ~20px to spare. Adding a column costs roughly 40px here,
+     so re-measure rather than assuming this still fits. */
+  max-width: 1720px;
   margin: 0 auto;
   padding: 28px 24px 72px;
 }
