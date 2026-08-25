@@ -16,14 +16,14 @@ from app.repositories import scan_repository
 from app.services.diff_service import diff_resource_lists
 
 
-def list_with_deltas(limit: int = 20, *, tenant_id: str | None = None) -> list[dict]:
+def list_with_deltas(limit: int = 20, *, workspace_id: str | None = None) -> list[dict]:
     """Return recent scans (newest first), each with a `vs_previous` delta.
 
     `vs_previous` is None for the earliest scan, otherwise a summary dict:
     {"added": n, "removed": n, "changed": n, "unchanged": n}.
     """
     # Fetch one extra so the oldest item in the page still has a predecessor.
-    full = scan_repository.list_scans_full(limit + 1, tenant_id=tenant_id)
+    full = scan_repository.list_scans_full(limit + 1, workspace_id=workspace_id)
     page = full[:limit]
 
     enriched: list[dict] = []

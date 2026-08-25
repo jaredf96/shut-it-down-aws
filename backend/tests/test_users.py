@@ -4,14 +4,14 @@ from app.repositories import user_repository
 
 
 def test_create_list_and_resolve_users(dynamo_table):
-    tenant = "class-101"
-    user_repository.create_user(tenant, "Instructor", role="admin")
+    workspace = "class-101"
+    user_repository.create_user(workspace, "Instructor", role="admin")
 
-    member = user_repository.create_user(tenant, "Student A", role="member")
+    member = user_repository.create_user(workspace, "Student A", role="member")
     assert member["role"] == "member"
     assert member["api_key"].startswith("clc_")
 
-    users = user_repository.list_users(tenant)
+    users = user_repository.list_users(workspace)
     assert len(users) == 2
     roles = {u["role"] for u in users}
     assert roles == {"admin", "member"}
@@ -24,24 +24,24 @@ def test_create_list_and_resolve_users(dynamo_table):
 
 
 def test_invalid_role_defaults_to_member(dynamo_table):
-    tenant = "t"
-    user = user_repository.create_user(tenant, "X", role="superadmin")
+    workspace = "t"
+    user = user_repository.create_user(workspace, "X", role="superadmin")
     assert user["role"] == "member"
 
 
 def test_delete_user_revokes_key(dynamo_table):
-    tenant = "t"
-    user = user_repository.create_user(tenant, "Temp", role="member")
+    workspace = "t"
+    user = user_repository.create_user(workspace, "Temp", role="member")
 
     assert user_repository.resolve_api_key(user["api_key"]) is not None
-    assert user_repository.delete_user(tenant, user["user_id"]) is True
+    assert user_repository.delete_user(workspace, user["user_id"]) is True
     # Key no longer resolves.
     assert user_repository.resolve_api_key(user["api_key"]) is None
-    assert user_repository.delete_user(tenant, user["user_id"]) is False
+    assert user_repository.delete_user(workspace, user["user_id"]) is False
 
 
-def test_users_are_isolated_by_tenant(dynamo_table):
-    a, b = "tenant-a", "tenant-b"
+def test_users_are_isolated_by_workspace(dynamo_table):
+    a, b = "workspace-a", "workspace-b"
     user_repository.create_user(a, "A-admin", role="admin")
     user_repository.create_user(a, "A-only")
     user_repository.create_user(b, "B-admin", role="admin")

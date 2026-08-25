@@ -53,8 +53,9 @@ Rules that keep this maintainable:
   plain list so nothing downstream has to unpack a tuple. A scanner that cannot
   run **at all** raises — `scan_all` records it under `scanners_failed` and
   keeps going. Never return `[]` for a failure: that is "couldn't see" rendered
-  as "nothing there". Everything tenant-aware lives in services/repositories via
-  an explicit, **optional** `tenant_id=` kwarg (default = single-tenant mode).
+  as "nothing there". Everything workspace-aware lives in services/repositories
+  via an explicit, **optional** `workspace_id=` kwarg (default = the local
+  workspace).
 - **Routes never contain business logic.** They resolve the principal, call a
   service, map errors to status codes.
 - **Config is functions, not module constants** — so tests can monkeypatch env
@@ -63,8 +64,13 @@ Rules that keep this maintainable:
 ## Data model — single DynamoDB table
 
 One table, `pk` (HASH) + `sk` (RANGE), record families by pk prefix:
-`TENANT#<t>` scans · `TENANTMETA#<t>` tenant+plan · `APIKEY#<sha256>` key→principal ·
-`USERS#<t>` · `ACCOUNTS#<t>` · `AUDIT#<t>`. Tenant isolation is structural.
+`TENANT#<w>` scans · `APIKEY#<sha256>` key→principal · `USERS#<w>` ·
+`ACCOUNTS#<w>` · `AUDIT#<w>`. Workspace isolation is structural. **Storage names
+are frozen legacy:** the logical model is `workspace`, the stored prefixes still
+say `TENANT#`, and the API-key record still stores a `tenant_id` attribute —
+deliberately, so no install needs a migration (D3). The one translation lives in
+`user_repository._principal_to_storage` / `_principal_from_storage`; do not add
+a generic mapper to `dynamo.py`.
 `scan_id = <ISO-8601-UTC>_<uuid8>` — time-sortable, so newest-first is a Query
 with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 (avoids Decimal issues); metadata native. Persistence is optional: no
@@ -77,7 +83,7 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
    `ENABLE_CLEANUP_ACTIONS` off by default (403 with exact message "Cleanup
    actions are disabled in this environment."), admin-only, `confirm_resource_id`
    must equal `resource_id`, `dry_run` defaults to true, a named `account_id`
-   must be one the tenant registered (never fall back to default credentials —
+   must be one the workspace registered (never fall back to default credentials —
    that runs the action against the host account), live precondition re-check
    against AWS (never trust the client), **every attempt audited**
    (including refusals/failures). Action catalog stays tiny: stop EC2, release
@@ -183,7 +189,7 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   cost-estimable, a `pricing/static_prices.py` entry, and moto tests.
   There is deliberately **no** per-service endpoint: one used to come free with
   registration and answered with the server's own inventory while `/scan`
-  answered with the tenant's.
+  answered with the workspace's.
 - **New cleanup action:** add to `ACTIONS` in `services/cleanup_actions.py`
   with a live precondition check and dry-run message. Only reversible-leaning,
   single-resource actions; anything data-destructive beyond unattached EBS

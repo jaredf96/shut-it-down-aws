@@ -1,6 +1,6 @@
-"""Scan one or many AWS accounts for a tenant.
+"""Scan one or many AWS accounts for a workspace.
 
-If the tenant has registered accounts, each is scanned with assumed-role
+If the workspace has registered accounts, each is scanned with assumed-role
 credentials and every resource is tagged with its account. Otherwise we fall
 back to a single scan using the server's own credentials (local / default).
 
@@ -38,9 +38,9 @@ def _tag_failure(failure: dict, account: dict) -> dict:
     return {**failure, "account_id": account["account_id"], "account_label": _label(account)}
 
 
-def scan_accounts(tenant_id: str | None = None) -> dict:
-    """Scan all of a tenant's registered accounts (or default creds if none)."""
-    accounts = account_repository.list_accounts(tenant_id) if tenant_id else []
+def scan_accounts(workspace_id: str | None = None) -> dict:
+    """Scan all of a workspace's registered accounts (or default creds if none)."""
+    accounts = account_repository.list_accounts(workspace_id) if workspace_id else []
 
     if not accounts:
         # Single-account / local mode — unchanged behavior.

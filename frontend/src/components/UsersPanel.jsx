@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-// Team members of the tenant. Admins can add/remove; members see a read-only
+// Team members of the workspace. Admins can add/remove; members see a read-only
 // roster. A newly created member's API key is shown once.
 export default function UsersPanel({ users, isAdmin, currentUserId, onAdd, onDelete }) {
   const [open, setOpen] = useState(false);

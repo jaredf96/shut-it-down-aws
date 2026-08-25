@@ -65,11 +65,10 @@ below is honest about which category it falls into.
 - Slack and email notifications
 - Guarded cleanup: opt-in, admin-only, typed confirmation, dry-run default,
   live precondition re-check, full audit trail
-- Multi-tenant backend with API-key RBAC: tenant-scoped data, admin/member
-  roles, SHA-256-hashed keys issued once, tenant-scoped AWS accounts with
-  assume-role isolation, and audit attribution. The browser client reads
-  `VITE_API_KEY` at build time, so the UI is an operator scaffold rather than a
-  production multi-user login
+- Workspace-scoped backend with API-key RBAC: admin/member roles, SHA-256-hashed
+  keys issued once, workspace-scoped AWS accounts with assume-role isolation, and
+  audit attribution. The browser client reads `VITE_API_KEY` at build time, so the
+  UI is an operator scaffold rather than a production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
 - 181 offline backend tests + 64 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
@@ -125,7 +124,7 @@ flowchart LR
     FE -- REST + API key --> API[FastAPI app]
 
     subgraph Backend
-        API --> Auth[Auth: API key → tenant + role]
+        API --> Auth[Auth: API key → workspace + role]
         API --> Scanners[Read-only scanners<br/>EC2 · EBS · EIP · NAT · ELB · RDS · S3]
         Scanners --> Pricing[Pricing<br/>static map + live API]
         Scanners --> Alerts[Alert rule engine]
@@ -134,13 +133,13 @@ flowchart LR
 
     Scanners -- assume-role --> AWS[(AWS accounts)]
     Cleanup -- stop/release/delete --> AWS
-    API <-->|scans · history · audit · tenants| DB[(DynamoDB<br/>single table)]
+    API <-->|scans · history · audit · users| DB[(DynamoDB<br/>single table)]
     Alerts --> Notify[Notifiers]
     Notify --> Slack[Slack]
     Notify --> Email[Email / SMTP]
 ```
 
-**Request lifecycle:** `Frontend → API (auth → tenant) → scanners (assume-role) →
+**Request lifecycle:** `Frontend → API (auth → workspace) → scanners (assume-role) →
 pricing + alerts → persistence (DynamoDB) → notifications`.
 
 The frontend never imports the HTTP client directly. It talks to a **scan
@@ -173,8 +172,8 @@ npm run dev
 Open **http://localhost:5173** and click **Run scan**. API docs at
 **http://localhost:8000/docs**.
 
-With no extra config the app runs in **single-tenant local mode**: no auth, no
-persistence, scanning your default AWS credentials. Everything else — history,
+With no extra config the app runs in **local mode**: no auth, no persistence,
+scanning your default AWS credentials. Everything else — history,
 teams, notifications, cleanup — is opt-in via the environment variables below.
 
 ### Makefile shortcuts
@@ -233,7 +232,7 @@ npm run typecheck          # provider-boundary types (tsc)
 CI runs all of it on every push, plus both frontend build profiles, a Docker
 build, and a grep over the built demo bundle asserting it carries no API
 endpoints and no credential handling (`make demo-bundle-check` locally). Backend coverage spans scanners, pricing, alerts, notifications,
-persistence, diffing, tenancy/roles, multi-account, cleanup safety, and the
+persistence, diffing, workspaces/roles, multi-account, cleanup safety, and the
 fail-closed behavior of the persistence layer.
 
 **The provider boundary is tested as a contract.** Demo and live providers fetch
@@ -259,9 +258,9 @@ Everything is **off by default** — set only what you need. Full annotated list
 | `DYNAMODB_TABLE_NAME` | Enables scan history / teams (set to enable) |
 | `DYNAMODB_ENDPOINT_URL` | Point at local DynamoDB (e.g. `http://localhost:8001`) |
 | `DYNAMODB_AUTO_CREATE` | Auto-create the table on startup (dev) |
-| **Auth / tenancy** | |
+| **Auth / workspace** | |
 | `AUTH_REQUIRED` | Require an API key on every request |
-| `DEFAULT_TENANT_ID` | Tenant used in local mode (default `default`) |
+| `DEFAULT_WORKSPACE_ID` | Workspace used in local mode (default `default`; `DEFAULT_TENANT_ID` is the deprecated former name) |
 | **Notifications** | |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | Email transport |
@@ -290,7 +289,7 @@ it must clear **seven independent gates**:
 3. **Typed confirmation** — the exact resource ID must be resubmitted
    (`confirm_resource_id == resource_id`).
 4. **Dry-run by default** — mutating requires an explicit `dry_run: false`.
-5. **Target account ownership** — an `account_id` the tenant has not registered
+5. **Target account ownership** — an `account_id` the workspace has not registered
    is refused with `404`. There is no fallback to the server's own credentials,
    which would run the action against the wrong account entirely.
 6. **Live precondition re-check** — state is re-verified against AWS at execution

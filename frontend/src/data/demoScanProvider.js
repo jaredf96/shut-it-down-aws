@@ -191,7 +191,7 @@ export const demoScanProvider = {
 
   // --- Team: hidden in the demo via capabilities ---
   async getMe() {
-    return { tenant_id: "demo", user_id: "demo", role: "viewer", name: "Demo visitor" };
+    return { workspace_id: "demo", user_id: "demo", role: "viewer", name: "Demo visitor" };
   },
   listUsers: notAvailable("Team management"),
   createUser: notAvailable("Adding a team member"),

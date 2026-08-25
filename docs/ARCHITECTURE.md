@@ -71,11 +71,12 @@ flowchart TB
 Frontend → API → scanners → persistence → alerts → notifications → billing
 ```
 
-1. **Frontend** (`frontend/src`) calls the API with `fetch`. In SaaS mode it
-   sends an `X-API-Key` header (`VITE_API_KEY`); locally it sends nothing.
+1. **Frontend** (`frontend/src`) calls the API with `fetch`. In a shared
+   deployment it sends an `X-API-Key` header (`VITE_API_KEY`); locally it sends
+   nothing.
 2. **API / auth** (`app/main.py`, `app/auth.py`) resolves the request to a
-   **principal** `{tenant_id, user_id, role}`. No key + `AUTH_REQUIRED` off →
-   an admin "local" user of the default tenant. A key → the stored principal.
+   **principal** `{workspace_id, user_id, role}`. No key + `AUTH_REQUIRED` off →
+   an admin "local" user of the default workspace. A key → the stored principal.
    `require_admin` guards mutating/management routes.
 3. **Scanners** (`app/scanners/`, orchestrated by `app/services/scan_service.py`
    and `multi_account_service.py`) call read-only AWS APIs. Single-account uses
@@ -86,7 +87,7 @@ Frontend → API → scanners → persistence → alerts → notifications → b
    enabled (with static fallback). It is a **floor**: unpriced dimensions (NAT
    data processing, S3 storage) can only push the real bill up.
 5. **Persistence** (`app/repositories/`) saves each scan to DynamoDB, scoped by
-   tenant, and powers history, "vs previous" deltas, and diffing.
+   workspace, and powers history, "vs previous" deltas, and diffing.
 6. **Alerts** (`app/services/alerts_service.py`) derive notification-ready
    `Alert` objects from the scan + the previous scan, ranked by spend.
 7. **Notifications** (`app/notifiers/`, `notification_service.py`) deliver alerts
@@ -102,7 +103,7 @@ path — see [SECURITY.md](SECURITY.md).
 | Layer | Modules | Responsibility |
 | --- | --- | --- |
 | **Routes** | `app/main.py` | HTTP surface, status codes, dependency wiring |
-| **Auth** | `app/auth.py` | API key → principal; `get_current_tenant`, `require_admin` |
+| **Auth** | `app/auth.py` | API key → principal; `get_current_workspace`, `require_admin` |
 | **Services** | `app/services/` | Orchestration: scan, diff, history, alerts, notification, multi_account, cleanup, billing |
 | **Scanners** | `app/scanners/` | One read-only `scan(regions=None, session=None, failed_regions=None) -> list[Resource]` per AWS service |
 | **Pricing** | `app/pricing/` | Static price map + live Pricing API + estimator |
@@ -113,9 +114,9 @@ path — see [SECURITY.md](SECURITY.md).
 | **Sessions/Lambda** | `app/lambda_handler.py` | Mangum adapter for Lambda |
 
 Design rule: **scanners are account-agnostic and read-only**; everything
-tenant-aware (saving, listing, diffing, billing) lives in services/repositories
-and threads an explicit `tenant_id`. This kept the original single-account
-scanner code untouched as multi-tenancy and multi-account were added.
+workspace-aware (saving, listing, diffing) lives in services/repositories and
+threads an explicit `workspace_id`. This kept the original single-account
+scanner code untouched as workspaces and multi-account were added.
 
 ## Scanner contract
 
@@ -162,21 +163,25 @@ floor.
 ## Data model — single DynamoDB table
 
 One table, `pk` (HASH) + `sk` (RANGE), `PAY_PER_REQUEST`. Record families are
-separated by **partition-key prefixes**, so everything is tenant-scoped and a
+separated by **partition-key prefixes**, so everything is workspace-scoped and a
 single `Query` answers each access pattern (no GSIs).
+
+The prefixes below say `TENANT#`/`ACCOUNTS#` while the logical model says
+*workspace*. That mismatch is deliberate: the rename (D3) stopped at the storage
+boundary so no self-hosted install needs a data migration. The one stored
+`tenant_id` attribute that reaches a caller is translated in `user_repository`.
 
 | Record | `pk` | `sk` | Notes |
 | --- | --- | --- | --- |
-| Scan run | `TENANT#<tenant>` | `<scan_id>` | `scan_id = <ISO-8601 UTC>_<uuid8>` (time-sortable) |
-| Tenant meta + billing | `TENANTMETA#<tenant>` | `#` | name, plan, subscription status |
-| API key → principal | `APIKEY#<sha256(key)>` | `#` | only the key **hash** is stored |
-| User | `USERS#<tenant>` | `<user_id>` | name, role, key hash (for revocation) |
-| AWS account | `ACCOUNTS#<tenant>` | `<account_id>` | role ARN, external id, regions |
-| Audit entry | `AUDIT#<tenant>` | `<ISO>_<uuid8>` | every cleanup attempt |
+| Scan run | `TENANT#<workspace>` | `<scan_id>` | `scan_id = <ISO-8601 UTC>_<uuid8>` (time-sortable) |
+| API key → principal | `APIKEY#<sha256(key)>` | `#` | only the key **hash** is stored; stores the workspace under the legacy attribute `tenant_id` |
+| User | `USERS#<workspace>` | `<user_id>` | name, role, key hash (for revocation) |
+| AWS account | `ACCOUNTS#<workspace>` | `<account_id>` | role ARN, external id, regions |
+| Audit entry | `AUDIT#<workspace>` | `<ISO>_<uuid8>` | every cleanup attempt |
 
 Key properties:
-- **Tenant isolation** is structural — a tenant can only ever `Query` its own
-  partitions.
+- **Workspace isolation** is structural — a workspace can only ever `Query` its
+  own partitions.
 - **Time-sortable sort keys** mean "newest first" is `ScanIndexForward=False`
   with no secondary index. History deltas fetch `limit + 1` so even the oldest
   row on a page has a predecessor to diff against.
@@ -235,14 +240,14 @@ sequenceDiagram
     participant DB as DynamoDB
 
     FE->>API: GET /scan (X-API-Key)
-    API->>API: resolve principal (tenant, role)
-    API->>MA: scan_accounts(tenant)
+    API->>API: resolve principal (workspace, role)
+    API->>MA: scan_accounts(workspace)
     MA->>SC: scan each account (assume-role)
     SC->>PR: annotate cost
     MA-->>API: resources + summary (+ fleet total)
     API->>DB: previous scan (for change-aware alerts)
     API->>AL: evaluate(resources, previous)
-    API->>DB: save scan (tenant-scoped)
+    API->>DB: save scan (workspace-scoped)
     API-->>FE: { summary, resources, regions_failed, scanners_failed, alerts, scan_id }
 ```
 

@@ -31,7 +31,7 @@ There are two credential modes, by design:
 - **Single-account / local** — the app uses the server's own credentials
   (`app/aws/session.py: default_session`). Good for local dev and single-account
   deployments. Give those credentials a **read-only** policy.
-- **Multi-account** — a tenant registers AWS accounts with a cross-account
+- **Multi-account** — a workspace registers AWS accounts with a cross-account
   **role ARN**; the app calls `sts:AssumeRole` to get short-lived credentials per
   account (`session_for_account`). The app's own principal never holds standing
   access to customer accounts — only the ability to assume narrowly-scoped roles
@@ -86,9 +86,9 @@ clears seven independent gates:
 3. **Typed confirmation** — `confirm_resource_id` must equal `resource_id`.
 4. **Dry-run by default** — the request body defaults `dry_run: true`; you must
    send `dry_run: false` to mutate.
-5. **Target account ownership** — a request naming an `account_id` the tenant
+5. **Target account ownership** — a request naming an `account_id` the workspace
    has not registered returns `404` and does nothing. The lookup is
-   tenant-scoped, so this is not a cross-tenant boundary; what it prevents is
+   workspace-scoped, so this is not a cross-workspace boundary; what it prevents is
    the service falling back to its own default credentials and running the
    action against the host account while reporting success.
 
@@ -113,17 +113,17 @@ transparency. There is **no bulk cleanup** — one resource per call.
 
 Every cleanup attempt — refused, failed, dry-run, or executed — produces an
 audit entry (`app/repositories/audit_repository.py`,
-`app/services/cleanup_service.py`) capturing **who** (tenant + user), **what**
+`app/services/cleanup_service.py`) capturing **who** (workspace + user), **what**
 (action, resource, region, account), the **outcome** (`success` / `dry_run` /
 `confirmation_mismatch` / `unsupported_action` / `unknown_account` /
 `precondition_failed` / `error`), a detail message, and a timestamp.
 
-- Durable entries live in DynamoDB (`AUDIT#<tenant>`), tenant-scoped and
+- Durable entries live in DynamoDB (`AUDIT#<workspace>`), workspace-scoped and
   time-sortable; `GET /cleanup/audit` lists them newest-first.
 - The service **also** logs every attempt to the application logger, so there is
   a record even when persistence is disabled.
 
-Because users are first-class (tenant + user id + role), every mutating action is
+Because users are first-class (workspace + user id + role), every mutating action is
 attributable to a specific user.
 
 ## Stripe webhook verification
@@ -169,11 +169,11 @@ This is a portfolio-grade MVP. Before charging real customers, harden at least:
   and a noisy account can flood a channel. Delivery is also synchronous: a slow
   or hanging SMTP server adds its timeout (up to ~10s) to the request.
 - **`POST /notify` is not admin-gated.** It resolves the caller with
-  `get_current_tenant`, so any authenticated member of a tenant can trigger
-  outbound messages to that tenant's configured Slack/email channels. Whether
+  `get_current_workspace`, so any authenticated member of a workspace can trigger
+  outbound messages to that workspace's configured Slack/email channels. Whether
   sending should be admin-only is a product decision, deliberately left open —
   but it is an abuse vector worth closing before untrusted members exist.
-  Consider soft-delete/snapshot-first, per-tenant allow-lists, and a second
+  Consider soft-delete/snapshot-first, per-workspace allow-lists, and a second
   approver for destructive actions.
 - **Billing edge cases.** Proration, failed payments
   (`invoice.payment_failed`), trials, and dunning aren't modeled — only

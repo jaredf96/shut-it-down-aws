@@ -220,8 +220,8 @@ def test_unregistered_account_is_refused_and_never_uses_default_credentials(
 ):
     """A cleanup naming an unregistered account must be refused outright.
 
-    The failure this guards against is not cross-tenant data loss — `get_account`
-    is tenant-scoped, so another tenant's registration is unreachable. It is
+    The failure this guards against is not cross-workspace data loss — `get_account`
+    is workspace-scoped, so another workspace's registration is unreachable. It is
     silent *retargeting*: the lookup missed, the service fell through to the
     server's own default credentials, and the destructive call landed on the
     host account while the audit recorded a success.
@@ -246,7 +246,7 @@ def test_unregistered_account_is_refused_and_never_uses_default_credentials(
             "resource_id": iid,
             "confirm_resource_id": iid,
             "region": REGION,
-            "account_id": "999999999999",  # never registered by this tenant
+            "account_id": "999999999999",  # never registered by this workspace
             "dry_run": False,
         },
     )
@@ -338,7 +338,7 @@ def test_failed_attempt_is_audited_even_without_persistence(monkeypatch):
         resource_id="i-1",
         confirm_resource_id="i-2",
         region=REGION,
-        tenant_id="t",
+        workspace_id="t",
         user_id="u",
     )
     assert record["status"] == "confirmation_mismatch"

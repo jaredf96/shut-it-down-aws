@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-// Manage the AWS accounts scanned for this tenant. Only rendered when the
+// Manage the AWS accounts scanned for this workspace. Only rendered when the
 // backend has persistence enabled (accounts require it).
 export default function AccountsPanel({ accounts, isAdmin = true, onAdd, onDelete }) {
   const [open, setOpen] = useState(false);

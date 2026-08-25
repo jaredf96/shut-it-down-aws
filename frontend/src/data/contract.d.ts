@@ -91,7 +91,7 @@ export interface RegionFailure {
   region: string;
   /** The API's own error code (e.g. "AuthFailure"), or the exception class name. */
   reason: string;
-  /** Set when scanning a tenant's registered accounts; null in single-account mode. */
+  /** Set when scanning a workspace's registered accounts; null in single-account mode. */
   account_id: string | null;
   account_label: string | null;
 }
@@ -113,7 +113,7 @@ export interface ScannerFailure {
   label: string;
   /** The API's own error code (e.g. "AccessDenied"), or the exception class name. */
   reason: string;
-  /** Set when scanning a tenant's registered accounts; null in single-account mode. */
+  /** Set when scanning a workspace's registered accounts; null in single-account mode. */
   account_id: string | null;
   account_label: string | null;
 }
@@ -230,7 +230,7 @@ export interface CleanupResult {
     | "dry_run"
     | "confirmation_mismatch"
     | "unsupported_action"
-    /** The named account is not registered to this tenant — refused, never retargeted. */
+    /** The named account is not registered to this workspace — refused, never retargeted. */
     | "unknown_account"
     | "precondition_failed"
     | "error";
@@ -277,7 +277,7 @@ export interface ScanProvider {
   createAccount(account: Partial<AwsAccount>): Promise<unknown>;
   deleteAccount(accountId: string): Promise<unknown>;
 
-  getMe(): Promise<{ tenant_id: string; user_id: string; role: string; name?: string }>;
+  getMe(): Promise<{ workspace_id: string; user_id: string; role: string; name?: string }>;
   listUsers(): Promise<{ users: unknown[] }>;
   createUser(user: unknown): Promise<unknown>;
   deleteUser(userId: string): Promise<unknown>;

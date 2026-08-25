@@ -1,20 +1,23 @@
-"""Persistence for scan runs in DynamoDB, scoped per tenant.
+"""Persistence for scan runs in DynamoDB, scoped per workspace.
 
 Each scan is one item:
 
-    pk = "TENANT#<tenant_id>"   sk = scan_id   ("<ISO timestamp>_<short uuid>")
+    pk = "TENANT#<workspace_id>"   sk = scan_id   ("<ISO timestamp>_<short uuid>")
 
-Because `scan_id` is prefixed with a UTC timestamp, querying a tenant's
+(`TENANT#` is the frozen legacy prefix for what is now a workspace — see
+`dynamo.py` and docs/DECISIONS.md D3.)
+
+Because `scan_id` is prefixed with a UTC timestamp, querying a workspace's
 partition with `ScanIndexForward=False` returns its most recent scans first —
-no GSI needed, and scans are naturally isolated by tenant.
+no GSI needed, and scans are naturally isolated by workspace.
 
 The bulk payload (summary + resources) is stored as JSON strings to keep
 serialization simple and avoid DynamoDB Decimal/float quirks. Lightweight
 metadata (scan_id, created_at, resource_count) is stored as native attributes
 so the history list can be projected cheaply without loading every resource.
 
-`tenant_id` is an optional keyword on every function; when omitted it resolves
-to the default tenant (local / single-tenant mode). If persistence is not
+`workspace_id` is an optional keyword on every function; when omitted it resolves
+to the default workspace (local / single-workspace mode). If persistence is not
 configured, every function is a safe no-op.
 """
 
@@ -41,8 +44,8 @@ __all__ = [
 ]
 
 
-def _scan_pk(tenant_id: str | None) -> str:
-    return f"TENANT#{tenant_id or config.default_tenant_id()}"
+def _scan_pk(workspace_id: str | None) -> str:
+    return f"TENANT#{workspace_id or config.default_workspace_id()}"
 
 
 def _new_scan_id() -> str:
@@ -63,8 +66,8 @@ def _serialize_resources(resources: list) -> list[dict]:
     return out
 
 
-def save_scan(result: dict, *, tenant_id: str | None = None) -> str | None:
-    """Persist a full scan result for a tenant. Returns scan_id, or None if disabled."""
+def save_scan(result: dict, *, workspace_id: str | None = None) -> str | None:
+    """Persist a full scan result for a workspace. Returns scan_id, or None if disabled."""
     if not is_enabled():
         return None
 
@@ -75,7 +78,7 @@ def save_scan(result: dict, *, tenant_id: str | None = None) -> str | None:
 
     get_table().put_item(
         Item={
-            "pk": _scan_pk(tenant_id),
+            "pk": _scan_pk(workspace_id),
             "sk": scan_id,
             "scan_id": scan_id,
             "created_at": created_at,
@@ -87,13 +90,13 @@ def save_scan(result: dict, *, tenant_id: str | None = None) -> str | None:
     return scan_id
 
 
-def list_scans(limit: int = 20, *, tenant_id: str | None = None) -> list[dict]:
-    """Return recent scan metadata for a tenant (newest first). Empty if disabled."""
+def list_scans(limit: int = 20, *, workspace_id: str | None = None) -> list[dict]:
+    """Return recent scan metadata for a workspace (newest first). Empty if disabled."""
     if not is_enabled():
         return []
 
     response = get_table().query(
-        KeyConditionExpression=Key("pk").eq(_scan_pk(tenant_id)),
+        KeyConditionExpression=Key("pk").eq(_scan_pk(workspace_id)),
         ScanIndexForward=False,  # newest first
         Limit=limit,
         ProjectionExpression="scan_id, created_at, resource_count, summary_json",
@@ -101,7 +104,7 @@ def list_scans(limit: int = 20, *, tenant_id: str | None = None) -> list[dict]:
     return [_to_meta(item) for item in response.get("Items", [])]
 
 
-def list_scans_full(limit: int = 20, *, tenant_id: str | None = None) -> list[dict]:
+def list_scans_full(limit: int = 20, *, workspace_id: str | None = None) -> list[dict]:
     """Like list_scans, but includes each scan's resources (one Query).
 
     Used to compute per-scan "vs previous" deltas without N round trips.
@@ -111,7 +114,7 @@ def list_scans_full(limit: int = 20, *, tenant_id: str | None = None) -> list[di
         return []
 
     response = get_table().query(
-        KeyConditionExpression=Key("pk").eq(_scan_pk(tenant_id)),
+        KeyConditionExpression=Key("pk").eq(_scan_pk(workspace_id)),
         ScanIndexForward=False,  # newest first
         Limit=limit,
     )
@@ -124,12 +127,12 @@ def list_scans_full(limit: int = 20, *, tenant_id: str | None = None) -> list[di
     ]
 
 
-def get_scan(scan_id: str, *, tenant_id: str | None = None) -> dict | None:
-    """Return a single saved scan for a tenant, or None if missing/disabled."""
+def get_scan(scan_id: str, *, workspace_id: str | None = None) -> dict | None:
+    """Return a single saved scan for a workspace, or None if missing/disabled."""
     if not is_enabled():
         return None
 
-    response = get_table().get_item(Key={"pk": _scan_pk(tenant_id), "sk": scan_id})
+    response = get_table().get_item(Key={"pk": _scan_pk(workspace_id), "sk": scan_id})
     item = response.get("Item")
     if not item:
         return None

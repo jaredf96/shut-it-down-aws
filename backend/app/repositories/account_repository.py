@@ -1,9 +1,10 @@
-"""Per-tenant AWS account registrations (same table as scans).
+"""Per-workspace AWS account registrations (same table as scans).
 
-    pk = "ACCOUNTS#<tenant_id>"   sk = <account_id>   -> account record
+    pk = "ACCOUNTS#<workspace_id>"   sk = <account_id>   -> account record
 
-A distinct partition prefix keeps these out of the tenant's scan partition
-(`TENANT#<tenant_id>`), so listing scans never sees account records.
+A distinct partition prefix keeps these out of the workspace's scan partition
+(`TENANT#<workspace_id>` — a frozen legacy name, see `dynamo.py`), so listing
+scans never sees account records.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _accounts_pk(tenant_id: str) -> str:
-    return f"ACCOUNTS#{tenant_id}"
+def _accounts_pk(workspace_id: str) -> str:
+    return f"ACCOUNTS#{workspace_id}"
 
 
 def account_id_from_role_arn(role_arn: str) -> str:
@@ -33,14 +34,14 @@ def account_id_from_role_arn(role_arn: str) -> str:
     return match.group(1) if match else uuid.uuid4().hex[:12]
 
 
-def create_account(tenant_id: str, payload: dict) -> dict:
-    """Register an account for a tenant. Returns the stored record."""
+def create_account(workspace_id: str, payload: dict) -> dict:
+    """Register an account for a workspace. Returns the stored record."""
     if not is_enabled():
         raise RuntimeError("Persistence is required to register accounts")
 
     account_id = payload.get("account_id") or account_id_from_role_arn(payload["role_arn"])
     item = {
-        "pk": _accounts_pk(tenant_id),
+        "pk": _accounts_pk(workspace_id),
         "sk": account_id,
         "account_id": account_id,
         "name": payload["name"],
@@ -53,28 +54,28 @@ def create_account(tenant_id: str, payload: dict) -> dict:
     return _strip_keys(item)
 
 
-def list_accounts(tenant_id: str) -> list[dict]:
-    """All accounts registered by a tenant. Empty if disabled."""
+def list_accounts(workspace_id: str) -> list[dict]:
+    """All accounts registered by a workspace. Empty if disabled."""
     if not is_enabled():
         return []
-    response = get_table().query(KeyConditionExpression=Key("pk").eq(_accounts_pk(tenant_id)))
+    response = get_table().query(KeyConditionExpression=Key("pk").eq(_accounts_pk(workspace_id)))
     return [_strip_keys(item) for item in response.get("Items", [])]
 
 
-def get_account(tenant_id: str, account_id: str) -> dict | None:
+def get_account(workspace_id: str, account_id: str) -> dict | None:
     if not is_enabled():
         return None
-    response = get_table().get_item(Key={"pk": _accounts_pk(tenant_id), "sk": account_id})
+    response = get_table().get_item(Key={"pk": _accounts_pk(workspace_id), "sk": account_id})
     item = response.get("Item")
     return _strip_keys(item) if item else None
 
 
-def delete_account(tenant_id: str, account_id: str) -> bool:
+def delete_account(workspace_id: str, account_id: str) -> bool:
     """Delete an account registration. Returns True if it existed."""
     if not is_enabled():
         return False
-    existed = get_account(tenant_id, account_id) is not None
-    get_table().delete_item(Key={"pk": _accounts_pk(tenant_id), "sk": account_id})
+    existed = get_account(workspace_id, account_id) is not None
+    get_table().delete_item(Key={"pk": _accounts_pk(workspace_id), "sk": account_id})
     return existed
 
 

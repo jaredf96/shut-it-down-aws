@@ -86,15 +86,15 @@ def diff_resource_lists(from_resources: list[dict], to_resources: list[dict]) ->
     }
 
 
-def diff_scans(from_id: str, to_id: str, *, tenant_id: str | None = None) -> dict:
-    """Diff two saved scans (older `from_id` vs newer `to_id`) for a tenant.
+def diff_scans(from_id: str, to_id: str, *, workspace_id: str | None = None) -> dict:
+    """Diff two saved scans (older `from_id` vs newer `to_id`) for a workspace.
 
     Raises LookupError(scan_id) if either scan does not exist.
     """
-    from_scan = scan_repository.get_scan(from_id, tenant_id=tenant_id)
+    from_scan = scan_repository.get_scan(from_id, workspace_id=workspace_id)
     if from_scan is None:
         raise LookupError(from_id)
-    to_scan = scan_repository.get_scan(to_id, tenant_id=tenant_id)
+    to_scan = scan_repository.get_scan(to_id, workspace_id=workspace_id)
     if to_scan is None:
         raise LookupError(to_id)
 

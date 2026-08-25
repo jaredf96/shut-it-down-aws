@@ -16,26 +16,26 @@ def test_account_id_parsed_from_role_arn():
 
 def test_create_list_get_delete_account(dynamo_table):
     created = account_repository.create_account(
-        "tenant-1",
+        "workspace-1",
         {"name": "Sandbox", "role_arn": "arn:aws:iam::111111111111:role/Read"},
     )
     assert created["account_id"] == "111111111111"
     assert "pk" not in created and "sk" not in created
 
-    listed = account_repository.list_accounts("tenant-1")
+    listed = account_repository.list_accounts("workspace-1")
     assert len(listed) == 1
 
-    assert account_repository.get_account("tenant-1", "111111111111") is not None
-    assert account_repository.delete_account("tenant-1", "111111111111") is True
-    assert account_repository.list_accounts("tenant-1") == []
+    assert account_repository.get_account("workspace-1", "111111111111") is not None
+    assert account_repository.delete_account("workspace-1", "111111111111") is True
+    assert account_repository.list_accounts("workspace-1") == []
 
 
-def test_accounts_are_isolated_by_tenant(dynamo_table):
+def test_accounts_are_isolated_by_workspace(dynamo_table):
     account_repository.create_account(
-        "tenant-a", {"name": "A", "role_arn": "arn:aws:iam::111111111111:role/R"}
+        "workspace-a", {"name": "A", "role_arn": "arn:aws:iam::111111111111:role/R"}
     )
-    assert len(account_repository.list_accounts("tenant-a")) == 1
-    assert account_repository.list_accounts("tenant-b") == []
+    assert len(account_repository.list_accounts("workspace-a")) == 1
+    assert account_repository.list_accounts("workspace-b") == []
 
 
 # --- assume-role session -------------------------------------------------
@@ -57,7 +57,7 @@ def test_scan_accounts_falls_back_to_default_when_none_registered(dynamo_table):
     boto3.client("ec2", region_name=REGION).run_instances(
         ImageId="ami-12345678", MinCount=1, MaxCount=1
     )
-    result = scan_accounts("tenant-1")  # no accounts registered
+    result = scan_accounts("workspace-1")  # no accounts registered
     assert "accounts_scanned" not in result  # default single-account path
     assert result["summary"]["total_resources"] >= 1
 
@@ -65,10 +65,10 @@ def test_scan_accounts_falls_back_to_default_when_none_registered(dynamo_table):
 def test_scan_accounts_tags_resources(dynamo_table, monkeypatch):
     # Register two accounts; make assume-role a no-op (use the moto default session).
     account_repository.create_account(
-        "tenant-1", {"name": "Acct One", "role_arn": "arn:aws:iam::111111111111:role/R"}
+        "workspace-1", {"name": "Acct One", "role_arn": "arn:aws:iam::111111111111:role/R"}
     )
     account_repository.create_account(
-        "tenant-1", {"name": "Acct Two", "role_arn": "arn:aws:iam::222222222222:role/R"}
+        "workspace-1", {"name": "Acct Two", "role_arn": "arn:aws:iam::222222222222:role/R"}
     )
     monkeypatch.setattr(
         "app.services.multi_account_service.session_for_account",
@@ -78,7 +78,7 @@ def test_scan_accounts_tags_resources(dynamo_table, monkeypatch):
         ImageId="ami-12345678", MinCount=1, MaxCount=1
     )
 
-    result = scan_accounts("tenant-1")
+    result = scan_accounts("workspace-1")
     assert len(result["accounts_scanned"]) == 2
     assert result["account_errors"] == []
     # Every resource is tagged with one of the two account ids.
@@ -89,7 +89,7 @@ def test_scan_accounts_tags_resources(dynamo_table, monkeypatch):
 
 def test_scan_accounts_collects_per_account_errors(dynamo_table, monkeypatch):
     account_repository.create_account(
-        "tenant-1", {"name": "Broken", "role_arn": "arn:aws:iam::333333333333:role/R"}
+        "workspace-1", {"name": "Broken", "role_arn": "arn:aws:iam::333333333333:role/R"}
     )
 
     def boom(account):
@@ -97,7 +97,7 @@ def test_scan_accounts_collects_per_account_errors(dynamo_table, monkeypatch):
 
     monkeypatch.setattr("app.services.multi_account_service.session_for_account", boom)
 
-    result = scan_accounts("tenant-1")
+    result = scan_accounts("workspace-1")
     assert result["resources"] == []
     assert len(result["account_errors"]) == 1
     assert "denied" in result["account_errors"][0]["error"]

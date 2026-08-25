@@ -70,7 +70,7 @@ Not the other way round.
 
 ## D3 — Multi-account yes, multi-tenant no
 
-**Decided:** 2026-08-25 · **Status:** follows from D1, not executed
+**Decided:** 2026-08-25 · **Status:** executed
 
 `tenant_id` currently does two unrelated jobs:
 
@@ -89,6 +89,54 @@ break the others — is the core instructor feature. It stays.
 
 Kept for the same reason: `account_repository`, `auth.py`, `user_repository`,
 `cleanup_service`, `audit_repository`, `scan_repository`.
+
+### How the rename is done
+
+**Rename the logical model end-to-end; freeze the storage schema.**
+
+Logical vocabulary becomes `workspace` everywhere a human or a caller sees it:
+Python identifiers, API payloads, frontend contracts and providers, tests, docs.
+
+Storage is **frozen legacy** and deliberately not renamed: partition prefixes
+`TENANT#`, `ACCOUNTS#`, `USERS#`, `AUDIT#` and every persisted `tenant_id`
+attribute stay exactly as they are. **No data migration.** Self-hosted means the
+data lives on each operator's own infrastructure; a migration would have to be
+idempotent, partial-failure-safe, and tested on every install, for a naming
+change nobody can see.
+
+**This mismatch is deliberate, and this paragraph is why it exists.** Finding
+`TENANT#` in the repository layer is not a bug or an oversight — it is a frozen
+storage name behind a translation boundary.
+
+Translation is **explicit and record-specific**, not generic. The only record
+that persists a `tenant_id` *attribute* crossing a public boundary is the API-key
+principal, so the mapping lives in `user_repository` as
+`_principal_to_storage()` / `_principal_from_storage()`. `dynamo.py` stays
+infrastructure plumbing and never silently rewrites arbitrary dicts — a generic
+mapper there would hide the fact that exactly one record type needs this.
+
+Every other repository already builds its public response from an explicit
+allowlist (`_PUBLIC_FIELDS`, `_strip_keys`, or a literal dict), and `_get_raw()`
+is private with internal callers only. Those are already correct; leave them
+alone. Remove raw-return patterns only where they genuinely cross a repository's
+public boundary.
+
+**Env var:** `DEFAULT_WORKSPACE_ID` is canonical. `DEFAULT_TENANT_ID` remains a
+deprecated fallback; the canonical name wins when both are set, and the fallback
+logs a deprecation warning **once per process** (config resolvers are functions,
+not constants — an unguarded warning fires on every read).
+
+**Accepted API break.** The response shape changes for the frontend, which is a
+real consumer — this is a coordinated break landed in the same change, not a
+break with no consumers. There is no supported external compatibility
+commitment, so no versioning or deprecation window applies. Both providers and
+`contract.d.ts` move together; `providerContract.test.js` enforces it.
+
+Tests that pin the boundary:
+- `/me` and user creation return `workspace_id` and never `tenant_id`
+- reading a legacy API-key row that stores `tenant_id` resolves correctly
+- new writes still produce the frozen storage representation
+- env-var precedence, and the legacy warning fires once
 
 ---
 

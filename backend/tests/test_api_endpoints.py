@@ -7,11 +7,11 @@ from tests.conftest import REGION
 client = TestClient(app)
 
 
-def _admin_user(tenant: str = "class", name: str = "Instructor") -> dict:
+def _admin_user(workspace: str = "class", name: str = "Instructor") -> dict:
     """Mint an admin API key directly — how a shared deployment gets its first."""
     from app.repositories import user_repository
 
-    return user_repository.create_user(tenant, name, role="admin")
+    return user_repository.create_user(workspace, name, role="admin")
 
 
 def test_health_does_not_touch_aws():
@@ -77,7 +77,7 @@ def test_scan_endpoint_reports_a_scanner_that_could_not_run(monkeypatch):
 
 def test_there_are_no_per_service_scan_endpoints():
     """`/scan/<service>` bypassed the multi-account path and answered with the
-    *server's* inventory, while `/scan` returned the tenant's — the same caller
+    *server's* inventory, while `/scan` returned the workspace's — the same caller
     got two different accounts' data with nothing to tell them apart.
 
     The endpoints are gone. Registering a scanner used to make one "come free",
@@ -218,7 +218,7 @@ def test_alerts_endpoint_uses_latest_saved_scan(dynamo_table):
     assert body["alerts"][0]["severity"] == "WARNING"
 
 
-# --- Tenancy / auth ------------------------------------------------------
+# --- Workspaces / auth ------------------------------------------------------
 
 
 def test_auth_required_rejects_missing_key(dynamo_table, monkeypatch):
@@ -238,7 +238,7 @@ def test_auth_required_accepts_valid_key_and_scopes_data(dynamo_table, monkeypat
     scan = client.get("/scan", headers=headers).json()
     assert scan["persisted"] is True
 
-    # The tenant sees its own scan in history.
+    # The workspace sees its own scan in history.
     listed = client.get("/scans", headers=headers).json()["scans"]
     assert len(listed) == 1
 
@@ -414,7 +414,7 @@ def test_unavailable_scanners_are_attributed_to_their_account(dynamo_table, monk
 def test_me_is_admin_in_local_mode():
     body = client.get("/me").json()
     assert body["role"] == "admin"
-    assert body["tenant_id"]
+    assert body["workspace_id"]
 
 
 def test_users_503_without_persistence():

@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import config
-from app.auth import get_current_principal, get_current_tenant, require_admin
+from app.auth import get_current_principal, get_current_workspace, require_admin
 from app.errors import PersistenceUnavailable
 from app.logging_setup import configure_logging
 from app.models import AccountCreate, CleanupRequest, UserCreate
@@ -169,7 +169,7 @@ def _require_persistence() -> None:
 
 @app.get("/me")
 def whoami(principal: dict = Depends(get_current_principal)):
-    """Return the calling principal (tenant, user, role) — handy for the UI."""
+    """Return the calling principal (workspace, user, role) — handy for the UI."""
     return principal
 
 
@@ -177,17 +177,17 @@ def whoami(principal: dict = Depends(get_current_principal)):
 
 
 @app.get("/users")
-def list_users(tenant: str = Depends(get_current_tenant)):
-    """List the team members of this tenant."""
+def list_users(workspace: str = Depends(get_current_workspace)):
+    """List the team members of this workspace."""
     _require_persistence()
-    return {"users": user_repository.list_users(tenant)}
+    return {"users": user_repository.list_users(workspace)}
 
 
 @app.post("/users", status_code=201)
 def add_user(payload: UserCreate, principal: dict = Depends(require_admin)):
     """Create a team member and return their API key (admin only, shown once)."""
     _require_persistence()
-    return user_repository.create_user(principal["tenant_id"], payload.name, payload.role)
+    return user_repository.create_user(principal["workspace_id"], payload.name, payload.role)
 
 
 @app.delete("/users/{user_id}")
@@ -196,7 +196,7 @@ def remove_user(user_id: str, principal: dict = Depends(require_admin)):
     _require_persistence()
     if user_id == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot remove yourself.")
-    if not user_repository.delete_user(principal["tenant_id"], user_id):
+    if not user_repository.delete_user(principal["workspace_id"], user_id):
         raise HTTPException(status_code=404, detail="User not found")
     return {"deleted": user_id}
 
@@ -205,24 +205,24 @@ def remove_user(user_id: str, principal: dict = Depends(require_admin)):
 
 
 @app.get("/accounts")
-def list_accounts(tenant: str = Depends(get_current_tenant)):
-    """List the AWS accounts registered for this tenant."""
+def list_accounts(workspace: str = Depends(get_current_workspace)):
+    """List the AWS accounts registered for this workspace."""
     _require_persistence()
-    return {"accounts": account_repository.list_accounts(tenant)}
+    return {"accounts": account_repository.list_accounts(workspace)}
 
 
 @app.post("/accounts", status_code=201)
 def add_account(payload: AccountCreate, principal: dict = Depends(require_admin)):
     """Register an AWS account (admin only)."""
     _require_persistence()
-    return account_repository.create_account(principal["tenant_id"], payload.model_dump())
+    return account_repository.create_account(principal["workspace_id"], payload.model_dump())
 
 
 @app.delete("/accounts/{account_id}")
 def remove_account(account_id: str, principal: dict = Depends(require_admin)):
     """Remove an account registration (admin only)."""
     _require_persistence()
-    if not account_repository.delete_account(principal["tenant_id"], account_id):
+    if not account_repository.delete_account(principal["workspace_id"], account_id):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"deleted": account_id}
 
@@ -252,10 +252,10 @@ def cleanup_actions():
 
 
 @app.get("/cleanup/audit")
-def cleanup_audit(limit: int = 50, tenant: str = Depends(get_current_tenant)):
-    """Recent cleanup attempts for this tenant (newest first)."""
+def cleanup_audit(limit: int = 50, workspace: str = Depends(get_current_workspace)):
+    """Recent cleanup attempts for this workspace (newest first)."""
     _require_persistence()
-    return {"entries": audit_repository.list_entries(tenant, limit)}
+    return {"entries": audit_repository.list_entries(workspace, limit)}
 
 
 @app.post("/cleanup/execute")
@@ -264,7 +264,7 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_a
 
     Hard-gated by `ENABLE_CLEANUP_ACTIONS`. Requires `confirm_resource_id` to
     equal `resource_id`. Defaults to a dry run; pass `dry_run=false` to mutate.
-    An `account_id` the tenant has not registered is refused (404), never run
+    An `account_id` the workspace has not registered is refused (404), never run
     against the server's own credentials.
     """
     if not config.cleanup_enabled():
@@ -279,7 +279,7 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_a
         region=payload.region,
         account_id=payload.account_id,
         dry_run=payload.dry_run,
-        tenant_id=principal["tenant_id"],
+        workspace_id=principal["workspace_id"],
         user_id=principal["user_id"],
     )
 
@@ -290,7 +290,7 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_a
 
 
 @app.get("/scan")
-def scan_everything(save: bool = True, tenant: str = Depends(get_current_tenant)):
+def scan_everything(save: bool = True, workspace: str = Depends(get_current_workspace)):
     """Run all scanners and return a combined, summarized result.
 
     The response includes `alerts` (derived from this scan, and the previous
@@ -298,17 +298,17 @@ def scan_everything(save: bool = True, tenant: str = Depends(get_current_tenant)
     also saved to DynamoDB and its `scan_id` is returned. Pass `?save=false`
     to skip saving.
 
-    If the tenant has registered AWS accounts, every account is scanned
+    If the workspace has registered AWS accounts, every account is scanned
     (assume-role) and each resource is tagged with its account; otherwise the
     server's own credentials are used.
     """
-    result = scan_accounts(tenant)
+    result = scan_accounts(workspace)
 
     # Compare against the most recent saved scan (the "previous" one) for
     # change-aware alerts. Fetch it before saving the new scan.
     previous_resources = None
     if scan_repository.is_enabled():
-        recent = scan_repository.list_scans_full(1, tenant_id=tenant)
+        recent = scan_repository.list_scans_full(1, workspace_id=workspace)
         if recent:
             previous_resources = recent[0]["resources"]
 
@@ -316,7 +316,7 @@ def scan_everything(save: bool = True, tenant: str = Depends(get_current_tenant)
 
     scan_id = None
     if save and scan_repository.is_enabled():
-        scan_id = scan_repository.save_scan(result, tenant_id=tenant)
+        scan_id = scan_repository.save_scan(result, workspace_id=workspace)
 
     response = {**result, "alerts": alerts, "scan_id": scan_id, "persisted": scan_id is not None}
 
@@ -328,7 +328,7 @@ def scan_everything(save: bool = True, tenant: str = Depends(get_current_tenant)
 
 
 @app.post("/notify")
-def notify_alerts(tenant: str = Depends(get_current_tenant)):
+def notify_alerts(workspace: str = Depends(get_current_workspace)):
     """Deliver the latest saved scan's alerts to configured channels.
 
     Requires persistence. Returns a per-channel result summary. Channels are
@@ -340,7 +340,7 @@ def notify_alerts(tenant: str = Depends(get_current_tenant)):
             status_code=503,
             detail="Persistence is required. Use NOTIFY_ON_SCAN for inline delivery instead.",
         )
-    recent = scan_repository.list_scans_full(2, tenant_id=tenant)
+    recent = scan_repository.list_scans_full(2, workspace_id=workspace)
     if not recent:
         return {"sent_count": 0, "channels": [], "based_on": None}
     current = recent[0]
@@ -350,7 +350,7 @@ def notify_alerts(tenant: str = Depends(get_current_tenant)):
 
 
 @app.get("/alerts")
-def get_alerts(tenant: str = Depends(get_current_tenant)):
+def get_alerts(workspace: str = Depends(get_current_workspace)):
     """Alerts derived from the latest saved scan (vs the one before it).
 
     Requires persistence. Without it, alerts are still returned inline by
@@ -361,7 +361,7 @@ def get_alerts(tenant: str = Depends(get_current_tenant)):
             status_code=503,
             detail="Persistence is disabled. Alerts are included inline in GET /scan.",
         )
-    recent = scan_repository.list_scans_full(2, tenant_id=tenant)
+    recent = scan_repository.list_scans_full(2, workspace_id=workspace)
     if not recent:
         return {"alerts": [], "based_on": None}
     current = recent[0]
@@ -371,7 +371,7 @@ def get_alerts(tenant: str = Depends(get_current_tenant)):
 
 
 @app.get("/scans")
-def list_scans(limit: int = 20, tenant: str = Depends(get_current_tenant)):
+def list_scans(limit: int = 20, workspace: str = Depends(get_current_workspace)):
     """List recent saved scans (newest first), each with a `vs_previous` delta.
 
     503 if persistence is disabled.
@@ -381,12 +381,12 @@ def list_scans(limit: int = 20, tenant: str = Depends(get_current_tenant)):
             status_code=503,
             detail="Persistence is disabled. Set DYNAMODB_TABLE_NAME to enable scan history.",
         )
-    return {"scans": list_with_deltas(limit=limit, tenant_id=tenant)}
+    return {"scans": list_with_deltas(limit=limit, workspace_id=workspace)}
 
 
 # NOTE: declared before "/scans/{scan_id}" so the fixed "diff" path matches first.
 @app.get("/scans/diff")
-def diff(from_id: str, to_id: str, tenant: str = Depends(get_current_tenant)):
+def diff(from_id: str, to_id: str, workspace: str = Depends(get_current_workspace)):
     """Compare two saved scans (older `from_id` vs newer `to_id`).
 
     503 if persistence is disabled, 404 if either scan id is missing.
@@ -394,17 +394,17 @@ def diff(from_id: str, to_id: str, tenant: str = Depends(get_current_tenant)):
     if not scan_repository.is_enabled():
         raise HTTPException(status_code=503, detail="Persistence is disabled.")
     try:
-        return diff_scans(from_id, to_id, tenant_id=tenant)
+        return diff_scans(from_id, to_id, workspace_id=workspace)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=f"Scan not found: {exc}") from exc
 
 
 @app.get("/scans/{scan_id}")
-def get_scan(scan_id: str, tenant: str = Depends(get_current_tenant)):
+def get_scan(scan_id: str, workspace: str = Depends(get_current_workspace)):
     """Fetch one saved scan by id. 503 if disabled, 404 if not found."""
     if not scan_repository.is_enabled():
         raise HTTPException(status_code=503, detail="Persistence is disabled.")
-    record = scan_repository.get_scan(scan_id, tenant_id=tenant)
+    record = scan_repository.get_scan(scan_id, workspace_id=workspace)
     if record is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return record

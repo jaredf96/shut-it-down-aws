@@ -2,12 +2,21 @@
 
 The whole app uses a single table with prefixed partition keys:
 
-    pk = "TENANT#<tenant_id>"      sk = <scan_id>     -> a saved scan
-    pk = "TENANTMETA#<tenant_id>"  sk = "#"           -> tenant record
-    pk = "APIKEY#<sha256(key)>"    sk = "#"           -> api key -> tenant lookup
+    pk = "TENANT#<workspace_id>"    sk = <scan_id>     -> a saved scan
+    pk = "ACCOUNTS#<workspace_id>"  sk = <account_id>  -> a registered AWS account
+    pk = "USERS#<workspace_id>"     sk = <user_id>     -> a team member
+    pk = "AUDIT#<workspace_id>"     sk = <entry_id>    -> a cleanup attempt
+    pk = "APIKEY#<sha256(key)>"     sk = "#"           -> api key -> principal
 
 Distinct prefixes keep these record types from colliding in one partition, so
-scoping scans by tenant is just a different `pk` value — no schema change.
+scoping scans by workspace is just a different `pk` value — no schema change.
+
+**`TENANT#` is a frozen legacy name, not an oversight.** The logical model was
+renamed tenant -> workspace (D3); the stored prefixes were deliberately not,
+because a self-hosted install keeps its data on its own infrastructure and a
+migration would have to be idempotent, partial-failure-safe and tested on every
+install — for a name no caller can see. The one stored `tenant_id` *attribute*
+that reaches a caller is translated in `user_repository`.
 
 Two behaviors live here so no repository has to repeat them:
 

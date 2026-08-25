@@ -84,6 +84,11 @@ function stubApi() {
       };
     } else if (path.startsWith("/accounts")) {
       body = accountsFixture;
+    } else if (path === "/me") {
+      // The principal, in the vocabulary the API actually speaks: the logical
+      // model is a workspace, and `tenant_id` is a storage name that never
+      // reaches a client (D3).
+      body = { workspace_id: "default", user_id: "local", role: "admin", name: "local" };
     } else {
       throw new Error(`unstubbed path: ${path}`);
     }
@@ -113,6 +118,7 @@ describe("both providers satisfy the same contract", () => {
     ["getScan", (p) => p.getScan(currentScan.scan_id)],
     ["listScans", (p) => p.listScans()],
     ["listAccounts", (p) => p.listAccounts()],
+    ["getMe", (p) => p.getMe()],
     ["compareScans", (p) => p.compareScans(previousScan.scan_id, currentScan.scan_id)],
   ])("%s returns the same shape from both providers", async (_name, call) => {
     const [demo, api] = await Promise.all([call(demoScanProvider), call(apiScanProvider)]);

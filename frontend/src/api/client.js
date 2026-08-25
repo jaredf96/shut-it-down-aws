@@ -2,8 +2,8 @@
 // (VITE_API_BASE_URL) when you deploy the backend somewhere other than local.
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-// Optional API key for SaaS mode. Left unset, the backend runs as the default
-// tenant (local dev needs no key).
+// Optional API key for a shared deployment. Left unset, the backend runs as
+// the default workspace (a local install needs no key).
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 function authHeaders() {
@@ -89,7 +89,7 @@ export function executeCleanup(request) {
 
 // --- Team / users ---
 
-// Current principal: { tenant_id, user_id, role, name }.
+// Current principal: { workspace_id, user_id, role, name }.
 export function getMe() {
   return getJSON("/me");
 }

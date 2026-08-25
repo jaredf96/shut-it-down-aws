@@ -1,6 +1,6 @@
 """Append-only audit log for cleanup attempts (same table as scans).
 
-    pk = "AUDIT#<tenant_id>"   sk = "<ISO-8601 UTC>_<short uuid>"
+    pk = "AUDIT#<workspace_id>"   sk = "<ISO-8601 UTC>_<short uuid>"
 
 Every cleanup attempt — success, failure, or refusal — is recorded here so there
 is always a trail of who tried to change what. Entries are time-sortable, so the
@@ -21,7 +21,7 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def append(tenant_id: str, entry: dict) -> dict:
+def append(workspace_id: str, entry: dict) -> dict:
     """Persist an audit entry and return it (with id + created_at).
 
     When persistence is disabled the entry is returned but not stored — the
@@ -32,17 +32,17 @@ def append(tenant_id: str, entry: dict) -> dict:
     record = {**entry, "created_at": created_at, "id": f"{created_at}_{uuid.uuid4().hex[:8]}"}
 
     if is_enabled():
-        get_table().put_item(Item={"pk": f"AUDIT#{tenant_id}", "sk": record["id"], **record})
+        get_table().put_item(Item={"pk": f"AUDIT#{workspace_id}", "sk": record["id"], **record})
 
     return record
 
 
-def list_entries(tenant_id: str, limit: int = 50) -> list[dict]:
-    """Return recent audit entries for a tenant (newest first). Empty if disabled."""
+def list_entries(workspace_id: str, limit: int = 50) -> list[dict]:
+    """Return recent audit entries for a workspace (newest first). Empty if disabled."""
     if not is_enabled():
         return []
     response = get_table().query(
-        KeyConditionExpression=Key("pk").eq(f"AUDIT#{tenant_id}"),
+        KeyConditionExpression=Key("pk").eq(f"AUDIT#{workspace_id}"),
         ScanIndexForward=False,
         Limit=limit,
     )

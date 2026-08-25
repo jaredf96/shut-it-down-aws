@@ -44,7 +44,7 @@ def region_failures(failed: dict[str, str]) -> list[dict[str, object]]:
     """Render collected region failures as the API's `regions_failed` entries.
 
     `account_id`/`account_label` mirror `Resource`: None in single-account mode,
-    stamped by `multi_account_service` when a tenant has registered accounts.
+    stamped by `multi_account_service` when a workspace has registered accounts.
     """
     return [
         {"region": region, "reason": reason, "account_id": None, "account_label": None}

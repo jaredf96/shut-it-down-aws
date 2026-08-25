@@ -62,11 +62,11 @@ boto3 picks up credentials automatically from any of:
 | ------ | ---------------------- | ----------------------------------------------- |
 | GET    | `/health`              | Liveness — process only, touches no dependency  |
 | GET    | `/ready`               | Readiness — verifies DynamoDB; `503` if unreachable |
-| GET    | `/me`                  | Current principal (tenant, user, role)          |
+| GET    | `/me`                  | Current principal (workspace, user, role)       |
 | GET    | `/users`               | List team members                               |
 | POST   | `/users`               | Add a member, returns API key (admin only)      |
 | DELETE | `/users/{id}`          | Remove a member, revokes key (admin only)       |
-| GET    | `/accounts`            | List the tenant's registered AWS accounts       |
+| GET    | `/accounts`            | List the workspace's registered AWS accounts    |
 | POST   | `/accounts`            | Register an AWS account (admin only)            |
 | DELETE | `/accounts/{id}`       | Remove an account registration (admin only)     |
 | GET    | `/cleanup/actions`     | Supported cleanup actions + what's excluded     |
@@ -104,13 +104,13 @@ a scan that could not read three regions — or could not list buckets — has t
 so rather than present a partial inventory as a clean bill of health. Both are
 empty when everything was read, and neither is stored with a saved scan.
 
-### Tenancy & auth
+### Workspace & auth
 
-Every scan and alert is scoped to a `tenant_id`. Auth is **optional and off by
-default**:
+Every scan and alert is scoped to a `workspace_id`. Auth is **optional and off
+by default**:
 
 - **Local (default):** no API key needed. Requests run as an admin `local` user
-  of the `default` tenant (override with `DEFAULT_TENANT_ID`).
+  of the `default` workspace (override with `DEFAULT_WORKSPACE_ID`).
 - **Shared deployment (`AUTH_REQUIRED=true`):** every data request must carry a
   valid API key, sent as either `Authorization: Bearer <key>` or
   `X-API-Key: <key>`.
@@ -128,25 +128,28 @@ curl http://localhost:8000/scans -H 'X-API-Key: clc_…'
 ```
 
 Data model (single table, prefixed partitions): `TENANT#<id>` holds that
-tenant's scans, `APIKEY#<sha256(key)>` maps a key to its principal (only the
-hash is stored), `USERS#<id>` the members. See
-`app/repositories/user_repository.py` and `app/auth.py`.
+workspace's scans, `APIKEY#<sha256(key)>` maps a key to its principal (only the
+hash is stored), `USERS#<id>` the members. The `TENANT#` prefix is a frozen
+legacy name kept deliberately — the logical model was renamed but stored data
+was not, so there is no migration (see `app/repositories/dynamo.py` and
+docs/DECISIONS.md D3). See `app/repositories/user_repository.py` and
+`app/auth.py`.
 
 ### Teams & roles
 
-A tenant has **users** with a role: **admin** (manage accounts + users) or
+A workspace has **users** with a role: **admin** (manage accounts + users) or
 **member** (read-only management, full scan/alert access). Each user has their
 own API key.
 
-- `GET /me` returns the caller's principal (`{tenant_id, user_id, role, name}`).
+- `GET /me` returns the caller's principal (`{workspace_id, user_id, role, name}`).
 - Admins add members with `POST /users` (returns the member's key, shown once)
   and remove them with `DELETE /users/{id}` (which revokes the key).
-- **Scans are shared** across a tenant — every member sees the same history and
+- **Scans are shared** across a workspace — every member sees the same history and
   alerts. For classrooms, register one AWS account per student; the dashboard's
   per-account filter gives the teacher a per-student view.
 
 In local mode (no API key, `AUTH_REQUIRED` unset) the caller is an admin of the
-default tenant, so everything is manageable without credentials.
+default workspace, so everything is manageable without credentials.
 
 ### Guided cleanup (the only mutating feature)
 
@@ -222,7 +225,7 @@ scope decision, not an oversight.
 
 ### Multi-account scanning
 
-A tenant can register multiple AWS accounts (`POST /accounts` with a
+A workspace can register multiple AWS accounts (`POST /accounts` with a
 cross-account `role_arn`). When any are registered, `GET /scan` assumes each
 account's role via STS, scans it, and **tags every resource with its
 `account_id` / `account_label`**. With none registered, the server's own
@@ -325,16 +328,17 @@ dashboard sidebar light up.
 
 | Attribute        | Notes                                                       |
 | ---------------- | ----------------------------------------------------------- |
-| `pk` (HASH)      | `"TENANT#<tenant_id>"` so each tenant's scans are isolated   |
+| `pk` (HASH)      | `"TENANT#<workspace_id>"` — frozen legacy prefix; scans are isolated per workspace |
 | `sk` (RANGE)     | `scan_id` = `<ISO-8601 UTC>_<short uuid>` (time-sortable)    |
 | `created_at`     | ISO timestamp                                               |
 | `resource_count` | number of resources found                                   |
 | `summary_json`   | small summary (counts by risk level)                        |
 | `resources_json` | full resource list                                          |
 
-Because `sk` is time-prefixed, listing a tenant's history is a single `Query`
+Because `sk` is time-prefixed, listing a workspace's history is a single `Query`
 with `ScanIndexForward=False` — no secondary index needed. Other record types
-share the table under distinct prefixes (`TENANTMETA#`, `APIKEY#`, `ACCOUNTS#`).
+share the table under distinct prefixes (`APIKEY#`, `USERS#`, `ACCOUNTS#`,
+`AUDIT#`).
 
 **Create the table** (idempotent):
 
@@ -421,7 +425,7 @@ If you enable **live pricing** (`ENABLE_LIVE_PRICING=true`), the role needs
 app/
   main.py                       FastAPI routes
   config.py                     env-driven settings (persistence + auth toggles)
-  auth.py                       API-key -> tenant dependency
+  auth.py                       API-key -> workspace dependency
   aws/session.py                default + assume-role boto3 sessions
   scanners/                     one read-only scanner per AWS service
   models/                       Resource, Alert, Account

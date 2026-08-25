@@ -14,7 +14,7 @@ click it safely; this is the counterpart that shows the live path.
 6. **Isolation** — the platform account is not the thing being scanned.
 
 Point 6 is the one worth lingering on. It is the difference between "I scanned
-my own account" and "I built a multi-tenant control plane."
+my own account" and "I built a control plane that scans accounts it is not in."
 
 ---
 

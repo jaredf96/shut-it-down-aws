@@ -9,7 +9,11 @@ environment and pick up the change without re-importing.
 
 from __future__ import annotations
 
+import functools
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -38,18 +42,46 @@ def auto_create_enabled() -> bool:
     return os.environ.get("DYNAMODB_AUTO_CREATE", "").lower() in _TRUTHY
 
 
-# --- Tenancy / auth ------------------------------------------------------
+# --- Workspaces / auth ---------------------------------------------------
+
+_LEGACY_WORKSPACE_ENV = "DEFAULT_TENANT_ID"
 
 
-def default_tenant_id() -> str:
-    """Tenant used when no API key is presented (local / single-tenant mode)."""
-    return os.environ.get("DEFAULT_TENANT_ID") or "default"
+# lru_cache, not a bare flag, because these resolvers are functions called on
+# every request: an unguarded logger.warning would fire on every read rather
+# than once per process. Tests reset it with .cache_clear().
+@functools.lru_cache(maxsize=1)
+def _warn_legacy_workspace_env() -> None:
+    logger.warning(
+        "%s is deprecated and will be removed; use DEFAULT_WORKSPACE_ID instead.",
+        _LEGACY_WORKSPACE_ENV,
+    )
+
+
+def default_workspace_id() -> str:
+    """Workspace used when no API key is presented (local mode).
+
+    `DEFAULT_WORKSPACE_ID` is canonical and wins when both are set.
+    `DEFAULT_TENANT_ID` is the name it replaced (D3) and still works, so an
+    existing deployment keeps booting — it just says so once.
+    """
+    workspace_id = os.environ.get("DEFAULT_WORKSPACE_ID")
+    if workspace_id:
+        return workspace_id
+
+    legacy = os.environ.get(_LEGACY_WORKSPACE_ENV)
+    if legacy:
+        _warn_legacy_workspace_env()
+        return legacy
+
+    return "default"
 
 
 def auth_required() -> bool:
     """When true, every data request must carry a valid API key.
 
-    Off by default so local dev needs no credentials. Turn on for SaaS mode.
+    Off by default so local use needs no credentials. Turn on for a shared
+    deployment where every request must carry an API key.
     """
     return os.environ.get("AUTH_REQUIRED", "").lower() in _TRUTHY
 
