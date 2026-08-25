@@ -14,7 +14,7 @@ from . import (
     s3_scanner,
 )
 
-# Maps the API path slug -> scanner module.
+# Maps the registry key -> scanner module.
 SCANNERS = {
     "ec2": ec2_scanner,
     "ebs": ebs_scanner,
@@ -25,7 +25,21 @@ SCANNERS = {
     "s3": s3_scanner,
 }
 
+# Display names for the registry keys. Used when a whole scanner is
+# unavailable and the dashboard has to say *what* it could not see — "s3" is an
+# internal key, not something to put in front of a reader.
+SCANNER_LABELS = {
+    "ec2": "EC2 instances",
+    "ebs": "EBS volumes",
+    "elastic-ips": "Elastic IPs",
+    "nat-gateways": "NAT Gateways",
+    "load-balancers": "Load Balancers",
+    "rds": "RDS databases",
+    "s3": "S3 buckets",
+}
+
 __all__ = [
+    "SCANNER_LABELS",
     "SCANNERS",
     "ec2_scanner",
     "ebs_scanner",

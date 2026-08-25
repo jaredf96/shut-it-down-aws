@@ -5,7 +5,7 @@ import BillingPanel from "../components/BillingPanel.jsx";
 import CleanupPanel from "../components/CleanupPanel.jsx";
 import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
-import RegionFailures from "../components/RegionFailures.jsx";
+import IncompleteScan from "../components/IncompleteScan.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
 import ScanHistory from "../components/ScanHistory.jsx";
 import ScanProgress from "../components/ScanProgress.jsx";
@@ -25,9 +25,11 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [resources, setResources] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  // Regions this scan could not read. Live scans only — a saved scan does not
-  // record them, so viewing history clears it rather than showing a stale one.
+  // What this scan could not see: regions it could not read, and scanners that
+  // could not run at all. Live scans only — a saved scan records neither, so
+  // viewing history clears them rather than showing a stale one.
   const [regionsFailed, setRegionsFailed] = useState([]);
+  const [scannersFailed, setScannersFailed] = useState([]);
   const [hasScanned, setHasScanned] = useState(false);
 
   // The progress bar outlives `loading` by one completion beat, so it can fill
@@ -178,6 +180,7 @@ export default function Dashboard() {
       setSummary(data.summary);
       setAlerts(data.alerts || []);
       setRegionsFailed(data.regions_failed || []);
+      setScannersFailed(data.scanners_failed || []);
       setScannedAt(data.created_at || null);
       setHasScanned(true);
       setActiveScanId(null);
@@ -212,6 +215,7 @@ export default function Dashboard() {
       setSummary(record.summary);
       setAlerts([]); // alerts reflect the latest live scan, not a historical view
       setRegionsFailed([]); // not recorded with a saved scan
+      setScannersFailed([]);
       setScannedAt(record.created_at || null);
       setHasScanned(true);
       setActiveScanId(scanId);
@@ -285,7 +289,7 @@ export default function Dashboard() {
 
       {/* Above the summary tiles on purpose: "these totals are incomplete" has
           to be read before the totals are. */}
-      {viewingLive && <RegionFailures failures={regionsFailed} />}
+      {viewingLive && <IncompleteScan regions={regionsFailed} scanners={scannersFailed} />}
 
       {viewingLive && <AlertsPanel alerts={alerts} />}
 

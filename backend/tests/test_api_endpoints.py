@@ -25,6 +25,7 @@ def test_scan_all_endpoint_shape():
     assert body["summary"]["total_resources"] >= 1
     # Always present, so a caller can tell "saw everything" from "saw nothing".
     assert body["regions_failed"] == []
+    assert body["scanners_failed"] == []
 
 
 def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
@@ -41,6 +42,30 @@ def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
     assert body["regions_failed"] == [
         {"region": REGION, "reason": "AuthFailure", "account_id": None, "account_label": None}
     ]
+
+
+def test_scan_endpoint_reports_a_scanner_that_could_not_run(monkeypatch):
+    """S3 is global — no region to blame, so it gets its own array."""
+    from botocore.exceptions import ClientError
+
+    from app.scanners import s3_scanner
+
+    def boom(*args, **kwargs):
+        raise ClientError({"Error": {"Code": "AccessDenied"}}, "ListBuckets")
+
+    monkeypatch.setattr(s3_scanner, "scan", boom)
+
+    body = client.get("/scan").json()
+    assert body["scanners_failed"] == [
+        {
+            "scanner": "s3",
+            "label": "S3 buckets",
+            "reason": "AccessDenied",
+            "account_id": None,
+            "account_label": None,
+        }
+    ]
+    assert body["regions_failed"] == []
 
 
 def test_there_are_no_per_service_scan_endpoints():
@@ -352,6 +377,40 @@ def test_unreadable_regions_are_attributed_to_their_account(dynamo_table, monkey
         {
             "region": REGION,
             "reason": "AuthFailure",
+            "account_id": "111111111111",
+            "account_label": "Acct One",
+        }
+    ]
+
+
+def test_unavailable_scanners_are_attributed_to_their_account(dynamo_table, monkeypatch):
+    """Same reason as regions: "S3 was unreadable" is meaningless across
+    accounts without saying whose S3."""
+    import boto3
+    from botocore.exceptions import ClientError
+
+    from app.scanners import s3_scanner
+
+    client.post(
+        "/accounts",
+        json={"name": "Acct One", "role_arn": "arn:aws:iam::111111111111:role/Read"},
+    )
+    monkeypatch.setattr(
+        "app.services.multi_account_service.session_for_account",
+        lambda account: boto3.Session(),
+    )
+
+    def boom(*args, **kwargs):
+        raise ClientError({"Error": {"Code": "AccessDenied"}}, "ListBuckets")
+
+    monkeypatch.setattr(s3_scanner, "scan", boom)
+
+    body = client.get("/scan").json()
+    assert body["scanners_failed"] == [
+        {
+            "scanner": "s3",
+            "label": "S3 buckets",
+            "reason": "AccessDenied",
             "account_id": "111111111111",
             "account_label": "Acct One",
         }

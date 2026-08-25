@@ -86,6 +86,28 @@ export interface RegionFailure {
   account_label: string | null;
 }
 
+/**
+ * One scanner that could not run at all — no credentials for the service, no
+ * permission, or an outright failure.
+ *
+ * Distinct from `RegionFailure` because there is no region to blame. S3 is
+ * global: `list_buckets` failing is not a fact about any region, and a scanner
+ * can also fail before it reaches one. The result is still an entire resource
+ * type missing from the scan, reported as zero of them — the same "couldn't
+ * see" rendered as "nothing there".
+ */
+export interface ScannerFailure {
+  /** Registry key, e.g. "s3". Stable; use `label` for display. */
+  scanner: string;
+  /** Human name for the resource type, e.g. "S3 buckets". */
+  label: string;
+  /** The API's own error code (e.g. "AccessDenied"), or the exception class name. */
+  reason: string;
+  /** Set when scanning a tenant's registered accounts; null in single-account mode. */
+  account_id: string | null;
+  account_label: string | null;
+}
+
 /** `GET /scan` — a scan plus the alerts derived from it. */
 export interface ScanResult extends Scan {
   alerts?: Alert[];
@@ -95,6 +117,11 @@ export interface ScanResult extends Scan {
    * with a saved scan, so `getScan()` does not carry it.
    */
   regions_failed?: RegionFailure[];
+  /**
+   * Always present on a live scan; empty when every scanner ran. Not stored
+   * with a saved scan, so `getScan()` does not carry it.
+   */
+  scanners_failed?: ScannerFailure[];
 }
 
 export interface DiffCounts {

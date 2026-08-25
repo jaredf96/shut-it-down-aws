@@ -798,7 +798,7 @@ h1::before {
 
 /* Deliberately louder than `.notice`: this says the numbers below are
    incomplete, so it must not read as a footnote. */
-.region-failures {
+.incomplete-scan {
   margin: 16px 0;
   padding: 14px 16px;
   background: color-mix(in oklab, var(--warning) 12%, var(--surface));
@@ -806,28 +806,28 @@ h1::before {
   border-radius: var(--radius);
 }
 
-.region-failures__title {
+.incomplete-scan__title {
   margin: 0;
   font-size: 0.95rem;
   color: var(--text);
 }
 
-.region-failures__lede {
+.incomplete-scan__lede {
   margin: 4px 0 10px;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-.region-failures__list {
+.incomplete-scan__list {
   list-style: none;
-  margin: 0;
+  margin: 0 0 8px;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.region-failures__item {
+.incomplete-scan__item {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
@@ -838,20 +838,24 @@ h1::before {
   font-size: 0.82rem;
 }
 
-.region-failures__region {
+.incomplete-scan__what {
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--text);
 }
 
-.region-failures__reason {
+.incomplete-scan__reason {
   color: var(--text-muted);
 }
 
-.region-failures__account {
+.incomplete-scan__account {
   color: var(--text-muted);
   border-left: 1px solid var(--border);
   padding-left: 8px;
+}
+
+.incomplete-scan__list:last-child {
+  margin-bottom: 0;
 }
 
 /* --- Saved-scan banner --------------------------------------------------- */

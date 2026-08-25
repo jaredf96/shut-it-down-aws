@@ -58,7 +58,8 @@ below is honest about which category it falls into.
 - Risk levels + plain-English cost explanation and suggested action
 - Resource age from the AWS API's own launch/creation time, so a scan reads as a
   finding ("oldest running 87 days") rather than an inventory
-- Regions the scan could not read are reported, never rendered as empty ones
+- Regions the scan could not read — and services it could not reach at all —
+  are reported, never rendered as empty ones
 - Alert rule engine (new billable resource, risk increase, standing high risk)
 - Scan history and diffing, persisted to DynamoDB
 - Slack and email notifications

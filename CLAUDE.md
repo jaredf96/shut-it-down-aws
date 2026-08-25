@@ -27,7 +27,7 @@ Run from the repo root (Makefile drives everything):
 
 ```bash
 make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 175 backend tests — pytest + moto, fully offline, no AWS creds needed
+make test          # 181 backend tests — pytest + moto, fully offline, no AWS creds needed
 make lint          # ruff check + ruff format --check
 make format        # auto-fix lint + reformat (run before committing)
 make run           # backend on :8000 (uvicorn, reload)
@@ -67,7 +67,10 @@ Rules that keep this maintainable:
   `scan(regions=None, session=None, failed_regions=None) -> list[Resource]`.
   `failed_regions` is an optional `dict[str, str]` the sweep fills with
   `region -> reason` for regions it could not read; the return type stays a
-  plain list so nothing downstream has to unpack a tuple.
+  plain list so nothing downstream has to unpack a tuple. A scanner that cannot
+  run **at all** raises — `scan_all` records it under `scanners_failed` and
+  keeps going. Never return `[]` for a failure: that is "couldn't see" rendered
+  as "nothing there".
   Everything tenant-aware lives in services/repositories via an explicit,
   **optional** `tenant_id=` kwarg (default = local single-tenant mode).
 - **Routes never contain business logic.** They resolve the principal, call a
@@ -185,9 +188,13 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   and return `scan_regions(lambda r: _scan_region(r, session), regions, session,
   failed_regions=failed_regions)` (build clients via `make_client`). Let
   per-region errors propagate out of `_scan_region` so `scan_regions` can record
-  them; catching them there reports an unreadable region as an empty one.
-  Register in `scanners/__init__.py` SCANNERS dict → the aggregate scan picks it
-  up. Add risk levels + plain-English `monthly_cost_risk`/`suggested_action`;
+  them; catching them there reports an unreadable region as an empty one. Same
+  rule for a failure with no region to blame (a global service like S3, or
+  anything that fails before the sweep): let it out of `scan()` and `scan_all`
+  reports the scanner as unavailable.
+  Register in `scanners/__init__.py` SCANNERS dict **and** SCANNER_LABELS (the
+  display name shown when it is unavailable) → the aggregate scan picks it up.
+  Add risk levels + plain-English `monthly_cost_risk`/`suggested_action`;
   set `created_at` from whatever launch/creation time the API already returns;
   populate `details` if cost-estimable; add a static price entry in
   `pricing/static_prices.py`; write moto tests.

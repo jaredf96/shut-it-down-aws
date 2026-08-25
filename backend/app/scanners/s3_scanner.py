@@ -29,36 +29,41 @@ def scan(
 
     `regions` and `failed_regions` are accepted for a uniform scanner signature
     but unused: list_buckets is global, so there is no per-region sweep that
-    could partially fail.
+    could partially fail — and no region to blame when it does.
+
+    A failing `list_buckets` propagates. Catching it here would return an empty
+    list, which is byte-for-byte what an account with no buckets returns: the
+    same "couldn't see" rendered as "nothing there" that `failed_regions` exists
+    to prevent for the per-region sweeps. `scan_service` records the whole
+    scanner as unavailable instead.
     """
     session = session or boto3.Session()
     resources: list[Resource] = []
-    try:
-        s3 = session.client("s3")
-        response = s3.list_buckets()
-        for bucket in response.get("Buckets", []):
-            name = bucket["Name"]
-            resources.append(
-                Resource(
-                    resource_type="S3 Bucket",
-                    resource_id=name,
-                    name=name,
-                    region=_bucket_region(s3, name),
-                    status="active",
-                    risk_level=RiskLevel.REVIEW,
-                    monthly_cost_risk=(
-                        "S3 cost depends on how much data is stored and how often it is "
-                        "accessed. An empty bucket is nearly free; a bucket full of lab "
-                        "data or old backups can add up."
-                    ),
-                    suggested_action=(
-                        "Review the contents and size of this bucket. Empty and delete it "
-                        "manually if it only holds leftover tutorial data."
-                    ),
-                    created_at=bucket.get("CreationDate"),
-                )
+    s3 = session.client("s3")
+    response = s3.list_buckets()
+    for bucket in response.get("Buckets", []):
+        name = bucket["Name"]
+        resources.append(
+            Resource(
+                resource_type="S3 Bucket",
+                resource_id=name,
+                name=name,
+                # Per-bucket, so a location call that fails leaves one bucket
+                # marked "unknown" rather than hiding the whole inventory.
+                region=_bucket_region(s3, name),
+                status="active",
+                risk_level=RiskLevel.REVIEW,
+                monthly_cost_risk=(
+                    "S3 cost depends on how much data is stored and how often it is "
+                    "accessed. An empty bucket is nearly free; a bucket full of lab "
+                    "data or old backups can add up."
+                ),
+                suggested_action=(
+                    "Review the contents and size of this bucket. Empty and delete it "
+                    "manually if it only holds leftover tutorial data."
+                ),
+                created_at=bucket.get("CreationDate"),
             )
-    except (BotoCoreError, ClientError):
-        pass
+        )
 
     return resources

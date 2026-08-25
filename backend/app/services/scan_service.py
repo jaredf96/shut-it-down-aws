@@ -14,8 +14,9 @@ import boto3
 
 from app.models import Resource
 from app.pricing import pricing_service
-from app.scanners import SCANNERS
+from app.scanners import SCANNER_LABELS, SCANNERS
 from app.utils import get_regions
+from app.utils.concurrency import failure_reason
 
 logger = logging.getLogger("app.scan")
 
@@ -51,6 +52,27 @@ def region_failures(failed: dict[str, str]) -> list[dict[str, object]]:
     ]
 
 
+def scanner_failures(failed: dict[str, str]) -> list[dict[str, object]]:
+    """Render whole-scanner failures as the API's `scanners_failed` entries.
+
+    The companion to `region_failures`, one level up. A region sweep that fails
+    everywhere still names regions; a scanner that cannot run at all names no
+    region to blame — S3 is global, and a scanner can also fail before it ever
+    reaches a region. Either way the scan is missing an entire resource type,
+    and reporting zero of them as though the account had none is the same lie.
+    """
+    return [
+        {
+            "scanner": key,
+            "label": SCANNER_LABELS.get(key, key),
+            "reason": reason,
+            "account_id": None,
+            "account_label": None,
+        }
+        for key, reason in sorted(failed.items())
+    ]
+
+
 def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object]:
     """Run every scanner and return a combined, summarized result.
 
@@ -66,6 +88,8 @@ def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object
     # them, and the caller wants "regions I could not read", not one list per
     # scanner.
     failed_regions: dict[str, str] = {}
+    # Scanners that could not run at all, as key -> reason.
+    failed_scanners: dict[str, str] = {}
     logger.info("scan start: %d region(s) across %d scanners", len(regions), len(SCANNERS))
     started = time.perf_counter()
 
@@ -73,9 +97,12 @@ def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object
         t0 = time.perf_counter()
         try:
             found = scan_one(key, regions, session=session, failed_regions=failed_regions)
-        except Exception:
-            # One failing scanner should never break the whole scan.
+        except Exception as exc:
+            # One failing scanner should never break the whole scan — but it
+            # must not vanish either. Without the record below the response is
+            # indistinguishable from an account that owns none of that type.
             logger.exception("scanner %s failed", key)
+            failed_scanners[key] = failure_reason(exc)
             found = []
         all_resources.extend(found)
         logger.info("  %-14s %3d resource(s) in %6.2fs", key, len(found), time.perf_counter() - t0)
@@ -95,6 +122,7 @@ def scan_all(regions: list[str] | None = None, session=None) -> dict[str, object
         "summary": summarize(all_resources),
         "resources": all_resources,
         "regions_failed": region_failures(failed_regions),
+        "scanners_failed": scanner_failures(failed_scanners),
     }
 
 

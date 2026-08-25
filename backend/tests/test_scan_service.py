@@ -24,8 +24,9 @@ def test_scan_all_aggregates_and_summarizes():
 
     result = scan_all()
 
-    assert set(result.keys()) == {"summary", "resources", "regions_failed"}
+    assert set(result.keys()) == {"summary", "resources", "regions_failed", "scanners_failed"}
     assert result["regions_failed"] == []  # nothing was unreadable
+    assert result["scanners_failed"] == []  # every scanner ran
     assert all(isinstance(r, Resource) for r in result["resources"])
 
     summary = result["summary"]
@@ -113,6 +114,54 @@ def test_scan_all_reports_the_region_it_could_not_read(monkeypatch):
             "account_label": None,
         }
     ]
+
+
+def test_scan_all_reports_a_scanner_that_could_not_run(monkeypatch):
+    """S3 is global: there is no region to blame, so it needs its own signal.
+
+    `list_buckets` failing used to be swallowed inside the scanner, which
+    returned `[]` — identical to an account with no buckets. That is the same
+    "couldn't see" reported as "nothing there" that `regions_failed` fixed for
+    the per-region sweeps.
+    """
+    from app.scanners import s3_scanner
+
+    boto3.client("s3", region_name=REGION).create_bucket(Bucket="a-bucket-nobody-will-see")
+
+    def boom(*args, **kwargs):
+        raise _denied("AccessDenied")
+
+    monkeypatch.setattr(s3_scanner, "scan", boom)
+
+    result = scan_all(regions=[REGION])
+
+    assert result["scanners_failed"] == [
+        {
+            "scanner": "s3",
+            "label": "S3 buckets",
+            "reason": "AccessDenied",
+            "account_id": None,
+            "account_label": None,
+        }
+    ]
+    # No region is blamed for it, because none is at fault.
+    assert result["regions_failed"] == []
+    # And the bucket really is missing from the results — that is the point.
+    assert not any(r.resource_type == "S3 Bucket" for r in result["resources"])
+
+
+def test_a_failing_scanner_does_not_stop_the_others(monkeypatch):
+    from app.scanners import s3_scanner
+
+    ec2 = boto3.client("ec2", region_name=REGION)
+    ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)
+    monkeypatch.setattr(s3_scanner, "scan", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
+
+    result = scan_all(regions=[REGION])
+
+    assert any(r.resource_type == "EC2 Instance" for r in result["resources"])
+    # Not a ClientError, so the reason falls back to the exception class name.
+    assert [f["reason"] for f in result["scanners_failed"]] == ["RuntimeError"]
 
 
 # --- Resource age ---------------------------------------------------------

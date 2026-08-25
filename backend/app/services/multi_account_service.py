@@ -6,7 +6,8 @@ back to a single scan using the server's own credentials (local / default).
 
 A failure assuming one account's role never breaks the others — it is collected
 in `account_errors`. Regions an account was scanned with but could not be read
-are collected in `regions_failed`, stamped with the account they belong to.
+are collected in `regions_failed`, and whole scanners that could not run in
+`scanners_failed`; both are stamped with the account they belong to.
 """
 
 from __future__ import annotations
@@ -28,7 +29,12 @@ def _tag(resource: Resource, account: dict) -> Resource:
 
 
 def _tag_failure(failure: dict, account: dict) -> dict:
-    """Attribute an unreadable region to the account it was unreadable in."""
+    """Attribute a gap in coverage to the account it happened in.
+
+    Shared by region and scanner failures: both carry the same account fields,
+    for the same reason resources do — the same gap in two accounts must not
+    conflate.
+    """
     return {**failure, "account_id": account["account_id"], "account_label": _label(account)}
 
 
@@ -42,6 +48,7 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
 
     all_resources: list[Resource] = []
     regions_failed: list[dict] = []
+    scanners_failed: list[dict] = []
     scanned: list[dict] = []
     errors: list[dict] = []
 
@@ -52,6 +59,9 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
             all_resources.extend(_tag(r, account) for r in result["resources"])
             regions_failed.extend(
                 _tag_failure(f, account) for f in result.get("regions_failed", [])
+            )
+            scanners_failed.extend(
+                _tag_failure(f, account) for f in result.get("scanners_failed", [])
             )
             scanned.append({"account_id": account["account_id"], "name": account.get("name")})
         except Exception as exc:  # one bad account must not break the rest
@@ -67,6 +77,7 @@ def scan_accounts(tenant_id: str | None = None) -> dict:
         "summary": summarize(all_resources),
         "resources": all_resources,
         "regions_failed": regions_failed,
+        "scanners_failed": scanners_failed,
         "accounts_scanned": scanned,
         "account_errors": errors,
     }

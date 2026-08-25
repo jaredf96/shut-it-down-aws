@@ -129,8 +129,14 @@ def scan(regions=None, session=None, failed_regions=None) -> list[Resource]: ...
 - `session=None` → default credentials; otherwise an assumed-role session.
 - `failed_regions` → optional `dict` filled with `region -> reason` for regions
   the sweep could not read, surfaced as `regions_failed` on the scan result.
-- Registered in `app/scanners/__init__.py` (`SCANNERS` dict), so the service
-  iterates uniformly. Scanners are reached only through `GET /scan`.
+- A scanner that cannot run at all **raises**; `scan_service` catches it, keeps
+  the other scanners going, and reports it under `scanners_failed`. Returning
+  an empty list instead would report "could not see" as "nothing there" — the
+  same failure `failed_regions` exists to prevent, one level up. This is the
+  only signal S3 has: it is global, so no region is at fault.
+- Registered in `app/scanners/__init__.py` (`SCANNERS` dict, with a display
+  name in `SCANNER_LABELS`), so the service iterates uniformly. Scanners are
+  reached only through `GET /scan`.
 
 Each `Resource` carries: type, id, name, region, status, **risk level**,
 plain-English cost note, suggested action, optional `account_id`/`account_label`,
@@ -222,7 +228,7 @@ sequenceDiagram
     API->>DB: previous scan (for change-aware alerts)
     API->>AL: evaluate(resources, previous)
     API->>DB: save scan (tenant-scoped)
-    API-->>FE: { summary, resources, regions_failed, alerts, scan_id }
+    API-->>FE: { summary, resources, regions_failed, scanners_failed, alerts, scan_id }
 ```
 
 ## Deployment shape

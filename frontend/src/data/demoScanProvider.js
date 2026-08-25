@@ -135,9 +135,10 @@ export const demoScanProvider = {
       alerts: alertsFixture.alerts,
       persisted: false,
       // The fixtures come from a moto sandbox that read every region it was
-      // asked about, so there is genuinely nothing to report here. Inventing a
-      // failure would be fabricating fixture data.
+      // asked about, and every scanner ran, so there is genuinely nothing to
+      // report here. Inventing a failure would be fabricating fixture data.
       regions_failed: [],
+      scanners_failed: [],
     };
   },
 

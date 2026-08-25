@@ -48,6 +48,7 @@ function stubApi() {
         alerts: alertsFixture.alerts,
         persisted: false,
         regions_failed: [],
+        scanners_failed: [],
       };
     } else if (path.startsWith("/scans/diff")) {
       body = expectedDiff;

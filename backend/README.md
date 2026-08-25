@@ -93,13 +93,21 @@ reports no allocation time at all. Age is what makes a scan a finding rather tha
 an inventory: "14 idle instances" versus "14 idle instances, the oldest running
 87 days".
 
-Every `GET /scan` response carries a **`regions_failed`** array: the regions the
-sweep could not fully read (disabled, throttled, or not permitted), each with the
-API error code and — in multi-account mode — the account it belongs to. Such a
-region returns no resources, which is indistinguishable from an empty one, so a
-scan that could not see three regions has to say so rather than present a partial
-inventory as a clean bill of health. It is empty when everything was read, and is
-not stored with a saved scan.
+Every `GET /scan` response carries two arrays saying what the scan could **not**
+see, each entry carrying the API error code and — in multi-account mode — the
+account it belongs to:
+
+- **`regions_failed`** — regions the sweep could not fully read (disabled,
+  throttled, or not permitted).
+- **`scanners_failed`** — whole scanners that could not run, as
+  `{scanner, label, reason, account_id, account_label}`. S3 is global, so a
+  failing `list_buckets` names no region to blame; a scanner can also fail
+  before it reaches a region at all.
+
+Either gap returns no resources, which is indistinguishable from having none, so
+a scan that could not read three regions — or could not list buckets — has to say
+so rather than present a partial inventory as a clean bill of health. Both are
+empty when everything was read, and neither is stored with a saved scan.
 
 ### Tenancy & auth
 
@@ -245,8 +253,9 @@ credentials are used (single-account / local — unchanged).
 
 - Per-account failures (e.g. a role that can't be assumed) are collected in
   `account_errors` and never break the other accounts.
-- Unreadable regions are collected in `regions_failed`, stamped with the account
-  they occurred in — "us-west-1 failed" means little without saying whose.
+- Unreadable regions (`regions_failed`) and scanners that could not run
+  (`scanners_failed`) are stamped with the account they occurred in —
+  "us-west-1 failed" means little without saying whose.
 - Resource identity for diffs/alerts includes `account_id`, so the same id in
   two accounts is never conflated.
 
