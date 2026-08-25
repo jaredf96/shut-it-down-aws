@@ -19,8 +19,10 @@ still contradicts it.
 
 ## D1 — Shut It Down is a self-hosted portfolio project, not a commercial SaaS
 
-**Decided:** 2026-08-25 · **Status:** executed — carried out by D2 (billing
-removed), D3 (rename), and D4/D5 (docs aligned)
+**Decided:** 2026-08-25 · **Status:** executed
+
+Carried out by D2 (billing removed), D3 (tenant -> workspace), and D4/D5 (docs
+aligned). The code and the docs now state this product and no other.
 
 A production-conscious AWS lab-management portfolio project: a real
 local/self-hosted scanner for individuals and instructors, supported by a safe
@@ -166,13 +168,21 @@ Tests that pin the boundary:
 
 ### Where "tenant" is still allowed
 
-Standing policy, not a one-time cleanup check. `git grep -in tenant` over
-`backend/app`, `backend/tests` and `frontend/src` should return **only**:
+Standing policy, not a one-time cleanup check. The routine check is
+`git grep -in tenant` over `backend/app`, `backend/tests` and `frontend/src`,
+but the policy holds wherever the word appears. Permitted **only** in:
 
-- **Frozen storage names** — the `TENANT#` and `TENANTMETA#` prefixes, the
+- **Frozen storage names** — the `TENANT#` and `TENANTMETA#` prefixes and the
   stored `tenant_id` attribute — and the functions that translate them
-  (`_STORED_WORKSPACE_ATTR`, `_principal_to_storage`, `_principal_from_storage`),
-  including the comments explaining why they are frozen.
+  (`_STORED_WORKSPACE_ATTR`, `_principal_to_storage`, `_principal_from_storage`).
+- **Documentation and comments explaining the frozen-storage mismatch**, in
+  code or in prose. A frozen name with no explanation reads as an oversight and
+  gets "fixed", so the explanations are load-bearing and have to be free to name
+  the legacy thing. This covers the module docstrings in `dynamo.py`,
+  `scan_repository.py`, `account_repository.py` and `user_repository.py`;
+  explanatory comments in tests, including annotations on stubbed API responses
+  that say why the wire shape is `workspace_id`; and the data-model sections of
+  `CLAUDE.md` and `docs/ARCHITECTURE.md`.
 - **The deprecated `DEFAULT_TENANT_ID` fallback** and its warning.
 - **Compatibility tests** that assert the legacy shape on purpose.
 - **Historical or explanatory text** in this file.
