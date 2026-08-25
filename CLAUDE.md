@@ -14,8 +14,19 @@ Production gaps).
 by `demo-data/` fixtures — no credentials, no API client in the bundle. The
 authenticated app talks to the real API. The frontend picks between them at
 build time via the provider in `frontend/src/data/`; components never import
-`api/client.js` directly. Keep that boundary. The SaaS build-out (Cognito,
-queued workers, Stripe lifecycle) is deliberately **shelved**, not in progress.
+`api/client.js` directly. Keep that boundary — D5 makes it load-bearing, since
+the public simulation is half the stated product rather than a marketing page.
+
+**What this is for (D1).** A self-hosted tool for individuals and instructors,
+**not** a commercial SaaS. Someone runs it against their own AWS account, or
+assumes read-only roles into N student lab accounts. No credentials needed to
+start; optional API keys if TAs need access. It finds resources left running
+after labs, explains in plain English what they cost, alerts on new risk, keeps
+scan history and an audit trail, and can clean up on request. Every capability
+in that sentence already exists — reaching the end state is subtraction, not
+construction. Billing is gone (D2), not shelved; `tenant` is `workspace` (D3);
+auth is optional and `AUTH_REQUIRED` unset is the **normal** mode, not a dev
+shortcut (D4).
 
 Paths below assume the repo root is the project root (`backend/`, `frontend/`).
 
@@ -93,14 +104,16 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
    handed an id and a region and cannot infer the account, so the gate above
    cannot close the case on its own.
 3. **Everything off by default.** New features must degrade gracefully when
-   their env vars are unset (no Stripe → manual plan mode; no DynamoDB →
-   in-memory; no notifiers → no-op). Local dev must always run with zero config.
+   their env vars are unset (no DynamoDB → in-memory; no notifiers → no-op; no
+   `AUTH_REQUIRED` → local admin). Local use must always run with zero config.
 4. **Pricing/notifications must never break a scan.** Live pricing catches
    *all* exceptions and falls back to static; a failing notifier channel is
    reported per-channel, never raised.
 5. **API keys stored only as SHA-256 hashes**; plaintext returned once at creation.
-6. **Stripe webhooks are signature-verified**; manual plan endpoint returns 409
-   when Stripe is configured (server-authoritative plans).
+6. **Storage names are frozen, the logical model is not.** `workspace_id` in
+   Python and on the wire; `TENANT#` prefixes and the API-key record's
+   `tenant_id` attribute stay as they are, translated in `user_repository` (D3).
+   No caller ever sees `tenant_id` — `test_workspaces.py` pins both directions.
 
 ## Gotchas (learned the hard way — don't reintroduce)
 
@@ -201,15 +214,16 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 
 ## Docs map
 
-**`docs/DECISIONS.md` — read first.** Records which side of each open seam is live
-(product scope, billing, tenancy). Several seams here were deliberately built to
-keep options open; that file says which option was taken, so they stop reading as
-open questions.
+**`docs/DECISIONS.md` — read first.** Records which side of each seam is live
+(product scope, billing, workspaces, auth, the demo boundary). Several seams here
+were built to keep options open; that file says which option was taken, so they
+stop reading as open questions. Add an entry when a decision is made, not when
+the code changes.
 
 `docs/ARCHITECTURE.md` (components, data model, request flow) ·
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·
 `docs/DEMO.md` (cross-account sandbox recording script) ·
-`backend/README.md` (API reference) · `deploy/README.md` (container/Lambda + Stripe).
+`backend/README.md` (API reference) · `deploy/README.md` (container/Lambda).
 All env vars are annotated in `backend/.env.example`.
 
 Read `deploy/terraform/demo/README.md` before touching `deploy/` — it carries the

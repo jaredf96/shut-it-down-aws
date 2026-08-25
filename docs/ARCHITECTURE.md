@@ -29,7 +29,7 @@ Two consequences worth noting:
   client out of the demo bundle entirely** — the published demo contains no
   endpoints and no credential handling, not merely a disabled path.
 - Providers publish a `capabilities` map (`liveScan`, `history`,
-  `accountsAdmin`, `team`, `billing`, `cleanupExecute`), so panels ask *"may I
+  `accountsAdmin`, `team`, `cleanupPreview`, `cleanupExecute`), so panels ask *"may I
   offer this?"* rather than testing for demo mode. Adding a surface means adding
   a provider, not threading conditionals through the component tree.
 
@@ -62,13 +62,12 @@ flowchart TB
     SVC -->|boto3: default or assume-role| AWS[(AWS APIs)]
     REPO --> DDB[(DynamoDB single table)]
     NOTIF --> EXT[Slack / SMTP]
-    SVC --> STRIPE[Stripe]
 ```
 
 ## The end-to-end flow
 
 ```
-Frontend → API → scanners → persistence → alerts → notifications → billing
+Frontend → API → scanners → persistence → alerts → notifications
 ```
 
 1. **Frontend** (`frontend/src`) calls the API with `fetch`. In a shared
@@ -92,8 +91,6 @@ Frontend → API → scanners → persistence → alerts → notifications → b
    `Alert` objects from the scan + the previous scan, ranked by spend.
 7. **Notifications** (`app/notifiers/`, `notification_service.py`) deliver alerts
    to Slack/email — automatically on scan or via `POST /notify`.
-8. **Billing** (`app/services/billing_service.py`) enforces plan limits on
-   account/user creation and integrates Stripe Checkout + webhooks.
 
 Cleanup (`app/services/cleanup_service.py`) is a separate, opt-in, audited write
 path — see [SECURITY.md](SECURITY.md).
@@ -104,7 +101,7 @@ path — see [SECURITY.md](SECURITY.md).
 | --- | --- | --- |
 | **Routes** | `app/main.py` | HTTP surface, status codes, dependency wiring |
 | **Auth** | `app/auth.py` | API key → principal; `get_current_workspace`, `require_admin` |
-| **Services** | `app/services/` | Orchestration: scan, diff, history, alerts, notification, multi_account, cleanup, billing |
+| **Services** | `app/services/` | Orchestration: scan, diff, history, alerts, notification, multi_account, cleanup |
 | **Scanners** | `app/scanners/` | One read-only `scan(regions=None, session=None, failed_regions=None) -> list[Resource]` per AWS service |
 | **Pricing** | `app/pricing/` | Static price map + live Pricing API + estimator |
 | **Notifiers** | `app/notifiers/` | Slack + email channels (`format` vs `send`) |
@@ -190,8 +187,8 @@ Key properties:
 
 `app/repositories/dynamo.py` is the shared table accessor + idempotent
 `ensure_table()`. Persistence is **optional**: with no `DYNAMODB_TABLE_NAME`,
-every repository call is a safe no-op and history/teams/billing endpoints return
-`503`, while scanning still works.
+every repository call is a safe no-op and history/teams endpoints return `503`,
+while scanning still works.
 
 ## Cost floors
 

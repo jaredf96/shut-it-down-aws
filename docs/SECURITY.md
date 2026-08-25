@@ -1,8 +1,8 @@
 # Security
 
-How Shut It Down handles credentials, permissions, mutating
-actions, and money — and an honest list of what you'd harden before running it
-as a real paid service.
+How Shut It Down handles credentials, permissions, and mutating actions — and an
+honest list of what you'd harden before pointing it at AWS accounts you care
+about.
 
 ## No hardcoded AWS keys
 
@@ -34,11 +34,11 @@ There are two credential modes, by design:
 - **Multi-account** — a workspace registers AWS accounts with a cross-account
   **role ARN**; the app calls `sts:AssumeRole` to get short-lived credentials per
   account (`session_for_account`). The app's own principal never holds standing
-  access to customer accounts — only the ability to assume narrowly-scoped roles
-  they explicitly grant, optionally with an `ExternalId`.
+  access to the scanned accounts — only the ability to assume narrowly-scoped
+  roles they explicitly grant, optionally with an `ExternalId`.
 
-This separation means a customer onboards by creating a read-only role that
-trusts your scanner, rather than handing over long-lived keys.
+This separation means a student's lab account is onboarded by creating a
+read-only role that trusts the scanner, rather than handing over long-lived keys.
 
 ## Least-privilege IAM
 
@@ -126,43 +126,25 @@ audit entry (`app/repositories/audit_repository.py`,
 Because users are first-class (workspace + user id + role), every mutating action is
 attributable to a specific user.
 
-## Stripe webhook verification
-
-Billing webhooks are **signature-verified** before they can change anything.
-`POST /billing/webhook` reads the raw request body and the `Stripe-Signature`
-header and calls `stripe.Webhook.construct_event(payload, signature, secret)`
-(`app/services/billing_service.py: handle_webhook`). A bad or missing signature
-raises, and the route returns `400` — no plan change occurs.
-
-- The webhook secret comes from `STRIPE_WEBHOOK_SECRET` (env), never hardcoded.
-- Only two event types mutate state: `checkout.session.completed` (→ Pro) and
-  `customer.subscription.deleted` (→ Free); the tenant is resolved from the
-  event's `client_reference_id` / `metadata.tenant_id`.
-- Plan changes are server-authoritative. When Stripe is configured, the manual
-  `POST /billing/plan` override is **disabled** (`409`) so plans can't be
-  self-promoted client-side.
-
-When Stripe is not configured, billing runs in a local/dev mode where an admin
-sets the plan directly — useful for development, and clearly not for production.
-
 ## Production gaps
 
-This is a portfolio-grade MVP. Before charging real customers, harden at least:
+Shut It Down is self-hosted and exposes no public multi-tenant API (D1), so the
+gaps that mattered for a SaaS front door — open registration, per-customer abuse
+protection — no longer apply. What remains is what an operator pointing this at
+real AWS accounts should still know: credentials, blast radius, and the trail
+you would want afterwards.
 
-- **Tenant registration is open.** `POST /tenants` is gated only by an optional
-  `ADMIN_TOKEN`. Add real sign-up, email verification, and rate limiting.
 - **API keys, not sessions.** Auth is a single API key per user (hashed, but
   long-lived and not rotatable/expirable yet). Add key rotation/expiry, or move
   to OIDC/JWT sessions; consider per-key scopes.
 - **No transport hardening in-app.** TLS, HSTS, security headers, and CORS lock-
   down are deployment concerns — the dev CORS config allows `localhost:5173`.
   Restrict origins and terminate TLS at the edge in production.
-- **No rate limiting / abuse protection / WAF.** Scanning and cleanup endpoints
-  should be throttled per tenant.
 - **Audit log is append-only but not tamper-evident.** For compliance, ship
   audit events to an immutable store (e.g. CloudTrail Lake / S3 Object Lock).
-- **Secrets in env.** Move `STRIPE_*`, SMTP creds, etc. to a secrets manager
-  (AWS Secrets Manager / SSM) rather than plain environment variables.
+- **Secrets in env.** Move SMTP credentials and anything else sensitive to a
+  secrets manager (AWS Secrets Manager / SSM) rather than plain environment
+  variables.
 - **Cleanup blast radius.** Even the safe actions are irreversible for EIP/EBS.
 - **Outbound notifications are unthrottled.** There is no deduplication,
   cooldown, or send-rate limit, so a persistent finding re-alerts on every scan
@@ -175,15 +157,10 @@ This is a portfolio-grade MVP. Before charging real customers, harden at least:
   but it is an abuse vector worth closing before untrusted members exist.
   Consider soft-delete/snapshot-first, per-workspace allow-lists, and a second
   approver for destructive actions.
-- **Billing edge cases.** Proration, failed payments
-  (`invoice.payment_failed`), trials, and dunning aren't modeled — only
-  upgrade/cancel.
-- **Webhook idempotency & replay.** Persist processed Stripe event ids to ignore
-  duplicates/replays.
 - **Data lifecycle.** No retention/TTL on scans or audit entries; add DynamoDB
-  TTL and a tenant data-deletion path for privacy requests.
+  TTL and a workspace data-deletion path.
 - **Observability.** Add structured logging, metrics, tracing, and alerting on
-  the service itself (not just on customer AWS resources).
+  the service itself (not just on the AWS accounts it scans).
 
 See also: [ARCHITECTURE.md](ARCHITECTURE.md) and
 [backend/README.md](../backend/README.md).

@@ -151,10 +151,10 @@ deployments (a TA, a shared box).
 Recorded because D1 changes what this seam *means*. It used to read as "SaaS mode
 off"; it now reads as "the product's normal operating mode."
 
-`docs/SECURITY.md` → "Production gaps" needs revisiting under D1: entries about
-open tenant registration and public-API abuse protection stop applying once there
-is no public multi-tenant API. The ones about credential handling, least-privilege
-IAM, and TLS still apply and matter more.
+`docs/SECURITY.md` → "Production gaps" has been revisited under D1: the entries
+about open tenant registration and public-API abuse protection are gone, since
+there is no public multi-tenant API for them to describe. The ones about
+credential handling, least-privilege IAM, and TLS stayed, and matter more.
 
 ---
 
