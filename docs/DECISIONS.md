@@ -10,11 +10,17 @@ This file records which side of each seam is live. Add an entry when a decision
 gets made, not when the code changes — the point is to stop paying the tax before
 the refactor happens.
 
+A **Status** only moves to `executed` once the full verification suite passes —
+`make test`, `make lint`, the frontend tests and typecheck, and
+`make demo-bundle-check` — so no commit claims a decision is done while the repo
+still contradicts it.
+
 ---
 
 ## D1 — Shut It Down is a self-hosted portfolio project, not a commercial SaaS
 
-**Decided:** 2026-08-25 · **Status:** decided, code not yet aligned
+**Decided:** 2026-08-25 · **Status:** executed — carried out by D2 (billing
+removed), D3 (rename), and D4/D5 (docs aligned)
 
 A production-conscious AWS lab-management portfolio project: a real
 local/self-hosted scanner for individuals and instructors, supported by a safe
@@ -53,6 +59,8 @@ Removed:
 - `backend/app/repositories/tenant_repository.py` (49 lines) — collapses to a constant
 - Stripe checkout, customer-portal, and plan-limit routes in `main.py`
 - The plan-limit gates `user_limit_reached` / `account_limit_reached`
+- `ADMIN_TOKEN` (`config.admin_token()` + env) — it gated exactly one endpoint,
+  `POST /tenants`, which went with `tenant_repository`
 
 ~230 lines plus a handful of endpoints. Not a rewrite.
 
@@ -72,15 +80,15 @@ Not the other way round.
 
 **Decided:** 2026-08-25 · **Status:** executed
 
-`tenant_id` currently does two unrelated jobs:
+At the time of the decision, `tenant_id` did two unrelated jobs:
 
 1. **SaaS isolation** — keeping paying customer A's data away from customer B.
-   Dies with D1.
+   Died with D1.
 2. **A partition key** — `ACCOUNTS#<tenant_id>`, `TENANT#<tenant_id>` in DynamoDB.
-   Self-hosted, this is a constant from `config.default_tenant_id()`.
+   Self-hosted, that is a constant, now resolved by `config.default_workspace_id()`.
 
-Job 2 is most of the 125 call sites and is already benign. Rename to
-`workspace_id` (or pin it) so the name stops implying job 1.
+Job 2 was most of the 125 call sites and was already benign. It was renamed to
+`workspace_id` so the name stops implying job 1.
 
 **An instructor managing a class is a multi-account problem, not a multi-tenant
 one.** `multi_account_service` — assume read-only roles into N student lab
@@ -97,16 +105,34 @@ Kept for the same reason: `account_repository`, `auth.py`, `user_repository`,
 Logical vocabulary becomes `workspace` everywhere a human or a caller sees it:
 Python identifiers, API payloads, frontend contracts and providers, tests, docs.
 
-Storage is **frozen legacy** and deliberately not renamed: partition prefixes
-`TENANT#`, `ACCOUNTS#`, `USERS#`, `AUDIT#` and every persisted `tenant_id`
-attribute stay exactly as they are. **No data migration.** Self-hosted means the
-data lives on each operator's own infrastructure; a migration would have to be
-idempotent, partial-failure-safe, and tested on every install, for a naming
-change nobody can see.
+Storage is **frozen legacy** and deliberately not renamed. Every partition
+prefix and every persisted `tenant_id` attribute stays exactly as it is:
+
+| Prefix | Holds | Status |
+| --- | --- | --- |
+| `TENANT#<workspace>` | saved scans | live |
+| `ACCOUNTS#<workspace>` | registered AWS accounts | live |
+| `USERS#<workspace>` | team members | live |
+| `AUDIT#<workspace>` | cleanup attempts | live |
+| `APIKEY#<sha256(key)>` | principal (stores the workspace as `tenant_id`) | live |
+| `TENANTMETA#<workspace>` | the old tenant record | **RETIRED** |
+
+**No data migration.** Self-hosted means the data lives on each operator's own
+infrastructure; a migration would have to be idempotent, partial-failure-safe,
+and tested on every install, for a naming change nobody can see.
 
 **This mismatch is deliberate, and this paragraph is why it exists.** Finding
 `TENANT#` in the repository layer is not a bug or an oversight — it is a frozen
 storage name behind a translation boundary.
+
+**`TENANTMETA#` is retired, not missing.** It held the tenant record —
+`{name, created_at}`, later plan and subscription status — at sk `#`, and its
+only owner was `tenant_repository.py`, which D2 deleted. Nothing reads, writes,
+or deletes those rows now, and no code refers to the prefix at all. An install
+that ran an earlier version still has them: they are **orphaned on purpose** and
+left in place, for the same reason nothing else was migrated. Do not add a
+cleanup pass, and do not read the rows as garbage that escaped one — this line
+is the record that they were left deliberately.
 
 Translation is **explicit and record-specific**, not generic. The only record
 that persists a `tenant_id` *attribute* crossing a public boundary is the API-key
@@ -137,6 +163,22 @@ Tests that pin the boundary:
 - reading a legacy API-key row that stores `tenant_id` resolves correctly
 - new writes still produce the frozen storage representation
 - env-var precedence, and the legacy warning fires once
+
+### Where "tenant" is still allowed
+
+Standing policy, not a one-time cleanup check. `git grep -in tenant` over
+`backend/app`, `backend/tests` and `frontend/src` should return **only**:
+
+- **Frozen storage names** — the `TENANT#` and `TENANTMETA#` prefixes, the
+  stored `tenant_id` attribute — and the functions that translate them
+  (`_STORED_WORKSPACE_ATTR`, `_principal_to_storage`, `_principal_from_storage`),
+  including the comments explaining why they are frozen.
+- **The deprecated `DEFAULT_TENANT_ID` fallback** and its warning.
+- **Compatibility tests** that assert the legacy shape on purpose.
+- **Historical or explanatory text** in this file.
+
+Everything else is active logical vocabulary and says `workspace`. A new hit
+outside that list is a rename that was missed, not a new convention.
 
 ---
 

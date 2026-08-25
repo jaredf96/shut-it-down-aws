@@ -205,6 +205,7 @@ describe("the demo cannot reach the network", () => {
     await demoScanProvider.getScan(currentScan.scan_id);
     await demoScanProvider.compareScans(previousScan.scan_id, currentScan.scan_id);
     await demoScanProvider.listAccounts();
+    await demoScanProvider.getMe();
     await demoScanProvider.getCleanupActions();
 
     expect(global.fetch).not.toHaveBeenCalled();

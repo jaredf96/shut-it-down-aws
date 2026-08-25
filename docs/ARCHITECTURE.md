@@ -175,6 +175,7 @@ boundary so no self-hosted install needs a data migration. The one stored
 | User | `USERS#<workspace>` | `<user_id>` | name, role, key hash (for revocation) |
 | AWS account | `ACCOUNTS#<workspace>` | `<account_id>` | role ARN, external id, regions |
 | Audit entry | `AUDIT#<workspace>` | `<ISO>_<uuid8>` | every cleanup attempt |
+| ~~Tenant meta~~ | `TENANTMETA#<workspace>` | `#` | **RETIRED** — its owner was deleted in D2; nothing reads or writes it, and existing rows are deliberately left in place (D3) |
 
 Key properties:
 - **Workspace isolation** is structural — a workspace can only ever `Query` its

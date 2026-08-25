@@ -81,7 +81,9 @@ are frozen legacy:** the logical model is `workspace`, the stored prefixes still
 say `TENANT#`, and the API-key record still stores a `tenant_id` attribute —
 deliberately, so no install needs a migration (D3). The one translation lives in
 `user_repository._principal_to_storage` / `_principal_from_storage`; do not add
-a generic mapper to `dynamo.py`.
+a generic mapper to `dynamo.py`. `TENANTMETA#<w>` is **retired** — D2 deleted its
+owner, nothing reads or writes it, and existing rows are left in place on purpose
+(D3); they are not garbage to sweep.
 `scan_id = <ISO-8601-UTC>_<uuid8>` — time-sortable, so newest-first is a Query
 with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 (avoids Decimal issues); metadata native. Persistence is optional: no
