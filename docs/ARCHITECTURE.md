@@ -138,6 +138,21 @@ def scan(regions=None, session=None, failed_regions=None) -> list[Resource]: ...
   name in `SCANNER_LABELS`), so the service iterates uniformly. Scanners are
   reached only through `GET /scan`.
 
+The per-region body goes in a `_scan_region(region, session)` helper, and `scan`
+returns:
+
+```python
+return scan_regions(
+    lambda r: _scan_region(r, session), regions, session, failed_regions=failed_regions
+)
+```
+
+Build clients inside the helper with `make_client` (see `app/utils/concurrency.py`
+— it lock-guards botocore's client factory, which is not safe to call
+concurrently on a shared Session). Let per-region errors propagate out of
+`_scan_region` so `scan_regions` can record them; catching them there reports an
+unreadable region as an empty one.
+
 Each `Resource` carries: type, id, name, region, status, **risk level**,
 plain-English cost note, suggested action, optional `account_id`/`account_label`,
 `created_at` (the API's own launch/creation time, null where it reports none),

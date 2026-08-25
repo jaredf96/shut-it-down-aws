@@ -4,13 +4,11 @@ Project context for Claude Code. Read this before making changes.
 
 ## What this is
 
-A read-only AWS scanner that finds resources left running after labs/tutorials
-(EC2, EBS, Elastic IPs, NAT Gateways, ELB, RDS, S3), explains in plain English
-why each costs money and roughly how much, and alerts on new risks. Includes
-teams/roles, multi-account assume-role scanning, scan history + diffing,
-Slack/email notifications, a Stripe Checkout/webhook prototype, and one guarded
-opt-in cleanup feature. Status: **tested proof-of-concept scaffold, not
-production-hardened** (see `docs/SECURITY.md` → Production gaps).
+A read-only AWS scanner that finds resources left running after labs/tutorials,
+explains in plain English why each costs money and roughly how much, and alerts
+on new risks. Full feature list in the root `README.md`. Status: **tested
+proof-of-concept scaffold, not production-hardened** (`docs/SECURITY.md` →
+Production gaps).
 
 **Two deployment surfaces, one codebase.** The public demo is a static build fed
 by `demo-data/` fixtures — no credentials, no API client in the bundle. The
@@ -23,18 +21,15 @@ Paths below assume the repo root is the project root (`backend/`, `frontend/`).
 
 ## Commands
 
-Run from the repo root (Makefile drives everything):
+`make help` lists every target. The ones you actually run:
 
 ```bash
-make install-dev   # backend venv (.venv) + runtime + dev deps
-make test          # 181 backend tests — pytest + moto, fully offline, no AWS creds needed
-make lint          # ruff check + ruff format --check
-make format        # auto-fix lint + reformat (run before committing)
-make run           # backend on :8000 (uvicorn, reload)
-make frontend-run  # frontend on :5173 (vite)
-make build         # production frontend build (compile check)
-make demo-bundle-check  # build the public demo + assert no API client leaked in
-docker compose up --build   # backend + local DynamoDB end-to-end
+make install-dev        # backend venv (.venv) + runtime + dev deps
+make test               # pytest + moto, fully offline, no AWS creds needed
+make format && make lint
+make demo-fixtures      # regenerate demo-data/ from the real scanners
+make demo-bundle-check  # build the demo + assert no API client leaked in
+npm --prefix frontend test -- --run && npm --prefix frontend run typecheck
 ```
 
 Single test: `cd backend && .venv/bin/pytest tests/test_alerts_service.py -k name -q`
@@ -45,22 +40,10 @@ runtime). The system `python3` on macOS may be 3.9 — use `python3.12`.
 
 ## Architecture (layers, strictly kept)
 
-```
-backend/app/
-  main.py            routes only — thin; status codes + dependency wiring
-  auth.py            API key → principal {tenant_id, user_id, role}; require_admin
-  config.py          ALL feature toggles, env-driven, read lazily (functions, not constants)
-  scanners/          one read-only scanner per AWS service + SCANNERS registry
-  services/          orchestration: scan, multi_account, diff, history, alerts,
-                     notification, cleanup (+cleanup_actions), billing
-  pricing/           static_prices (baseline) + live_prices (Pricing API) + pricing_service
-  notifiers/         Slack + email; `format` separated from `send` for testability
-  repositories/      DynamoDB access: dynamo (shared), scan, tenant, user, account,
-                     audit, billing
-  models/            pydantic: Resource, Alert, Account/UserCreate, CleanupRequest
-  aws/session.py     default_session + session_for_account (STS assume-role)
-  lambda_handler.py  Mangum adapter
-```
+`backend/app/` layers top-down: `main.py` (routes only) → `services/`
+(orchestration) → `scanners/` · `pricing/` · `notifiers/` · `repositories/`, over
+`models/` (pydantic) and `aws/session.py`. `docs/ARCHITECTURE.md` has the
+component map, scanner contract, and request flow.
 
 Rules that keep this maintainable:
 - **Scanners are account-agnostic and read-only.** Uniform contract:
@@ -70,9 +53,8 @@ Rules that keep this maintainable:
   plain list so nothing downstream has to unpack a tuple. A scanner that cannot
   run **at all** raises — `scan_all` records it under `scanners_failed` and
   keeps going. Never return `[]` for a failure: that is "couldn't see" rendered
-  as "nothing there".
-  Everything tenant-aware lives in services/repositories via an explicit,
-  **optional** `tenant_id=` kwarg (default = local single-tenant mode).
+  as "nothing there". Everything tenant-aware lives in services/repositories via
+  an explicit, **optional** `tenant_id=` kwarg (default = single-tenant mode).
 - **Routes never contain business logic.** They resolve the principal, call a
   service, map errors to status codes.
 - **Config is functions, not module constants** — so tests can monkeypatch env
@@ -101,6 +83,9 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
    (including refusals/failures). Action catalog stays tiny: stop EC2, release
    unassociated EIP, delete unattached EBS. Terminate/S3/RDS/NAT deletion are
    deliberately NOT in the catalog — listed in `NOT_SUPPORTED` instead. No bulk ops.
+   The dashboard sends the account of the finding it is acting on: the service is
+   handed an id and a region and cannot infer the account, so the gate above
+   cannot close the case on its own.
 3. **Everything off by default.** New features must degrade gracefully when
    their env vars are unset (no Stripe → manual plan mode; no DynamoDB →
    in-memory; no notifiers → no-op). Local dev must always run with zero config.
@@ -118,18 +103,14 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - **IDs in URLs:** `scan_id` uses `_` as separator, never `#` (URL fragment —
   it silently truncated paths once).
 - **Test fixture patching:** scanners import `get_regions` into their own
-  namespace, and `services/scan_service.py` now resolves it once for the whole
-  aggregate scan; `tests/conftest.py` patches it per-module (all 6 scanners
-  **plus `scan_service`**) with signature `lambda session=None: [REGION]` — keep
-  the `session` param and the `scan_service` entry, or scans silently return empty.
-- **Region sweeps run concurrently** via `utils/concurrency.scan_regions`; each
-  scanner splits its per-region body into a `_scan_region(region, session)`
-  helper. boto3 client construction goes through `make_client` (lock-guarded —
-  the botocore client factory isn't safe to call concurrently on a shared
-  Session). Single-region calls (every test) stay on the calling thread, so moto
-  never sees worker threads. Per-region errors are swallowed inside `scan_regions`,
-  which records them in the `failed_regions` mapping when one is passed — an
-  unreadable region must never reach the UI looking like an empty one.
+  namespace, and `scan_service.py` resolves it once for the whole aggregate
+  scan; `tests/conftest.py` patches it per-module (all 6 scanners **plus
+  `scan_service`**) with signature `lambda session=None: [REGION]` — keep the
+  `session` param and the `scan_service` entry, or scans silently return empty.
+- **Region sweeps run concurrently** via `utils/concurrency.scan_regions`. Build
+  clients through `make_client` — it lock-guards botocore's client factory, which
+  isn't safe to call concurrently on a shared Session. Single-region calls (every
+  test) stay on the calling thread, so moto never sees worker threads.
 - **moto quirks:** STS assume-role accepts any ARN (handy for multi-account
   tests); us-east-1 `get_bucket_location` returns `None`.
 - **`.gitignore`:** root ignores `.env.*` but negates `!.env.example` — keep the
@@ -138,33 +119,33 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   account_id)` — account included so the same id in two accounts never conflates.
 - The `dynamo_table` fixture in conftest is opt-in (not autouse); tests without
   it run with persistence disabled — that's intentional coverage of both modes.
-- **Local DynamoDB gets dummy credentials.** botocore signs every request
-  through the ambient credential chain, so an expired SSO session used to break
-  *local* persistence too. `repositories/dynamo.py` supplies placeholder creds
-  when the endpoint host is in a narrow allowlist (`localhost`, `127.0.0.1`,
-  `::1`, `dynamodb-local`). Never widen that list — dummy creds must not reach a
-  real endpoint.
+- **Local DynamoDB gets dummy credentials.** botocore signs every request through
+  the ambient credential chain, so an expired SSO session used to break *local*
+  persistence too. `repositories/dynamo.py` supplies placeholder creds for a
+  narrow host allowlist (`localhost`, `127.0.0.1`, `::1`, `dynamodb-local`).
+  Never widen it — dummy creds must not reach a real endpoint.
 - **Unhandled exceptions bypass CORS.** Starlette's outermost error handler runs
   outside `CORSMiddleware`, so a raw 500 arrives with no
-  `Access-Control-Allow-Origin` and the browser reports a *CORS* error, hiding
-  the real failure. `ErrorEnvelopeMiddleware` converts escapes into JSON and is
-  registered **before** CORS so CORS stays outermost (later `add_middleware`
-  wraps earlier ones). Keep that ordering.
+  `Access-Control-Allow-Origin` and the browser reports a *CORS* error, hiding the
+  real failure. `ErrorEnvelopeMiddleware` is registered **before** CORS so CORS
+  stays outermost (later `add_middleware` wraps earlier) — keep that order.
 - Repository connectivity/credential failures raise `PersistenceUnavailable`
   (→ structured 503). `ClientError` is *not* translated: it means DynamoDB
   answered, and callers like `ensure_table` depend on reading its code.
-- **The provider boundary is a contract.** Demo and live providers may obtain
-  data differently, but everything above them receives identical shapes.
-  Enforced three ways: `src/data/contract.d.ts` at compile time, the
-  provider-contract test at runtime, and `test_demo_fixtures.py` against the
-  real Pydantic models. When changing a service's return shape, update the
-  contract *and* regenerate fixtures (`make demo-fixtures`) — the demo computes
-  its own diff locally and will silently diverge otherwise. It already did once:
-  `changed` entries are `{resource, changes}` keyed by field, **not** a flat
-  resource with an array.
+- **The provider boundary is a contract.** Demo and live providers obtain data
+  differently but return identical shapes, enforced by `src/data/contract.d.ts`
+  (compile time), the provider-contract test (runtime), and
+  `test_demo_fixtures.py` (against the real Pydantic models). Changing a
+  service's return shape means updating the contract *and* regenerating
+  fixtures — the demo computes its own diff locally and silently diverged once
+  already: `changed` entries are `{resource, changes}` keyed by field, **not** a
+  flat resource with an array.
 - **Demo fixtures are generated, never hand-edited.** `make demo-fixtures` runs
   the real scanners over a seeded moto sandbox. The seed matters: without it,
   every regeneration churns all IDs and invalidates the committed screenshots.
+- **A new scan-table column can silently clip the last one.** `.page`'s
+  max-width is sized to fit the table beside the history sidebar; re-measure
+  `.table-wrapper` scrollWidth vs clientWidth (the CSS comment has the numbers).
 
 ## Conventions
 
@@ -175,32 +156,23 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - Frontend: plain React, one panel component per feature, styles in
   `frontend/src/styles.css` (BEM-ish). **Components never import
   `api/client.js`** — they go through the provider (`frontend/src/data/`).
-- Frontend tests: `npm test` (vitest + React Testing Library) and
-  `npm run typecheck` (tsc, scoped to `src/data`). Both run in CI.
-- Keep READMEs in sync: endpoint tables in `backend/README.md`, feature list and
-  env-var table in root `README.md`, plus `docs/ARCHITECTURE.md` / `SECURITY.md`
-  when structure or security behavior changes.
+  Frontend tests (vitest + RTL) and `typecheck` (tsc, scoped to `src/data`)
+  both run in CI.
+- Keep docs in sync: endpoint tables in `backend/README.md`, feature list and
+  env-var table in root `README.md`, plus `docs/ARCHITECTURE.md` /
+  `docs/SECURITY.md` when structure or security behavior changes.
 
 ## Extension recipes
 
-- **New scanner:** add `app/scanners/<svc>_scanner.py` with the uniform `scan()`
-  contract — put the per-region body in a `_scan_region(region, session)` helper
-  and return `scan_regions(lambda r: _scan_region(r, session), regions, session,
-  failed_regions=failed_regions)` (build clients via `make_client`). Let
-  per-region errors propagate out of `_scan_region` so `scan_regions` can record
-  them; catching them there reports an unreadable region as an empty one. Same
-  rule for a failure with no region to blame (a global service like S3, or
-  anything that fails before the sweep): let it out of `scan()` and `scan_all`
-  reports the scanner as unavailable.
-  Register in `scanners/__init__.py` SCANNERS dict **and** SCANNER_LABELS (the
-  display name shown when it is unavailable) → the aggregate scan picks it up.
-  Add risk levels + plain-English `monthly_cost_risk`/`suggested_action`;
-  set `created_at` from whatever launch/creation time the API already returns;
-  populate `details` if cost-estimable; add a static price entry in
-  `pricing/static_prices.py`; write moto tests.
-  There is deliberately **no** per-service endpoint. One used to come free with
-  registration, bypassed the multi-account path, and answered with the server's
-  own inventory while `/scan` answered with the tenant's.
+- **New scanner:** follow the contract in `docs/ARCHITECTURE.md` § Scanner
+  contract. Register in `scanners/__init__.py` — `SCANNERS` **and**
+  `SCANNER_LABELS` (the display name shown when it is unavailable). Add risk
+  levels + plain-English `monthly_cost_risk`/`suggested_action`, `created_at`
+  from whatever launch/creation time the API returns, `details` if
+  cost-estimable, a `pricing/static_prices.py` entry, and moto tests.
+  There is deliberately **no** per-service endpoint: one used to come free with
+  registration and answered with the server's own inventory while `/scan`
+  answered with the tenant's.
 - **New cleanup action:** add to `ACTIONS` in `services/cleanup_actions.py`
   with a live precondition check and dry-run message. Only reversible-leaning,
   single-resource actions; anything data-destructive beyond unattached EBS
@@ -210,23 +182,15 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - **New live-pricing dimension:** add a cached method on `LivePricer`, then a
   branch in `pricing_service._live_estimate` — static remains the fallback.
 
-## Env vars (all optional; see backend/.env.example for the full annotated list)
-
-`DYNAMODB_TABLE_NAME` / `DYNAMODB_ENDPOINT_URL` / `DYNAMODB_AUTO_CREATE` ·
-`AUTH_REQUIRED` / `DEFAULT_TENANT_ID` / `ADMIN_TOKEN` ·
-`SLACK_WEBHOOK_URL` / `SMTP_*` / `ALERT_EMAIL_*` / `NOTIFY_ON_SCAN` /
-`NOTIFY_MIN_SEVERITY` · `ENABLE_LIVE_PRICING` · `ENABLE_CLEANUP_ACTIONS` (the
-mutating master switch) · `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` /
-`STRIPE_WEBHOOK_SECRET` / `BILLING_*_URL`.
-
 ## Docs map
 
 `docs/ARCHITECTURE.md` (components, data model, request flow) ·
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·
 `docs/DEMO.md` (cross-account sandbox recording script) ·
 `backend/README.md` (API reference) · `deploy/README.md` (container/Lambda + Stripe).
+All env vars are annotated in `backend/.env.example`.
 
-Read `deploy/terraform/demo/README.md` before touching `deploy/` — it carries
-the demo stack's design rationale and the operational hazards that have caught
-people out (the pricing plan's restrictions, the bucket policy as kill switch,
-edge caches surviving a grant removal, failed applies writing state).
+Read `deploy/terraform/demo/README.md` before touching `deploy/` — it carries the
+demo stack's rationale and the operational hazards that have caught people out
+(pricing-plan restrictions, the bucket policy as kill switch, edge caches
+surviving a grant removal, failed applies writing state).
