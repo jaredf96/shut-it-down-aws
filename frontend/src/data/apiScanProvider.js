@@ -8,7 +8,6 @@ import {
   deleteAccount,
   deleteUser,
   executeCleanup,
-  getBilling,
   getCleanupActions,
   getCleanupAudit,
   getDiff,
@@ -18,8 +17,6 @@ import {
   listScans,
   listUsers,
   scanAll,
-  setPlan,
-  startCheckout,
 } from "../api/client.js";
 
 /** @type {import("./contract").ScanProvider} */
@@ -33,7 +30,6 @@ export const apiScanProvider = {
     history: true,
     accountsAdmin: true,
     team: true,
-    billing: true,
     cleanupPreview: true,
     cleanupExecute: true,
   },
@@ -59,11 +55,6 @@ export const apiScanProvider = {
   listUsers: () => listUsers(),
   createUser: (user) => createUser(user),
   deleteUser: (userId) => deleteUser(userId),
-
-  // --- Billing ---
-  getBilling: () => getBilling(),
-  setPlan: (plan) => setPlan(plan),
-  startCheckout: () => startCheckout(),
 
   // --- Cleanup ---
   getCleanupActions: () => getCleanupActions(),

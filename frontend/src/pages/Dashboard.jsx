@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import AccountsPanel from "../components/AccountsPanel.jsx";
 import AlertsPanel from "../components/AlertsPanel.jsx";
-import BillingPanel from "../components/BillingPanel.jsx";
 import CleanupPanel from "../components/CleanupPanel.jsx";
 import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
@@ -407,7 +406,6 @@ export default function Dashboard() {
 
       {/* Configuration panels sit below the findings: a visitor should see what the
           scan found before meeting any account, team, or cleanup controls. */}
-      {capabilities.billing && <BillingPanel isAdmin={isAdmin} />}
 
       {users !== null && (
         <UsersPanel

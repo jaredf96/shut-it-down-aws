@@ -257,7 +257,6 @@ export interface Capabilities {
   history: boolean;
   accountsAdmin: boolean;
   team: boolean;
-  billing: boolean;
   /** May the surface walk through a dry run? True in the demo. */
   cleanupPreview: boolean;
   /** May the surface actually mutate AWS? Never true in the demo. */
@@ -282,10 +281,6 @@ export interface ScanProvider {
   listUsers(): Promise<{ users: unknown[] }>;
   createUser(user: unknown): Promise<unknown>;
   deleteUser(userId: string): Promise<unknown>;
-
-  getBilling(): Promise<unknown>;
-  setPlan(plan: string): Promise<unknown>;
-  startCheckout(): Promise<{ url: string }>;
 
   getCleanupActions(): Promise<{ enabled: boolean; actions: unknown[]; not_supported: unknown[] }>;
   getCleanupAudit(limit?: number): Promise<{ entries: CleanupResult[] }>;

@@ -120,7 +120,6 @@ export const demoScanProvider = {
     history: true,
     accountsAdmin: false,
     team: false,
-    billing: false,
     // The demo walks through the safety checks but can never mutate: there is
     // no account to act on and no credential to act with.
     cleanupPreview: true,
@@ -190,16 +189,13 @@ export const demoScanProvider = {
   createAccount: notAvailable("Registering an AWS account"),
   deleteAccount: notAvailable("Removing an AWS account"),
 
-  // --- Team / billing: hidden in the demo via capabilities ---
+  // --- Team: hidden in the demo via capabilities ---
   async getMe() {
     return { tenant_id: "demo", user_id: "demo", role: "viewer", name: "Demo visitor" };
   },
   listUsers: notAvailable("Team management"),
   createUser: notAvailable("Adding a team member"),
   deleteUser: notAvailable("Removing a team member"),
-  getBilling: notAvailable("Billing"),
-  setPlan: notAvailable("Changing plan"),
-  startCheckout: notAvailable("Checkout"),
 
   // --- Cleanup: catalog is shown so visitors can read the safety model,
   // but execution is impossible — there is no account to act on. ---

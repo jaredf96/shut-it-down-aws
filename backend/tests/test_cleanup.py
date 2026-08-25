@@ -309,10 +309,9 @@ def test_registered_account_still_assumes_its_role(dynamo_table, cleanup_on, mon
 
 
 def test_member_cannot_execute_cleanup(dynamo_table, cleanup_on):
-    from app.repositories import tenant_repository, user_repository
+    from app.repositories import user_repository
 
-    tenant = tenant_repository.create_tenant("T")["tenant_id"]
-    member_key = user_repository.create_user(tenant, "M", role="member")["api_key"]
+    member_key = user_repository.create_user("t", "M", role="member")["api_key"]
 
     res = client.post(
         "/cleanup/execute",

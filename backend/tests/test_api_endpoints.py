@@ -7,6 +7,13 @@ from tests.conftest import REGION
 client = TestClient(app)
 
 
+def _admin_user(tenant: str = "class", name: str = "Instructor") -> dict:
+    """Mint an admin API key directly — how a shared deployment gets its first."""
+    from app.repositories import user_repository
+
+    return user_repository.create_user(tenant, name, role="admin")
+
+
 def test_health_does_not_touch_aws():
     res = client.get("/health")
     assert res.status_code == 200
@@ -214,26 +221,17 @@ def test_alerts_endpoint_uses_latest_saved_scan(dynamo_table):
 # --- Tenancy / auth ------------------------------------------------------
 
 
-def test_create_tenant_returns_api_key(dynamo_table):
-    res = client.post("/tenants", json={"name": "Acme"})
-    assert res.status_code == 201
-    body = res.json()
-    assert body["api_key"].startswith("clc_")
-    assert body["tenant_id"]
-
-
-def test_create_tenant_503_without_persistence():
-    assert client.post("/tenants", json={"name": "Acme"}).status_code == 503
-
-
 def test_auth_required_rejects_missing_key(dynamo_table, monkeypatch):
     monkeypatch.setenv("AUTH_REQUIRED", "true")
     assert client.get("/scan").status_code == 401
 
 
 def test_auth_required_accepts_valid_key_and_scopes_data(dynamo_table, monkeypatch):
-    # Create a tenant before turning auth on (creation may be public).
-    api_key = client.post("/tenants", json={"name": "Acme"}).json()["api_key"]
+    # Issue a key before turning auth on — API keys are the opt-in path for a
+    # shared deployment, minted by the operator rather than self-registered.
+    from app.repositories import user_repository
+
+    api_key = user_repository.create_user("acme", "Acme admin", role="admin")["api_key"]
     monkeypatch.setenv("AUTH_REQUIRED", "true")
 
     headers = {"X-API-Key": api_key}
@@ -248,13 +246,6 @@ def test_auth_required_accepts_valid_key_and_scopes_data(dynamo_table, monkeypat
 def test_auth_required_rejects_invalid_key(dynamo_table, monkeypatch):
     monkeypatch.setenv("AUTH_REQUIRED", "true")
     assert client.get("/scan", headers={"X-API-Key": "clc_bogus"}).status_code == 401
-
-
-def test_admin_token_gate_on_tenant_creation(dynamo_table, monkeypatch):
-    monkeypatch.setenv("ADMIN_TOKEN", "s3cret")
-    assert client.post("/tenants", json={"name": "X"}).status_code == 401
-    ok = client.post("/tenants", json={"name": "X"}, headers={"X-Admin-Token": "s3cret"})
-    assert ok.status_code == 201
 
 
 # --- Notifications -------------------------------------------------------
@@ -431,8 +422,7 @@ def test_users_503_without_persistence():
 
 
 def test_admin_can_add_member_and_member_is_restricted(dynamo_table):
-    # Tenant creator is an admin.
-    admin = client.post("/tenants", json={"name": "Class"}).json()
+    admin = _admin_user()
     admin_headers = {"X-API-Key": admin["api_key"]}
 
     # Admin adds a member.
@@ -464,14 +454,14 @@ def test_admin_can_add_member_and_member_is_restricted(dynamo_table):
 
 
 def test_admin_cannot_remove_self(dynamo_table):
-    admin = client.post("/tenants", json={"name": "Class"}).json()
+    admin = _admin_user()
     headers = {"X-API-Key": admin["api_key"]}
     res = client.delete(f"/users/{admin['user_id']}", headers=headers)
     assert res.status_code == 400
 
 
 def test_admin_removes_member_revokes_access(dynamo_table):
-    admin = client.post("/tenants", json={"name": "Class"}).json()
+    admin = _admin_user()
     admin_headers = {"X-API-Key": admin["api_key"]}
     member = client.post(
         "/users", json={"name": "Temp", "role": "member"}, headers=admin_headers

@@ -33,7 +33,7 @@ NEEDLES=(
   '/cleanup/execute'
   '/cleanup/audit'
   '/scans/diff'
-  '/billing/checkout'
+  '/users'
 )
 
 leaked=0

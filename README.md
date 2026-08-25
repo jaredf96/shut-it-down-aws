@@ -74,10 +74,6 @@ below is honest about which category it falls into.
 - 181 offline backend tests + 64 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
-- Stripe Checkout/webhook **prototype** — quotas, checkout sessions, webhook
-  parsing and server-side plan state, with eleven tests. Deliberately not a
-  headline feature, and not a complete billing system: no webhook idempotency
-  or replay handling, no payment-failure states, no customer portal
 
 </details>
 
@@ -88,7 +84,7 @@ Scan workflow · risk-ranked resource table with resource age · minimum-cost
 summary · account filtering · scan history · changes between scans · alert
 presentation.
 
-Team management, billing, and cleanup execution are **not** exposed in the demo.
+Team management and cleanup execution are **not** exposed in the demo.
 
 </details>
 
@@ -237,8 +233,8 @@ npm run typecheck          # provider-boundary types (tsc)
 CI runs all of it on every push, plus both frontend build profiles, a Docker
 build, and a grep over the built demo bundle asserting it carries no API
 endpoints and no credential handling (`make demo-bundle-check` locally). Backend coverage spans scanners, pricing, alerts, notifications,
-persistence, diffing, tenancy/roles, multi-account, cleanup safety, billing, and
-the fail-closed behavior of the persistence layer.
+persistence, diffing, tenancy/roles, multi-account, cleanup safety, and the
+fail-closed behavior of the persistence layer.
 
 **The provider boundary is tested as a contract.** Demo and live providers fetch
 data differently, but everything above them must receive identical shapes. That
@@ -266,7 +262,6 @@ Everything is **off by default** — set only what you need. Full annotated list
 | **Auth / tenancy** | |
 | `AUTH_REQUIRED` | Require an API key on every request |
 | `DEFAULT_TENANT_ID` | Tenant used in local mode (default `default`) |
-| `ADMIN_TOKEN` | Gate `POST /tenants` behind this token |
 | **Notifications** | |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | Email transport |
@@ -276,8 +271,6 @@ Everything is **off by default** — set only what you need. Full annotated list
 | `ENABLE_LIVE_PRICING` | Use the live AWS Pricing API (needs `pricing:GetProducts`) |
 | **Cleanup (mutating!)** | |
 | `ENABLE_CLEANUP_ACTIONS` | **Master safety switch — off by default** |
-| **Billing (optional)** | |
-| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` | Stripe Checkout/webhook prototype — set all three or none |
 
 Frontend builds use `VITE_API_BASE_URL` (API mode) or `VITE_DEMO_MODE=true`
 (fixture demo, see [.env.demo](frontend/.env.demo)). Note that Vite inlines every
@@ -360,7 +353,7 @@ shut-it-down-aws/
 ├── backend/
 │   ├── app/
 │   │   ├── scanners/       one read-only scanner per AWS service
-│   │   ├── services/       scan, diff, alerts, notify, cleanup, billing
+│   │   ├── services/       scan, diff, alerts, notify, cleanup
 │   │   ├── repositories/   DynamoDB access (single table)
 │   │   ├── pricing/        static price map + live Pricing API
 │   │   └── notifiers/      Slack + email

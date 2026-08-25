@@ -87,20 +87,6 @@ export function executeCleanup(request) {
   return sendJSON("POST", "/cleanup/execute", request);
 }
 
-// --- Billing ---
-
-export function getBilling() {
-  return getJSON("/billing");
-}
-
-export function setPlan(plan) {
-  return sendJSON("POST", "/billing/plan", { plan });
-}
-
-export function startCheckout() {
-  return sendJSON("POST", "/billing/checkout");
-}
-
 // --- Team / users ---
 
 // Current principal: { tenant_id, user_id, role, name }.

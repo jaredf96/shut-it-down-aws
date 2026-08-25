@@ -62,7 +62,6 @@ boto3 picks up credentials automatically from any of:
 | ------ | ---------------------- | ----------------------------------------------- |
 | GET    | `/health`              | Liveness — process only, touches no dependency  |
 | GET    | `/ready`               | Readiness — verifies DynamoDB; `503` if unreachable |
-| POST   | `/tenants`             | Register a tenant + first admin user (key once) |
 | GET    | `/me`                  | Current principal (tenant, user, role)          |
 | GET    | `/users`               | List team members                               |
 | POST   | `/users`               | Add a member, returns API key (admin only)      |
@@ -73,10 +72,6 @@ boto3 picks up credentials automatically from any of:
 | GET    | `/cleanup/actions`     | Supported cleanup actions + what's excluded     |
 | GET    | `/cleanup/audit`       | Recent cleanup attempts (audit log)             |
 | POST   | `/cleanup/execute`     | Run one cleanup action (admin, opt-in, audited) |
-| GET    | `/billing`             | Plan, limits, usage                             |
-| POST   | `/billing/plan`        | Set plan directly (admin, dev/no-Stripe)        |
-| POST   | `/billing/checkout`    | Create a Stripe Checkout session (admin)        |
-| POST   | `/billing/webhook`     | Stripe webhook (signature-verified)             |
 | POST   | `/notify`              | Send latest scan's alerts to channels (503 if off) |
 | GET    | `/scan`                | Run every scanner; includes `alerts` (saves if on) |
 | GET    | `/alerts`              | Alerts from the latest saved scan (503 if off)   |
@@ -111,55 +106,37 @@ empty when everything was read, and neither is stored with a saved scan.
 
 ### Tenancy & auth
 
-Every scan and alert is scoped to a `tenant_id`, so the app is multi-tenant
-ready. Auth is **optional and off by default**:
+Every scan and alert is scoped to a `tenant_id`. Auth is **optional and off by
+default**:
 
-- **Local / single-tenant (default):** no API key needed. Requests run as the
-  `default` tenant (override with `DEFAULT_TENANT_ID`).
-- **SaaS mode (`AUTH_REQUIRED=true`):** every data request must carry a valid
-  API key, sent as either `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+- **Local (default):** no API key needed. Requests run as an admin `local` user
+  of the `default` tenant (override with `DEFAULT_TENANT_ID`).
+- **Shared deployment (`AUTH_REQUIRED=true`):** every data request must carry a
+  valid API key, sent as either `Authorization: Bearer <key>` or
+  `X-API-Key: <key>`.
 
-Create a tenant (requires persistence; protect with `ADMIN_TOKEN` before
-exposing publicly):
+There is no self-registration endpoint. Keys are minted by an admin — locally
+that is you, via `POST /users` — and handed out:
 
 ```bash
-curl -X POST http://localhost:8000/tenants \
+curl -X POST http://localhost:8000/users \
   -H 'Content-Type: application/json' \
-  -d '{"name": "Acme Labs"}'
-# -> {"tenant_id": "…", "name": "Acme Labs", "api_key": "clc_…"}   (key shown once)
+  -d '{"name": "TA", "role": "member"}'
+# -> {"user_id": "…", "name": "TA", "api_key": "clc_…"}   (key shown once)
 
 curl http://localhost:8000/scans -H 'X-API-Key: clc_…'
 ```
 
 Data model (single table, prefixed partitions): `TENANT#<id>` holds that
 tenant's scans, `APIKEY#<sha256(key)>` maps a key to its principal (only the
-hash is stored), `TENANTMETA#<id>` the tenant record, `USERS#<id>` the members.
-See `app/repositories/{tenant,user}_repository.py` and `app/auth.py`.
-
-### Billing & plans
-
-Tenants are on a **Free** or **Pro** plan with per-tenant limits (AWS accounts +
-team members). `add_account`/`add_user` return `402` when a plan limit is
-reached. `GET /billing` reports the plan, limits, and live usage.
-
-Stripe is **optional**:
-
-- **No Stripe configured** (local/dev): an admin sets the plan directly via
-  `POST /billing/plan`.
-- **Stripe configured** (`STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID` +
-  `STRIPE_WEBHOOK_SECRET`): upgrades go through `POST /billing/checkout`
-  (Stripe Checkout), and `POST /billing/webhook` applies
-  `checkout.session.completed` (→ Pro) and `customer.subscription.deleted`
-  (→ Free). Webhook signatures are verified.
-
-See `app/services/billing_service.py`. Plan state lives on the tenant record.
-Deployment + Stripe setup: [`deploy/README.md`](../deploy/README.md).
+hash is stored), `USERS#<id>` the members. See
+`app/repositories/user_repository.py` and `app/auth.py`.
 
 ### Teams & roles
 
 A tenant has **users** with a role: **admin** (manage accounts + users) or
-**member** (read-only management, full scan/alert access). The tenant creator is
-the first admin. Each user has their own API key.
+**member** (read-only management, full scan/alert access). Each user has their
+own API key.
 
 - `GET /me` returns the caller's principal (`{tenant_id, user_id, role, name}`).
 - Admins add members with `POST /users` (returns the member's key, shown once)
@@ -450,11 +427,9 @@ app/
   models/                       Resource, Alert, Account
   services/                     scan, diff, history, alerts, notification,
                                 multi_account, cleanup (+ cleanup_actions)
-  services/billing_service.py   plans, limits, Stripe checkout + webhooks
   pricing/                      static_prices, live_prices, pricing_service
   notifiers/                    Slack + email delivery (base, slack, email)
-  repositories/                 dynamo (shared), scan, tenant, user, account,
-                                audit, billing
+  repositories/                 dynamo (shared), scan, user, account, audit
   lambda_handler.py             AWS Lambda entrypoint (Mangum)
   utils/                        region discovery helpers
 scripts/create_table.py         idempotent table creation

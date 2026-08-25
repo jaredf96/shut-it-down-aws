@@ -1,4 +1,4 @@
-from app.repositories import scan_repository, tenant_repository, user_repository
+from app.repositories import scan_repository, user_repository
 
 
 def _scan(rid):
@@ -16,17 +16,13 @@ def _scan(rid):
     }
 
 
-def test_create_tenant_and_resolve_api_key(dynamo_table):
-    created = tenant_repository.create_tenant("Acme Labs")
-    assert created["name"] == "Acme Labs"
+def test_api_key_resolves_to_its_principal(dynamo_table):
+    created = user_repository.create_user("acme", "Acme admin", role="admin")
     assert created["api_key"].startswith("clc_")
-    assert created["tenant_id"]
-    # The tenant creator is an admin.
-    assert created["role"] == "admin"
 
     # The plaintext key resolves to the full principal.
     principal = user_repository.resolve_api_key(created["api_key"])
-    assert principal["tenant_id"] == created["tenant_id"]
+    assert principal["tenant_id"] == "acme"
     assert principal["role"] == "admin"
     assert principal["user_id"] == created["user_id"]
 
@@ -36,8 +32,7 @@ def test_unknown_api_key_resolves_to_none(dynamo_table):
 
 
 def test_scans_are_isolated_by_tenant(dynamo_table):
-    a = tenant_repository.create_tenant("Tenant A")["tenant_id"]
-    b = tenant_repository.create_tenant("Tenant B")["tenant_id"]
+    a, b = "tenant-a", "tenant-b"
 
     scan_repository.save_scan(_scan("i-a"), tenant_id=a)
 
@@ -49,8 +44,7 @@ def test_scans_are_isolated_by_tenant(dynamo_table):
 
 
 def test_get_scan_is_scoped_to_tenant(dynamo_table):
-    a = tenant_repository.create_tenant("Tenant A")["tenant_id"]
-    b = tenant_repository.create_tenant("Tenant B")["tenant_id"]
+    a, b = "tenant-a", "tenant-b"
 
     scan_id = scan_repository.save_scan(_scan("i-a"), tenant_id=a)
 

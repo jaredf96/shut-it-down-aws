@@ -54,11 +54,6 @@ def auth_required() -> bool:
     return os.environ.get("AUTH_REQUIRED", "").lower() in _TRUTHY
 
 
-def admin_token() -> str | None:
-    """If set, creating tenants requires this token in the X-Admin-Token header."""
-    return os.environ.get("ADMIN_TOKEN") or None
-
-
 # --- Cleanup actions (mutating!) -----------------------------------------
 
 
@@ -76,30 +71,6 @@ def cleanup_enabled() -> bool:
 def live_pricing_enabled() -> bool:
     """Use the live AWS Pricing API to refine estimates (falls back to static)."""
     return os.environ.get("ENABLE_LIVE_PRICING", "").lower() in _TRUTHY
-
-
-# --- Billing (Stripe) ----------------------------------------------------
-
-
-def stripe_secret_key() -> str | None:
-    return os.environ.get("STRIPE_SECRET_KEY") or None
-
-
-def stripe_webhook_secret() -> str | None:
-    return os.environ.get("STRIPE_WEBHOOK_SECRET") or None
-
-
-def stripe_price_id() -> str | None:
-    """Stripe Price id for the paid (Pro) subscription."""
-    return os.environ.get("STRIPE_PRICE_ID") or None
-
-
-def billing_success_url() -> str:
-    return os.environ.get("BILLING_SUCCESS_URL", "http://localhost:5173/?billing=success")
-
-
-def billing_cancel_url() -> str:
-    return os.environ.get("BILLING_CANCEL_URL", "http://localhost:5173/?billing=cancel")
 
 
 # --- Notifications -------------------------------------------------------

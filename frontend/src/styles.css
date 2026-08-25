@@ -426,7 +426,6 @@ h1::before {
 
 .alerts,
 .accounts,
-.billing,
 .users,
 .cleanup,
 .compare-bar,
@@ -1038,10 +1037,9 @@ h1::before {
   font-style: italic;
 }
 
-/* --- Section header helper (accounts / billing / users / cleanup) -------- */
+/* --- Section header helper (accounts / users / cleanup) ----------------- */
 
 .accounts__header h2,
-.billing__header h2,
 .users__header h2,
 .cleanup__header h2 {
   margin: 0;
@@ -1051,7 +1049,6 @@ h1::before {
 }
 
 .accounts,
-.billing,
 .users,
 .cleanup {
   margin: 16px 0;
@@ -1059,7 +1056,6 @@ h1::before {
 }
 
 .accounts__header,
-.billing__header,
 .users__header,
 .cleanup__header {
   display: flex;
@@ -1210,91 +1206,6 @@ h1::before {
   color: var(--critical);
   font-size: 0.8rem;
   width: 100%;
-}
-
-/* --- Billing panel ------------------------------------------------------- */
-
-.billing__plan {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-family: var(--font-mono);
-}
-
-.billing__plan--free {
-  background: var(--surface-3);
-  color: var(--text-muted);
-}
-
-.billing__plan--pro {
-  background: color-mix(in oklab, var(--accent) 16%, transparent);
-  color: var(--accent);
-}
-
-.billing__usage {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.billing__usage .is-limit {
-  color: var(--critical);
-  font-weight: 700;
-}
-
-.billing__upgrade {
-  margin-top: 12px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 9px 20px;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.billing__upgrade:hover {
-  background: var(--accent-hover);
-}
-
-.billing__dev {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.billing__chip {
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 4px 14px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.8rem;
-}
-
-.billing__chip.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.billing__error {
-  margin-top: 10px;
-  color: var(--critical);
-  font-size: 0.82rem;
 }
 
 /* --- Users / team panel -------------------------------------------------- */
