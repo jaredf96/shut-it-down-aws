@@ -1,0 +1,141 @@
+# Shut It Down — student/lab-account onboarding.
+#
+# One stack, run by the owner of the account to be scanned. It creates a
+# read-only role that the instructor's platform can assume, and nothing else.
+# No resources with a cost, no writes, no data.
+#
+# The instructor supplies both parameters. See docs/SECURITY.md § Onboarding an
+# account for the full sequence — the external ID has to exist BEFORE this stack
+# runs, so it is generated first (`make onboarding-id`) and reused when the role
+# ARN is registered afterwards.
+#
+# Intrinsic functions are written in FULL form (`Ref:`, `Fn::GetAtt:`) rather
+# than the `!Ref` short form. Both are valid CloudFormation; the full form is
+# plain YAML, so `yaml.safe_load` can read this file without a custom loader.
+# tests/test_onboarding_template.py depends on that — it pins these permissions
+# against the policy published in docs/SECURITY.md so the two cannot drift.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Read-only role allowing a Shut It Down deployment to scan this account for
+  resources left running after labs. Grants describe/list only.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Who may assume this role
+        Parameters:
+          - PlatformRoleArn
+          - ExternalId
+      - Label:
+          default: Naming
+        Parameters:
+          - RoleName
+    ParameterLabels:
+      PlatformRoleArn:
+        default: Platform runtime role ARN
+      ExternalId:
+        default: External ID (from your instructor)
+      RoleName:
+        default: Role name
+
+Parameters:
+  PlatformRoleArn:
+    Type: String
+    Description: >-
+      ARN of the IAM role the Shut It Down backend runs as. This is the only
+      principal allowed to assume the role created here. Name the role itself,
+      not the account root — an account-root principal trusts every principal in
+      that account, which is wider than this needs to be.
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:iam::[0-9]{12}:role/.+$"
+    ConstraintDescription: >-
+      Must be an IAM role ARN, e.g.
+      arn:aws:iam::123456789012:role/shut-it-down-backend
+
+  ExternalId:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    MaxLength: 1224
+    Description: >-
+      The external ID your instructor generated for this account. The role
+      cannot be assumed without it, which is what stops a third party who knows
+      the role ARN from using it (the confused-deputy problem).
+    AllowedPattern: "^[\\w+=,.@:/-]+$"
+    ConstraintDescription: >-
+      Allowed characters are letters, digits, and + = , . @ : / _ -
+
+  RoleName:
+    Type: String
+    Default: ShutItDownScannerRole
+    Description: Name for the role created in this account.
+    AllowedPattern: "^[\\w+=,.@-]{1,64}$"
+
+Resources:
+  ScannerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: RoleName
+      Description: >-
+        Read-only access for Shut It Down cost scanning. Created by
+        CloudFormation; delete the stack to revoke.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPlatformToAssumeWithExternalId
+            Effect: Allow
+            Principal:
+              AWS:
+                Ref: PlatformRoleArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId:
+                  Ref: ExternalId
+      Policies:
+        - PolicyName: ShutItDownReadOnlyScanning
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Exactly the policy published in docs/SECURITY.md § Least-privilege
+              # IAM. Describe/List/Get only: this role cannot change anything in
+              # the account, including the three cleanup actions the app supports
+              # elsewhere. Cross-account cleanup needs a separate role that does
+              # not exist yet (see docs/DECISIONS.md D6).
+              - Sid: ReadOnlyScanning
+                Effect: Allow
+                Action:
+                  - ec2:DescribeRegions
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeNatGateways
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - rds:DescribeDBInstances
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketLocation
+                # These describe/list APIs are account-wide and do not support
+                # resource-level permissions, so "*" is the narrowest this can be.
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: shut-it-down-aws
+
+Outputs:
+  RoleArn:
+    Description: >-
+      Register this in the dashboard (Accounts -> Add account), together with the
+      same external ID that was supplied above.
+    Value:
+      Fn::GetAtt:
+        - ScannerRole
+        - Arn
+
+  AccountId:
+    Description: The account this role can read.
+    Value:
+      Ref: AWS::AccountId

@@ -4,3 +4,7 @@ pytest==8.3.4
 moto[ec2,elb,elbv2,rds,s3]==5.0.27
 httpx==0.28.1
 ruff==0.8.6
+# Parses deploy/cloudformation/scanner-role.yaml in test_onboarding_template.py.
+# Already present transitively (moto -> responses); declared so the test does not
+# depend on another package's dependency tree.
+pyyaml==6.0.3
