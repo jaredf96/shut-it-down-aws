@@ -204,11 +204,31 @@ def remove_user(user_id: str, principal: dict = Depends(require_admin)):
 # --- Accounts (multi-account) --------------------------------------------
 
 
+def _without_external_id(account: dict) -> dict:
+    """Strip the external ID from an account record on its way out of the API.
+
+    It is returned once, by the registration that set it, and never listed
+    again — the treatment an API key gets (hard invariant 5) for the same
+    reason: nothing on the client needs to read it back, and unlike the POST
+    and DELETE beside it this route is open to every workspace member, not just
+    admins. `has_external_id` keeps the part an operator does need, which is
+    whether a registration has one at all.
+
+    The redaction belongs here and not in `account_repository`:
+    `multi_account_service` lists accounts through that same function and needs
+    the real value to assume the role.
+    """
+    redacted = {k: v for k, v in account.items() if k != "external_id"}
+    redacted["has_external_id"] = bool(account.get("external_id"))
+    return redacted
+
+
 @app.get("/accounts")
 def list_accounts(workspace: str = Depends(get_current_workspace)):
     """List the AWS accounts registered for this workspace."""
     _require_persistence()
-    return {"accounts": account_repository.list_accounts(workspace)}
+    accounts = account_repository.list_accounts(workspace)
+    return {"accounts": [_without_external_id(account) for account in accounts]}
 
 
 @app.post("/accounts", status_code=201)

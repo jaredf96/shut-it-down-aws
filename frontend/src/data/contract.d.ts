@@ -243,7 +243,14 @@ export interface AwsAccount {
   account_id: string;
   name: string;
   role_arn: string;
+  /**
+   * Write-only. Accepted by `createAccount`, and echoed by that one call —
+   * never present in `listAccounts` results, which every workspace member can
+   * read. See `_without_external_id` in backend/app/main.py.
+   */
   external_id?: string | null;
+  /** Whether a registration carries an external ID: the listed stand-in for it. */
+  has_external_id?: boolean;
   regions?: string[] | null;
   created_at?: string;
 }

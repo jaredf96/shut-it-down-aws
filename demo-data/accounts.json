@@ -4,7 +4,7 @@
       "account_id": "111122223333",
       "name": "sandbox-lab",
       "role_arn": "arn:aws:iam::111122223333:role/ShutItDownScannerRole",
-      "external_id": "demo-external-id-1",
+      "has_external_id": true,
       "regions": null,
       "created_at": "2026-07-02T09:14:22.000Z"
     },
@@ -12,7 +12,7 @@
       "account_id": "444455556666",
       "name": "training-account",
       "role_arn": "arn:aws:iam::444455556666:role/ShutItDownScannerRole",
-      "external_id": "demo-external-id-2",
+      "has_external_id": true,
       "regions": null,
       "created_at": "2026-07-09T16:41:05.000Z"
     }

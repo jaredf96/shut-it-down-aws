@@ -146,3 +146,85 @@ def test_tag_sets_account_fields():
     assert tagged.account_label == "Prod"
     # Original is untouched (model_copy).
     assert r.account_id is None
+
+
+# --- the external ID is written once and never listed ---------------------
+
+
+def test_registration_echoes_the_external_id_but_listing_never_does(dynamo_table):
+    """Same treatment as an API key, and for the same reason.
+
+    `POST`/`DELETE /accounts` are admin-only; `GET /accounts` is open to every
+    workspace member, so the value that has to be stored in plaintext does not
+    go back out through the route with the widest audience.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+
+    created = client.post(
+        "/accounts",
+        json={
+            "name": "Sandbox",
+            "role_arn": "arn:aws:iam::111111111111:role/ShutItDownScannerRole",
+            "external_id": "an-external-id-long-enough",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["external_id"] == "an-external-id-long-enough"
+
+    listed = client.get("/accounts").json()["accounts"]
+    assert len(listed) == 1
+    assert "external_id" not in listed[0]
+    assert listed[0]["has_external_id"] is True
+    # Everything an operator needs to identify the registration is still there.
+    assert listed[0]["role_arn"] == "arn:aws:iam::111111111111:role/ShutItDownScannerRole"
+
+
+def test_an_account_without_an_external_id_is_distinguishable(dynamo_table):
+    """`has_external_id` exists so redaction does not erase the distinction.
+
+    The API accepts role ARNs with no external ID (manually-configured roles),
+    and "redacted" must not look the same as "never had one".
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    client.post(
+        "/accounts",
+        json={"name": "Manual", "role_arn": "arn:aws:iam::222222222222:role/Manual"},
+    )
+    listed = client.get("/accounts").json()["accounts"]
+    assert listed[0]["has_external_id"] is False
+
+
+def test_scanning_still_receives_the_real_external_id(dynamo_table, monkeypatch):
+    """The redaction is at the API boundary, not in the repository.
+
+    `multi_account_service` lists accounts through the same repository function
+    the route uses. Redacting there would strip the value out from under
+    `session_for_account`, and every registered account would fail to assume.
+    """
+    account_repository.create_account(
+        "workspace-1",
+        {
+            "name": "Sandbox",
+            "role_arn": "arn:aws:iam::111111111111:role/ShutItDownScannerRole",
+            "external_id": "an-external-id-long-enough",
+        },
+    )
+
+    seen = {}
+
+    def capture(account):
+        seen.update(account)
+        raise RuntimeError("stop here — we only care what was handed over")
+
+    monkeypatch.setattr("app.services.multi_account_service.session_for_account", capture)
+    scan_accounts("workspace-1")
+
+    assert seen["external_id"] == "an-external-id-long-enough"
