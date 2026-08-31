@@ -65,12 +65,16 @@ below is honest about which category it falls into.
 - Slack and email notifications
 - Guarded cleanup: opt-in, admin-only, typed confirmation, dry-run default,
   live precondition re-check, full audit trail
+- CloudFormation onboarding for a scanned account: one stack creates a read-only
+  role trusting a single platform role ARN, gated by an external ID. The granted
+  permissions are pinned against the policy published in `docs/SECURITY.md` by a
+  test, so the doc and the template cannot drift apart
 - Workspace-scoped backend with API-key RBAC: admin/member roles, SHA-256-hashed
   keys issued once, workspace-scoped AWS accounts with assume-role isolation, and
   audit attribution. The browser client reads `VITE_API_KEY` at build time, so the
   UI is an operator scaffold rather than a production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 174 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
+- 180 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 
@@ -91,9 +95,10 @@ Team management and cleanup execution are **not** exposed in the demo.
 <summary><b>Planned hardening</b> — designed, not built</summary>
 
 OIDC authentication · fail-closed hosted account targeting · queue-based scan
-workers · full Terraform deployment · WAF and server-side quotas · customer
-CloudFormation onboarding · a separate narrowly-scoped cleanup role · production
-observability.
+workers · full Terraform deployment · WAF and server-side quotas · a separate
+narrowly-scoped cleanup role (cross-account cleanup is not possible without it —
+the onboarding role is read-only on purpose) · platform-issued external IDs with
+a pending-enrollment flow (`docs/DECISIONS.md` D6) · production observability.
 
 </details>
 
@@ -319,8 +324,9 @@ unknown, or unverified account targets and never falling back to platform
 credentials.
 
 **Then** — queue-based async scans with real progress, OIDC authentication,
-customer onboarding via CloudFormation/Terraform with a generated external ID,
-full infrastructure-as-code, and scanner intelligence (utilization evidence,
+platform-issued external IDs behind a two-phase onboarding flow (the
+CloudFormation template ships today; the ID is operator-generated, D6), full
+infrastructure-as-code, and scanner intelligence (utilization evidence,
 confidence scores, measured false-positive rates).
 
 ---
@@ -331,7 +337,7 @@ confidence scores, measured false-positive rates).
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, request flow |
 | [docs/SECURITY.md](docs/SECURITY.md) | Credentials, IAM, cleanup gates, production gaps |
-| [docs/DEMO.md](docs/DEMO.md) | Cross-account sandbox walkthrough script |
+| [docs/DEMO.md](docs/DEMO.md) | Cross-account walkthrough / recording script |
 | [backend/README.md](backend/README.md) | API reference, endpoints, IAM policy |
 | [deploy/README.md](deploy/README.md) | Container / Lambda deployment notes |
 

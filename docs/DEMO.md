@@ -20,31 +20,62 @@ my own account" and "I built a control plane that scans accounts it is not in."
 
 ## Before you record
 
-Everything is provisioned with Terraform and destroyed immediately afterward, so
-the whole exercise costs cents.
+Two things have to exist in the target account: the role, and something worth
+finding. They are provisioned separately, and only the first is automated.
+
+### 1. The role — the same stack a student runs
+
+Nothing walkthrough-specific here. This is
+[`deploy/cloudformation/scanner-role.yaml`](../deploy/cloudformation/scanner-role.yaml),
+the onboarding template an instructor hands out, which is part of why the
+walkthrough is worth recording: the reviewer watches the real onboarding path.
+
+Generate the external ID **first** — the stack takes it as input, so it cannot
+be issued after the fact:
 
 ```bash
-cd deploy/terraform/sandbox      # walkthrough-only stack
-terraform init
-terraform apply                  # creates the target-account role + demo resources
+make onboarding-id            # keep this value; you need it twice
 ```
 
-The stack creates:
+```bash
+aws cloudformation deploy \
+  --profile target \
+  --template-file deploy/cloudformation/scanner-role.yaml \
+  --stack-name shut-it-down-onboarding \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+      PlatformRoleArn=arn:aws:iam::<PLATFORM_ACCOUNT>:role/<BACKEND_ROLE> \
+      ExternalId=<THE_GENERATED_ID>
 
-- **In the target account** — `ShutItDownScannerRole` with the nine read-only
-  actions, a trust policy naming the platform account as principal, and a
-  `sts:ExternalId` condition bound to the generated ID.
-- **Demo resources worth finding** — an unassociated Elastic IP, an unattached
-  EBS volume, a stopped instance with an attached volume, and (optional, the
-  priciest) a NAT Gateway.
-- **A budget alarm**, so a forgotten teardown pages you instead of surprising you.
+aws cloudformation describe-stacks --profile target \
+  --stack-name shut-it-down-onboarding \
+  --query 'Stacks[0].Outputs' --output table
+```
+
+The `RoleArn` output is what gets registered in the dashboard, together with the
+same external ID.
+
+### 2. Resources worth finding — by hand, for now
+
+There is **no stack for these**. Create them in the target account yourself: an
+unassociated Elastic IP, an unattached EBS volume, a stopped instance with an
+attached volume, and — optional, and by far the priciest — a NAT Gateway.
+
+Set a budget alarm at the same time. A forgotten teardown should page you rather
+than surprise you at the end of the month, and nothing here does that for you.
+
+> Automating this as a separate, explicitly opt-in fixtures stack is the obvious
+> next step. It is deliberately not folded into the onboarding template: that
+> template is what students run, and it must never create anything that costs
+> money.
 
 Verify CloudTrail is on in the target account before recording — the assumed-role
 event is the most convincing single frame in the video.
 
-> **Tear down the moment you stop recording.** `terraform destroy`. The NAT
-> Gateway is the expensive one; an Elastic IP and a 1 GiB volume are rounding
-> errors, but they are not free.
+> **Tear down the moment you stop recording** — see [After recording](#after-recording).
+> The NAT Gateway is the expensive one; an Elastic IP and a 1 GiB volume are
+> rounding errors, but they are not free. The role costs nothing and is still
+> worth deleting.
 
 ---
 
@@ -67,16 +98,22 @@ the external-ID condition:
 ```json
 {
   "Effect": "Allow",
-  "Principal": { "AWS": "arn:aws:iam::<PLATFORM_ACCOUNT>:root" },
+  "Principal": { "AWS": "arn:aws:iam::<PLATFORM_ACCOUNT>:role/<BACKEND_ROLE>" },
   "Action": "sts:AssumeRole",
   "Condition": { "StringEquals": { "sts:ExternalId": "<GENERATED_ID>" } }
 }
 ```
 
-Say: *"The customer creates this role themselves. We never hold their keys — the
-external ID is generated server-side, so a third party who learns the role ARN
-still cannot assume it."* (That is the confused-deputy problem, and it is exactly
-what the external ID exists to prevent.)
+Say: *"The student creates this role themselves — we never hold their keys. It
+trusts one specific role in the platform account, not the account as a whole, and
+it will not hand out credentials without an external ID the instructor issued per
+account."*
+
+Both halves matter, and the principal is the load-bearing one. The external ID is
+**not** a secret that makes a role ARN safe to publish — knowing an ARN never
+granted anyone the right to assume it. Narrowing the principal is what limits who
+may try; the external ID is what stops a confused deputy from being talked into
+trying on someone else's behalf.
 
 ### 3. Register the account and scan (~25s)
 
@@ -130,8 +167,14 @@ reaches anything that can assume a role."*
 
 ## After recording
 
+Two teardowns, because there were two setups:
+
 ```bash
-terraform destroy
+# The role — free to leave, but leave nothing behind
+aws cloudformation delete-stack --profile target --stack-name shut-it-down-onboarding
+
+# The findable resources — release the EIP, delete the volume and NAT Gateway,
+# terminate the instance. These are the ones that cost money.
 ```
 
 Then confirm the account is actually clean — teardown failures are quiet and
