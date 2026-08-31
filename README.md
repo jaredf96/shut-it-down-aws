@@ -74,7 +74,7 @@ below is honest about which category it falls into.
   audit attribution. The browser client reads `VITE_API_KEY` at build time, so the
   UI is an operator scaffold rather than a production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 180 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
+- 182 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 

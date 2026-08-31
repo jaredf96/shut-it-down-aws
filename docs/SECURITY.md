@@ -80,8 +80,11 @@ that policy document (`deploy/terraform/outputs.tf: app_policy_json`).
 The policy above is the other one — what a **scanned** account grants. It is what
 `deploy/cloudformation/scanner-role.yaml` creates, and
 `backend/tests/test_onboarding_template.py` parses both this document and that
-template to assert they still say the same thing. A permission added to one and
-not the other fails the test rather than quietly widening the grant.
+template to assert they still say the same thing. An equal action list is only
+least privilege if it is the whole grant, so the test also pins that the role
+attaches no managed policy and that the template creates no other resource —
+`AdministratorAccess` attached alongside would otherwise pass a comparison of
+action lists.
 
 ## Onboarding an account
 
@@ -110,6 +113,15 @@ aws cloudformation deploy \
 
 3. Register the stack's `RoleArn` output in the dashboard (**Accounts → Add
    account**) with **the same external ID**. Scans fan out to it from then on.
+
+**Step 3 needs persistence, and the normal mode does not have it.** Registered
+accounts live in DynamoDB: `/accounts` returns 503 when `DYNAMODB_TABLE_NAME` is
+unset, and the dashboard hides the accounts panel entirely rather than offering a
+form that cannot save. Zero-config is otherwise the *normal* way to run this
+(D4), so this is the one place onboarding needs more than the defaults — set
+`DYNAMODB_TABLE_NAME` before you start. Skip it and you get a role in the target
+account with nowhere to register it, while scans go on quietly using the
+platform's own credentials.
 
 **`PlatformRoleArn` is the backend's own role, not the account root.** The
 template rejects a root ARN outright. An account-root principal delegates the

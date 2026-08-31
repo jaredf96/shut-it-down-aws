@@ -52,12 +52,17 @@ def role_properties(template: dict) -> dict:
 
 
 @pytest.fixture(scope="module")
-def granted_actions(role_properties: dict) -> list[str]:
+def scanning_statement(role_properties: dict) -> dict:
     policies = role_properties["Policies"]
     assert len(policies) == 1, "one inline policy keeps the grant readable in the console"
     statements = policies[0]["PolicyDocument"]["Statement"]
     assert len(statements) == 1
-    return statements[0]["Action"]
+    return statements[0]
+
+
+@pytest.fixture(scope="module")
+def granted_actions(scanning_statement: dict) -> list[str]:
+    return scanning_statement["Action"]
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +88,27 @@ def test_role_can_only_read(granted_actions):
         verb = action.split(":", 1)[1]
         assert verb.startswith(("Describe", "List", "Get")), f"{action} is not a read"
     assert "*" not in "".join(granted_actions), "no wildcard actions"
+
+
+def test_nothing_grants_alongside_the_inline_policy(template, role_properties):
+    """An equal action list is only least privilege if it is the whole grant.
+
+    Comparing action lists reads one statement in one inline policy. A managed
+    policy attached to the role, or a second `AWS::IAM::Policy` naming it, would
+    widen this role without changing anything that comparison looks at — and
+    `AdministratorAccess` attached here would pass an action-list check while
+    handing the platform write access to the whole account.
+    """
+    assert "ManagedPolicyArns" not in role_properties
+    assert list(template["Resources"]) == [
+        "ScannerRole"
+    ], "a second resource could grant permissions alongside the inline policy"
+
+
+def test_the_scanning_statement_allows_rather_than_denies(scanning_statement):
+    """`Effect: Deny` would pass an action-list comparison and break every scan."""
+    assert scanning_statement["Effect"] == "Allow"
+    assert scanning_statement["Resource"] == "*"
 
 
 def test_trust_policy_names_the_platform_role_and_requires_the_external_id(role_properties):
