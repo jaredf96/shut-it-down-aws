@@ -224,6 +224,62 @@ the stated product rather than a marketing page.
 
 ---
 
+## D6 — The onboarding external ID is operator-generated, not platform-issued
+
+**Decided:** 2026-08-31 · **Status:** executed
+
+`deploy/cloudformation/scanner-role.yaml` requires an `ExternalId` parameter with
+no default. The operator generates it (`make onboarding-id`), supplies it to the
+stack, and supplies the same value again when registering the role ARN the stack
+outputs. `POST /accounts` keeps `external_id` optional, for roles configured by
+hand.
+
+**Why this came up.** `docs/DEMO.md` claimed the external ID was "generated
+server-side, so a third party who learns the role ARN still cannot assume it."
+Nothing generated it — `AccountCreate.external_id` was an optional string the
+caller supplied — so the claim described a protection the code did not provide.
+Two ways to close that: build server issuance, or correct the claim.
+
+**Why not server issuance.** It cannot be bolted onto `POST /accounts`: that
+endpoint needs the role ARN, which does not exist until the stack has run, and
+the stack needs the external ID as input. Making it real means a two-phase
+onboarding — issue a pending enrollment, deploy the role, finalize with the ARN —
+which is a state machine with expiry, reuse, and abandonment cases.
+
+That is the right design for untrusted, self-service onboarding. This is not
+that: `POST /accounts` is **admin-only** and the deployment is self-hosted, so
+there is no untrusted actor who can point the platform at an arbitrary role ARN.
+Server issuance here would prevent operator mistakes, not close an exploitable
+path — and preserving a sentence is not a reason to build a state machine.
+
+**What is guaranteed:** the role trusts exactly one platform role ARN (not an
+account root — the template rejects one) and will not issue credentials without
+the matching external ID.
+
+**What is not:** platform-enforced uniqueness, non-reuse, or expiry of external
+IDs; any proof that a submitted value came from `make onboarding-id`; any audit
+trail of enrollment before the role exists. `make onboarding-id` buys entropy and
+the convention that the operator assigns the value — not enforcement.
+
+**Revisit when any of these becomes true:**
+
+- account onboarding is opened to untrusted or self-service users
+- more than one delegated operator can register accounts
+- external-ID reuse across accounts is actually observed
+- enrollment needs auditing *before* the role is created
+- the deployment stops being single-operator and self-hosted (would reopen D1)
+
+**Deferred design, so it is not re-derived:** issue and persist a pending
+enrollment with a generated external ID → the account owner deploys the role →
+finalize the registration with the resulting role ARN.
+
+**Consequences:** `docs/DEMO.md`'s server-generated claim is retracted and its
+trust-policy snippet now names a role rather than an account root;
+`docs/SECURITY.md` gains § Onboarding an account, including what the external ID
+does not do. No backend, API, or frontend change.
+
+---
+
 ## Template
 
 ```markdown
