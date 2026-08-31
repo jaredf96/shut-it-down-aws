@@ -44,6 +44,12 @@ read-only role that trusts the scanner, rather than handing over long-lived keys
 
 ## Least-privilege IAM
 
+Two roles appear below and they are **not** the same grant. A **scanned account**
+grants describe/list and nothing else. The **platform's own runtime role**
+additionally persists scan history and assumes those scanner roles.
+
+### A scanned account
+
 Scanning needs only describe/list permissions. Attach the AWS-managed
 `ReadOnlyAccess`, or this minimal policy:
 
@@ -68,7 +74,7 @@ Grant the rest **only when you opt into the corresponding feature**:
 | Feature | Extra permissions | Scope |
 | --- | --- | --- |
 | Persistence | `dynamodb:GetItem/PutItem/UpdateItem/DeleteItem/Query` (+ `CreateTable` for auto-create) | the app's table ARN |
-| Multi-account | `sts:AssumeRole` | the registered role ARNs |
+| Multi-account | `sts:AssumeRole` | roles tagged `Project=shut-it-down-aws` (see below) |
 | Live pricing | `pricing:GetProducts` | `*` (Pricing API is global) |
 | **Guided cleanup** | `ec2:StopInstances`, `ec2:ReleaseAddress`, `ec2:DeleteVolume` | only where cleanup is intended |
 
@@ -86,15 +92,104 @@ attaches no managed policy and that the template creates no other resource —
 `AdministratorAccess` attached alongside would otherwise pass a comparison of
 action lists.
 
+### The platform's own runtime role
+
+What the backend itself runs as. `deploy/cloudformation/platform-role.yaml`
+creates it, `deploy/terraform/main.tf` emits the same document for an existing
+role, and `backend/tests/test_platform_role_template.py` pins the template
+against this block:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AppTableAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:PutItem",
+        "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:REGION:PLATFORM_ACCOUNT:table/TABLE_NAME"
+    },
+    {
+      "Sid": "ReadOnlyScanning",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeRegions", "ec2:DescribeInstances", "ec2:DescribeVolumes",
+        "ec2:DescribeAddresses", "ec2:DescribeNatGateways",
+        "elasticloadbalancing:DescribeLoadBalancers", "rds:DescribeDBInstances",
+        "s3:ListAllMyBuckets", "s3:GetBucketLocation"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AssumeRegisteredScannerRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/*",
+      "Condition": {
+        "StringEquals": { "aws:ResourceTag/Project": "shut-it-down-aws" }
+      }
+    }
+  ]
+}
+```
+
+`DescribeTable` is not decoration: `GET /ready` calls it on every probe, so a
+role without it reports the backend unready while history reads and writes work.
+
+**Why `sts:AssumeRole` is scoped by a tag rather than by ARN.** The registered
+ARNs are not knowable when this policy is written — onboarding is self-service,
+and the scanner role's name is overridable. Scoping to `role/*` with no condition
+would let the platform assume anything that happens to trust it; a hard-coded
+list would need a platform redeploy per student. The tag is the one property
+every role `scanner-role.yaml` creates carries. It is a **namespace guard, not an
+authorization boundary** — the account's owner controls its tags exactly as it
+controls its trust policy. The boundary remains where it always was: the target's
+trust policy plus its external ID.
+
 ## Onboarding an account
 
 An instructor onboards each lab account by having its owner run one
 CloudFormation stack. Nobody hands over keys, and the platform never holds
 standing access.
 
-**The order is forced by the external ID.** The stack takes it as a parameter, so
-it has to exist before the role does — and the role ARN the platform registers
-does not exist until the stack has run:
+**Step 0 — the platform's own role has to exist first, and the backend has to
+run as it.** `PlatformRoleArn` in step 2 is the role the backend runs as, and
+every target's trust policy names it. Create it once per install:
+
+```bash
+aws cloudformation deploy \
+  --template-file deploy/cloudformation/platform-role.yaml \
+  --stack-name shut-it-down-platform-role \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides OperatorPrincipalArn=arn:aws:iam::PLATFORM_ACCOUNT:role/YOUR_OPERATOR_ROLE
+```
+
+Creating it is not enough — the backend has to actually assume it, or targets
+will refuse the backend's own credentials. They trust the platform role, not you:
+
+```ini
+# ~/.aws/config
+[profile shut-it-down]
+role_arn = arn:aws:iam::PLATFORM_ACCOUNT:role/shut-it-down-backend
+source_profile = your-normal-profile
+region = us-east-1
+```
+
+```bash
+AWS_PROFILE=shut-it-down make run
+```
+
+Hosted deployments skip this stack entirely: an ECS task or a Lambda already runs
+as a role, and `deploy/README.md` says to attach the same policy to it. Note the
+lifecycle warning at the top of `platform-role.yaml` — deleting and recreating
+this role strands every target that already trusts it.
+
+**The rest of the order is forced by the external ID.** The stack takes it as a
+parameter, so it has to exist before the role does — and the role ARN the
+platform registers does not exist until the stack has run:
 
 ```bash
 make onboarding-id      # 1. generate the external ID. One per account, never reused.
@@ -132,6 +227,14 @@ one role my scanner runs as" — and the external ID does not narrow it back dow
 someone from persuading the platform to assume a role on their behalf. It is
 **not** a secret that makes a role ARN safe to publish, and knowing a role ARN
 never granted anyone the right to assume it.
+
+**Where it is readable.** It has to be stored in plaintext — assuming the role
+needs the literal value — but `GET /accounts` does not return it. Registration
+echoes it once and it is never listed again, which is how API keys are handled
+and for the same reason: that route is open to every workspace member, while
+registering and deleting accounts are admin-only. Listings carry
+`has_external_id` instead. An operator who loses the value re-runs the target's
+stack with a fresh one; nothing can read it back out of the API.
 
 **What this does not guarantee.** The external ID is generated by the operator,
 so the platform does not enforce uniqueness, non-reuse, or expiry, and cannot

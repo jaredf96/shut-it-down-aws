@@ -18,21 +18,17 @@ No AWS calls: this reads two files off disk.
 
 from __future__ import annotations
 
-import json
 import re
-from pathlib import Path
 
 import pytest
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from tests.conftest import REPO_ROOT, policy_document_under
+
 TEMPLATE_PATH = REPO_ROOT / "deploy" / "cloudformation" / "scanner-role.yaml"
-SECURITY_DOC = REPO_ROOT / "docs" / "SECURITY.md"
 
 # The cleanup catalog, which this role must never be able to perform.
 CLEANUP_ACTIONS = {"ec2:StopInstances", "ec2:ReleaseAddress", "ec2:DeleteVolume"}
-
-_JSON_BLOCK = re.compile(r"```json\n(.*?)```", re.DOTALL)
 
 
 @pytest.fixture(scope="module")
@@ -67,13 +63,14 @@ def granted_actions(scanning_statement: dict) -> list[str]:
 
 @pytest.fixture(scope="module")
 def published_actions() -> list[str]:
-    """The action list from the minimal policy in docs/SECURITY.md."""
-    for block in _JSON_BLOCK.findall(SECURITY_DOC.read_text()):
-        document = json.loads(block)
-        actions = document.get("Statement", [{}])[0].get("Action")
-        if actions and "ec2:DescribeRegions" in actions:
-            return actions
-    pytest.fail("no minimal scanning policy found in docs/SECURITY.md")
+    """The action list from the scanned-account policy in docs/SECURITY.md.
+
+    Selected by heading. This used to take the first JSON block containing
+    `ec2:DescribeRegions`, which bound to whichever policy appeared first in the
+    document — and the platform role's policy, added later, contains that action
+    too.
+    """
+    return policy_document_under("### A scanned account")["Statement"][0]["Action"]
 
 
 def test_template_grants_exactly_the_published_policy(granted_actions, published_actions):

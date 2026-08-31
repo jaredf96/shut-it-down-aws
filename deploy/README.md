@@ -12,7 +12,20 @@ terraform apply -var table_name=cloud-lab-scans
 # -> outputs: table_name, table_arn, app_policy_json
 ```
 
-Attach `app_policy_json` to whatever role runs the backend.
+Attach `app_policy_json` to whatever role runs the backend — on ECS that is the
+task role, on Lambda the execution role. Both already exist by the time you get
+here, which is why neither needs the template below.
+
+**Running it yourself, with no such role?** `deploy/cloudformation/platform-role.yaml`
+creates one, with the same policy, plus a trust policy naming you. That role's
+ARN is what every onboarded account trusts (`docs/SECURITY.md` § Onboarding an
+account, step 0), so it has to exist before any account can be onboarded — and
+it must not be deleted and recreated afterwards, which strands every target that
+trusts it. The template deliberately does **not** trust `ecs-tasks.amazonaws.com`
+or `lambda.amazonaws.com`: a service principal alone would make it look like a
+working hosted runtime role while it still lacked the service-specific
+permissions those runtimes need (CloudWatch Logs for Lambda; ECS separates the
+task role from the task execution role).
 
 ## 2. Run the backend
 

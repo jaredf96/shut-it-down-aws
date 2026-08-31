@@ -1,0 +1,203 @@
+# Shut It Down — the platform's own runtime role.
+#
+# One stack, run by whoever operates the platform, in the platform's account.
+# It creates the role the backend runs as: the role that assumes the read-only
+# scanner roles in registered target accounts, and writes this install's scan
+# history.
+#
+# This has to exist BEFORE any account can be onboarded, because
+# scanner-role.yaml takes this role's ARN as `PlatformRoleArn`. See
+# docs/SECURITY.md § Onboarding an account, step 0.
+#
+# Hosted deployments on ECS or Lambda do NOT need this stack — they already have
+# a task or execution role, and deploy/README.md tells them to attach the same
+# policy to it. The trust here names a human operator precisely because this is
+# the self-hosted case: adding `ecs-tasks.amazonaws.com` would make the role look
+# hosted-ready while still lacking the service-specific permissions (CloudWatch
+# Logs for Lambda, the task/task-execution split for ECS) that a real hosted
+# runtime role needs.
+#
+# LIFECYCLE WARNING. Every onboarded target account trusts this role, and IAM
+# binds that trust to the role's internal principal id, not to its ARN. Deleting
+# this stack and recreating it yields the same textual ARN and a DIFFERENT
+# principal id, so every existing target starts refusing with AccessDenied and
+# redeploying this template does not repair them — each target's stack has to be
+# redeployed too. Update this stack; do not delete and recreate it.
+#
+# Intrinsic functions are in FULL form (`Ref:`, `Fn::GetAtt:`) for the same
+# reason as scanner-role.yaml: `yaml.safe_load` has to read this file without a
+# custom loader, because tests/test_platform_role_template.py parses it.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Runtime role for a self-hosted Shut It Down backend. Assumes the read-only
+  scanner roles in registered target accounts, and reads/writes its own table.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Who may run the backend as this role
+        Parameters:
+          - OperatorPrincipalArn
+      - Label:
+          default: Persistence
+        Parameters:
+          - TableName
+          - TableRegion
+      - Label:
+          default: Naming
+        Parameters:
+          - RoleName
+
+Parameters:
+  OperatorPrincipalArn:
+    Type: String
+    Description: >-
+      ARN of the IAM role you run the backend under — an SSO permission-set
+      role, or an instance/container role. Name a role, not the account root:
+      a root principal lets every principal in the account run as the platform.
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:iam::[0-9]{12}:role/.+$"
+    ConstraintDescription: >-
+      Must be an IAM role ARN, e.g.
+      arn:aws:iam::123456789012:role/MyOperatorRole
+
+  TableName:
+    Type: String
+    Default: cloud-lab-scans
+    Description: >-
+      The DynamoDB table this install persists to — the value you set as
+      DYNAMODB_TABLE_NAME. Leave unset only if you run without persistence, in
+      which case this grant is harmless.
+    # DynamoDB's own name rules. Without this, a value like "cloud-lab-*" would
+    # be read as an IAM wildcard and widen the grant across tables.
+    AllowedPattern: "^[A-Za-z0-9_.-]{3,255}$"
+    ConstraintDescription: >-
+      3-255 characters: letters, digits, and _ . -
+
+  TableRegion:
+    Type: String
+    Default: ""
+    Description: >-
+      Region the table lives in. Leave empty to use this stack's region. IAM is
+      global, so this stack can be deployed anywhere — which makes "same region
+      as the table" an assumption worth stating rather than inheriting silently.
+    AllowedPattern: "^$|^[a-z0-9-]+$"
+
+  RoleName:
+    Type: String
+    Default: shut-it-down-backend
+    Description: >-
+      Name for the role. Every onboarded target hard-codes the resulting ARN in
+      its trust policy — see the lifecycle warning at the top of this file.
+    AllowedPattern: "^[\\w+=,.@-]{1,64}$"
+
+  ScannerRoleTagValue:
+    Type: String
+    Default: shut-it-down-aws
+    Description: >-
+      The value of the `Project` tag that scanner-role.yaml puts on every role
+      it creates. This role may assume only roles carrying it. Changing this
+      without changing scanner-role.yaml stops every scan.
+    AllowedPattern: "^[\\w+=,.@:/-]+$"
+
+Conditions:
+  TableInStackRegion:
+    Fn::Equals:
+      - Ref: TableRegion
+      - ""
+
+Resources:
+  PlatformRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: RoleName
+      Description: >-
+        Shut It Down backend runtime role. Assumes read-only scanner roles in
+        registered accounts; cannot change anything in them.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowOperatorToRunTheBackend
+            Effect: Allow
+            Principal:
+              AWS:
+                Ref: OperatorPrincipalArn
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ShutItDownBackendRuntime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Persistence. DescribeTable is not optional decoration: GET
+              # /ready calls it on every probe (repositories/dynamo.py: ping),
+              # so a role without it reports the whole backend unready while
+              # scan history reads and writes work perfectly.
+              - Sid: AppTableAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource:
+                  Fn::If:
+                    - TableInStackRegion
+                    - Fn::Sub: "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}"
+                    - Fn::Sub: "arn:${AWS::Partition}:dynamodb:${TableRegion}:${AWS::AccountId}:table/${TableName}"
+
+              # Scanning the platform's OWN account, which is what happens in
+              # single-account mode when no accounts are registered
+              # (multi_account_service falls back to default credentials).
+              # Exactly the nine actions published in docs/SECURITY.md
+              # § Least-privilege IAM — the same list scanner-role.yaml grants.
+              - Sid: ReadOnlyScanning
+                Effect: Allow
+                Action:
+                  - ec2:DescribeRegions
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeNatGateways
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - rds:DescribeDBInstances
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketLocation
+                Resource: "*"
+
+              # Assuming the scanner role in each registered account. The set of
+              # target ARNs is not knowable here — onboarding is self-service and
+              # RoleName is overridable — so this is scoped by the tag that
+              # scanner-role.yaml puts on every role it creates rather than by
+              # ARN. That tag is not an authorization boundary (the target's
+              # owner controls it, as they control the trust policy); it is a
+              # namespace guard, so that a role which merely happens to trust
+              # this one is not assumable. The real boundary stays where it has
+              # always been: the target's trust policy plus its external ID.
+              - Sid: AssumeRegisteredScannerRoles
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource:
+                  Fn::Sub: "arn:${AWS::Partition}:iam::*:role/*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/Project:
+                      Ref: ScannerRoleTagValue
+      Tags:
+        - Key: Project
+          Value: shut-it-down-aws
+
+Outputs:
+  RoleArn:
+    Description: >-
+      Pass this as PlatformRoleArn when onboarding a target account, and run the
+      backend under it (docs/SECURITY.md § Onboarding an account, step 0).
+    Value:
+      Fn::GetAtt:
+        - PlatformRole
+        - Arn

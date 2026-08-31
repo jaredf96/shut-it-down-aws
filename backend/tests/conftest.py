@@ -6,11 +6,41 @@ account and need no real credentials.
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 import boto3
 import pytest
 from moto import mock_aws
 
 REGION = "us-east-1"
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SECURITY_DOC = REPO_ROOT / "docs" / "SECURITY.md"
+
+_HEADING = re.compile(r"^#{1,6} .*$", re.MULTILINE)
+_JSON_BLOCK = re.compile(r"```json\n(.*?)```", re.DOTALL)
+
+
+def policy_document_under(heading: str) -> dict:
+    """The first fenced JSON policy block under `heading` in docs/SECURITY.md.
+
+    Anchored to the heading, not to the block's contents. The drift tests used
+    to take the first block containing a known action, which meant a second
+    policy added anywhere above the intended one silently rebound them to the
+    wrong policy — a test that still passes while pinning nothing.
+    """
+    text = SECURITY_DOC.read_text()
+    headings = [(match.start(), match.group().strip()) for match in _HEADING.finditer(text)]
+    for index, (position, line) in enumerate(headings):
+        if line != heading:
+            continue
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
+        blocks = _JSON_BLOCK.findall(text[position:end])
+        assert blocks, f"no JSON policy block under {heading!r} in docs/SECURITY.md"
+        return json.loads(blocks[0])
+    raise AssertionError(f"heading {heading!r} not found in docs/SECURITY.md")
 
 
 @pytest.fixture(autouse=True)
