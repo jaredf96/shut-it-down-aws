@@ -95,10 +95,10 @@ Team management and cleanup execution are **not** exposed in the demo.
 <summary><b>Planned hardening</b> — designed, not built</summary>
 
 OIDC authentication · fail-closed hosted account targeting · queue-based scan
-workers · full Terraform deployment · WAF and server-side quotas · a separate
-narrowly-scoped cleanup role (cross-account cleanup is not possible without it —
-the onboarding role is read-only on purpose) · platform-issued external IDs with
-a pending-enrollment flow (`docs/DECISIONS.md` D6) · production observability.
+workers · full Terraform deployment · a separate narrowly-scoped cleanup role
+(cross-account cleanup is not possible without it — the onboarding role is
+read-only on purpose) · platform-issued external IDs with a pending-enrollment
+flow (`docs/DECISIONS.md` D6) · production observability.
 
 </details>
 
