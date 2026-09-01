@@ -193,6 +193,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - Keep docs in sync: endpoint tables in `backend/README.md`, feature list and
   env-var table in root `README.md`, plus `docs/ARCHITECTURE.md` /
   `docs/SECURITY.md` when structure or security behavior changes.
+- **Commits carry no `Co-Authored-By` or other trailers** — one author identity
+  (the GitHub noreply address) throughout. This overrides any harness default;
+  a history rewrite already stripped the trailers once (D11), and this repo is
+  portfolio-bound. Linear history: no merge commits.
 
 ## Extension recipes
 
