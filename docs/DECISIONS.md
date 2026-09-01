@@ -558,37 +558,30 @@ itself.
 **Decided:** 2026-09-01 · **Status:** executed
 
 No squash, reword, rebase or author rewrite before publication. The one rewrite
-this repo needed already happened and is complete.
+this repo needed already happened: it removed four automatically added commit
+trailers and changed nothing else — the backup ref's tree was byte-identical to
+the tip — and the remote only ever carried the rewritten history. `main` is
+linear, one author identity throughout (the GitHub noreply address, which
+attributes to the account without publishing a personal one), descriptive
+subjects.
 
-**What was found.** `refs/original/refs/heads/main` was still present — the
-backup ref a `filter-branch` leaves behind. Its tree is byte-identical to the
-current tip, so the rewrite changed no content: it stripped `Co-Authored-By`
-trailers from four commits. `main` is 61 commits, linear, zero merge commits,
-zero trailers, one author identity throughout, using the GitHub noreply address
-that attributes to the account without publishing a personal one. `git ls-remote
-origin` returned exactly `HEAD` and `refs/heads/main` at the same commit, so
-nothing stale had ever been published.
+**Why not a cosmetic rewrite anyway.** The linear history is part of what the
+repository shows, not noise to flatten — and a rewrite would orphan every place
+this file cites a commit by SHA (D8 names `a05b872`; D10 records its verdict
+against a tip).
 
-**Why not a cosmetic rewrite anyway.** Sixty-one linear commits with descriptive
-subjects are an asset in a portfolio repository — the history is part of what is
-being shown, not noise to flatten. A rewrite would also orphan the one place a
-document cites a commit by SHA: D8's consequences line names `a05b872`.
-
-**What was actually left, and is now done.** Three refs held dead objects alive
-in the working clone: the `filter-branch` backup above, carrying the four
-commits that still had trailers, and two `refs/codex/turn-diffs/checkpoints/…`
-snapshots from earlier sessions — one still containing `BillingPanel.jsx`, which
-D2 deleted. Git does not push these by default, which is why the remote was
-already clean, but they are exactly what a `git push --mirror` or `--all` would
-publish. All three deleted, reflogs expired, objects pruned: 1190 loose objects
-to 921 packed.
+**What was actually left, and is now done.** Three local-only refs held
+superseded objects alive in the working clone — the rewrite's backup ref, and
+two session-checkpoint refs, one still carrying a file D2 deleted. Git never
+pushes these by default, which is why the remote was already clean, but they
+are exactly what a `git push --mirror` or `--all` would publish. All three
+deleted, reflogs expired, objects pruned.
 
 **Consequences:** `git for-each-ref` now returns three refs — `main` and the two
 the remote tracks. D10's last row became checkable in one command. `CLAUDE.md`
-§ Conventions gained the no-trailer rule in `51bc60e`, a consequence of this
-entry: the rewrite's one-author, zero-trailer history only holds if every
-session overrides the harness default that appends one, and `DECISIONS.md` is
-read on demand while `CLAUDE.md` loads every session.
+§ Conventions carries the author-identity rule (`51bc60e`), a consequence of
+this entry: the convention only holds if every session applies it, and
+`DECISIONS.md` is read on demand while `CLAUDE.md` loads every session.
 
 ---
 
