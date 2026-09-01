@@ -434,6 +434,40 @@ into one list loses two of the three answers.
 
 ---
 
+## D10 — Publication is gated on an independent security review, and the reviewer is not Claude
+
+**Decided:** 2026-09-01 · **Status:** decided
+
+The repository stays private until an adversarial review passes. The reviewer is
+Codex, via `/crosscheck`, alongside the repo's own `/security-review`. A second
+Claude pass does not satisfy this: the blind spot being guarded against is one
+shared with whatever wrote the code, so more depth from the same model buys
+nothing that independence buys.
+
+What the review must cover, and what already holds each claim up — so the review
+checks these rather than re-deriving them:
+
+| Claim | How it is held today |
+| --- | --- |
+| No secrets, tfstate, tfvars or `.env` in the tree | `.gitignore`, verified against `git ls-files` |
+| …nor anywhere in history | `git log --all --diff-filter=A --name-only` over every commit — only `.env.example` and `.env.demo` have ever been added |
+| No real AWS account identifiers | only reserved-range placeholders appear in `demo-data/`, the fixture generator, and the tests |
+| The granted IAM policy is the published one | `test_onboarding_template.py` pins `scanner-role.yaml` against `docs/SECURITY.md` |
+| Both role templates agree on the scoping tag | `test_platform_role_template.py` (D8) |
+| The demo bundle carries no API client and no credential handling | `scripts/check-demo-bundle.sh`, run in CI |
+| The seven cleanup gates hold, including the refusals | `tests/test_cleanup.py` |
+| Nothing unpublished is reachable from the remote | `git ls-remote origin` returns `HEAD` and `refs/heads/main` only (D11) |
+
+**What fails the review:** any row above regressing; a local-only ref reaching
+the remote; or a doc claiming a protection the code does not provide. That last
+one is not hypothetical — it is precisely what D6 had to retract.
+
+**Why record this rather than just doing it:** "I looked at it and it seemed
+fine" is not a gate, and it is not repeatable. Naming the rows makes the review
+finite, and makes a second review a re-run rather than a fresh act of judgement.
+
+---
+
 ## Template
 
 ```markdown
