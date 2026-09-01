@@ -383,6 +383,55 @@ commit message and nowhere a decisions reader would look.
 
 ---
 
+## D9 — Finished means every claim is checkable and true, not that a feature list ran out
+
+**Decided:** 2026-09-01 · **Status:** executed
+
+The done-line, so it is not re-derived every session:
+
+1. The five gates pass — `make test`, `make lint`, the frontend tests, the
+   typecheck, and `make demo-bundle-check`.
+2. Every number, list, and capability claim in the docs is true, and pinned by a
+   test wherever that is practical rather than by attention. The IAM policy, the
+   fixture costs, the shared tag across both role templates, and the provider
+   contract are already held this way.
+3. Every seam has a recorded decision. D1–D8 cover them; this entry closes the
+   last open one, which was this question.
+4. Work that is not built is labelled as not built.
+
+**Finished explicitly does not require** anything under README's *Planned
+hardening* or *What's next*, the `docs/DEMO.md` walkthrough recording, or
+production hardening. Those are labelled, not owed.
+
+**Why:** D1 makes this a self-hosted portfolio proof-of-concept, and its feature
+list is deliberately open-ended — `CLAUDE.md` ships three extension recipes (new
+scanner, new cleanup action, new notifier) so that the list *can* grow. A
+done-line defined by features therefore never arrives, and "it feels ready" is
+not a line anyone can check. The line that does arrive is that nothing in the
+repo says something a reader can verify and find false.
+
+**What tipped it:** three self-contradictions were standing on the day this was
+written. The README pinned a test count of 182 against a suite of 213; a
+mitigation sentence in `docs/SECURITY.md` sat under `POST /notify` instead of the
+cleanup blast-radius gap it answers; and — the one that matters — README's
+*Planned hardening* still listed "WAF and server-side quotas" a week after D4
+removed exactly that concern from `docs/SECURITY.md` as inapplicable to a tool
+with no public multi-tenant API. D4 was marked executed against the code and
+against one of the two docs it changed.
+
+**Consequence for this file's Status rule.** The preamble says a Status reaches
+`executed` once the full verification suite passes. That is necessary and not
+sufficient: the suite cannot see a doc the decision touched and nobody re-read.
+`executed` now also means every document the decision names has been re-read
+against it.
+
+**Three lists of unbuilt work exist on purpose. Do not merge them.** README's
+*Planned hardening* says what a reviewer should not expect to find; README's
+*What's next* says what would be built next and in what order; `docs/SECURITY.md`
+§ Production gaps says what an operator must know before pointing this at real
+AWS. They overlap because they answer different questions, and collapsing them
+into one list loses two of the three answers.
+
 ---
 
 ## Template
