@@ -155,6 +155,11 @@ An instructor onboards each lab account by having its owner run one
 CloudFormation stack. Nobody hands over keys, and the platform never holds
 standing access.
 
+Placeholders in the command blocks below are bare `UPPERCASE` words, not
+`<ANGLE_BRACKETED>` ones, so that a block survives being copied whole: `<` is a
+shell redirect, and a bracketed placeholder fails with a syntax error before the
+command reaches AWS. Substitute them.
+
 **Step 0 — the platform's own role has to exist first, and the backend has to
 run as it.** `PlatformRoleArn` in step 2 is the role the backend runs as, and
 every target's trust policy names it. Create it once per install:
@@ -202,8 +207,8 @@ aws cloudformation deploy \
   --stack-name shut-it-down-onboarding \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
-      PlatformRoleArn=arn:aws:iam::<PLATFORM_ACCOUNT>:role/<BACKEND_ROLE> \
-      ExternalId=<THE_GENERATED_ID>
+      PlatformRoleArn=arn:aws:iam::PLATFORM_ACCOUNT:role/shut-it-down-backend \
+      ExternalId=THE_GENERATED_ID
 ```
 
 3. Register the stack's `RoleArn` output in the dashboard (**Accounts → Add

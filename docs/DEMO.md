@@ -37,6 +37,10 @@ be issued after the fact:
 make onboarding-id            # keep this value; you need it twice
 ```
 
+Substitute the bare `UPPERCASE` placeholders before running. They are not
+written as `<PLACEHOLDER>` on purpose — `<` is a shell redirect, so a bracketed
+one fails with a syntax error mid-recording.
+
 ```bash
 aws cloudformation deploy \
   --profile target \
@@ -44,8 +48,8 @@ aws cloudformation deploy \
   --stack-name shut-it-down-onboarding \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
-      PlatformRoleArn=arn:aws:iam::<PLATFORM_ACCOUNT>:role/<BACKEND_ROLE> \
-      ExternalId=<THE_GENERATED_ID>
+      PlatformRoleArn=arn:aws:iam::PLATFORM_ACCOUNT:role/shut-it-down-backend \
+      ExternalId=THE_GENERATED_ID
 
 aws cloudformation describe-stacks --profile target \
   --stack-name shut-it-down-onboarding \
@@ -98,9 +102,9 @@ the external-ID condition:
 ```json
 {
   "Effect": "Allow",
-  "Principal": { "AWS": "arn:aws:iam::<PLATFORM_ACCOUNT>:role/<BACKEND_ROLE>" },
+  "Principal": { "AWS": "arn:aws:iam::PLATFORM_ACCOUNT:role/shut-it-down-backend" },
   "Action": "sts:AssumeRole",
-  "Condition": { "StringEquals": { "sts:ExternalId": "<GENERATED_ID>" } }
+  "Condition": { "StringEquals": { "sts:ExternalId": "THE_GENERATED_ID" } }
 }
 ```
 
