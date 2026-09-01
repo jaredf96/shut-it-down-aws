@@ -503,6 +503,37 @@ the remote tracks. D10's last row became checkable in one command.
 
 ---
 
+## D12 — Publication is a sequence, and the irreversible step belongs to the operator
+
+**Decided:** 2026-09-01 · **Status:** decided
+
+The order, and why it is this order:
+
+1. **D9 — the docs are true.** First, because a security review of a repository
+   whose documents misdescribe it reviews something that does not exist.
+2. **D10 — the independent review passes.**
+3. **D11 — nothing unpublished is reachable from the remote.** Done.
+4. **Flip the repository public.** The operator does this, never an agent.
+5. **Portfolio site** — the repository link, the live demo, and the walkthrough
+   recording once it exists.
+
+**Step 4 is irreversible in practice.** A public repository can be cloned,
+forked, and archived by third parties within minutes; making it private again
+does not retract what was already taken. That is why it sits behind three gates
+and why no agent performs it.
+
+**The walkthrough does not gate step 4** (D9). It is a portfolio artifact, and
+standing the AWS side back up to record it is `docs/DEMO.md` § Before you
+record — which is also the reason the external ID has to be generated before the
+role stack, not after.
+
+**Why record a sequence that seems obvious:** it was not obvious enough to stop
+the question "is this done?" from being asked, and each of these steps is
+individually easy to do out of order. Reviewing before the docs are true, or
+publishing before the review, both cost more to undo than to sequence.
+
+---
+
 ## Template
 
 ```markdown
