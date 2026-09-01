@@ -647,9 +647,22 @@ What was built:
   refused (`audit_unavailable`, 503) — the initiated write *is* the pre-flight,
   so there is no check-then-act race. A store failure after the mutation returns
   the outcome to the caller and leaves the initiated row standing as
-  outcome-unknown, logged at error level. The guarantee this buys is exact: **no
-  mutation starts without durable evidence of intent.** Zero-config mode
-  (persistence disabled) is unchanged — log-only records, by design.
+  outcome-unknown, logged at error level. The guarantee this buys is exact: **a
+  persistence-enabled install never starts a mutation without durable evidence
+  of intent.** Zero-config mode (persistence disabled) sits deliberately outside
+  it — log-only records, like everything else that mode does.
+
+**The re-run tightened all three.** D10's second pass found the guarantee's
+edges rather than new ground: a DynamoDB `ClientError` (access denied,
+throttling) is not `PersistenceUnavailable` and slipped both guarded audit
+paths; the write-ahead claim read as unconditional while zero-config mode is
+deliberately log-only; "no refusal can bypass the trail" overclaimed against
+401s and malformed bodies, which resolve no workspace to audit under; and the
+API-key lookup's eventually consistent read could authenticate a just-revoked
+key one more time. The first and last are code fixes (`ClientError` caught
+alongside `PersistenceUnavailable` in both guarded paths; `ConsistentRead=True`
+on `resolve_api_key`); the middle two are the docs stating the decided scope
+precisely.
 
 **Deliberately not built:** idempotency keys / a full attempt state machine
 (conditional writes so a client retry cannot mutate twice). The live
@@ -659,18 +672,21 @@ an action whose retry is not naturally idempotent ever enters the catalog, or if
 reconciliation of outcome-unknown rows becomes a real operator task.
 
 **Also rejected:** scoping the docs claim to "attempts that reach the service"
-(abandons the guarantee); auditing at the route layer (splits the audit
-vocabulary across layers and puts business logic in routes); a per-request
-user-row check in auth (closes orphaned keys generally, at the cost of doubling
-reads on every authenticated request).
+(abandons the guarantee for refusals the service *can* see; the claim stays
+bounded by authentication regardless — a 401 or a malformed body resolves no
+workspace to audit under, and the docs say so); auditing at the route layer
+(splits the audit vocabulary across layers and puts business logic in routes);
+a per-request user-row check in auth (closes orphaned keys generally, at the
+cost of doubling reads on every authenticated request).
 
-**Consequences:** `backend/app/repositories/user_repository.py` (delete order),
-`backend/app/services/cleanup_service.py` (gates, write-ahead, guarded terminal
-write), `backend/app/main.py` (route + status map), and
-`backend/app/repositories/audit_repository.py` (`build_record` extracted) carry
-the code; `backend/tests/test_cleanup.py` and `test_users.py` pin the new
-behavior, including both injected-outage paths. `frontend/src/data/contract.d.ts`
-widens the status union. Docs re-read against the change: `backend/README.md`'s
+**Consequences:** `backend/app/repositories/user_repository.py` (delete order,
+consistent-read key resolution), `backend/app/services/cleanup_service.py`
+(gates, write-ahead, guarded terminal write), `backend/app/main.py` (route +
+status map), and `backend/app/repositories/audit_repository.py` (`build_record`
+extracted) carry the code; `backend/tests/test_cleanup.py` and `test_users.py`
+pin the new behavior, with each injected-outage path parametrized over both an
+unreachable store and a store error. `frontend/src/data/contract.d.ts` widens
+the status union. Docs re-read against the change: `backend/README.md`'s
 opening warning rewritten (the third finding), root `README.md` gate 7,
 `docs/SECURITY.md` §§ Cleanup gates + Audit logging, and `CLAUDE.md` invariant 2.
 

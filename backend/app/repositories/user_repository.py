@@ -153,10 +153,17 @@ def delete_user(workspace_id: str, user_id: str) -> bool:
 
 
 def resolve_api_key(api_key: str) -> dict | None:
-    """Return the principal {workspace_id, user_id, role, name} for a key, or None."""
+    """Return the principal {workspace_id, user_id, role, name} for a key, or None.
+
+    The read is strongly consistent on purpose: revocation must take effect the
+    moment `delete_user` returns, and an eventually consistent read could hand
+    back a just-deleted key row and authenticate it one more time.
+    """
     if not is_enabled() or not api_key:
         return None
-    response = get_table().get_item(Key={"pk": f"APIKEY#{_hash_key(api_key)}", "sk": "#"})
+    response = get_table().get_item(
+        Key={"pk": f"APIKEY#{_hash_key(api_key)}", "sk": "#"}, ConsistentRead=True
+    )
     item = response.get("Item")
     if not item:
         return None

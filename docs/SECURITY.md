@@ -291,24 +291,28 @@ audit entry (`app/repositories/audit_repository.py`,
 (action, resource, region, account), the **outcome** (`success` / `dry_run` /
 `forbidden` / `disabled` / `confirmation_mismatch` / `unsupported_action` /
 `unknown_account` / `precondition_failed` / `error` / `audit_unavailable`), a
-detail message, and a timestamp. "Every attempt" includes the two refusals that
-used to happen before the service was reached: a non-admin caller (`forbidden`)
-and the feature flag being off (`disabled`) — all gates live in the service
-precisely so no refusal can bypass the trail (D13).
+detail message, and a timestamp. "Every attempt" means every authenticated,
+well-formed request: the two refusals that used to happen before the service was
+reached — a non-admin caller (`forbidden`) and the feature flag being off
+(`disabled`) — are audited like any other outcome, because every gate lives in
+the service (D13). What never reaches the trail is a request with no principal
+to attribute: a missing or invalid API key (401) or a body that fails
+validation (422) resolves no workspace to record under.
 
 - Durable entries live in DynamoDB (`AUDIT#<workspace>`), workspace-scoped and
   time-sortable; `GET /cleanup/audit` lists them newest-first.
 - The service **also** logs every attempt to the application logger, so there is
   a record even when persistence is disabled.
-- **A real mutation is write-ahead audited.** Before any `dry_run: false`
-  action touches AWS, the service persists an `initiated` entry; if that write
-  fails, the action is refused with `audit_unavailable` (503) — persistence
-  *enabled but unreachable* must not produce an unrecorded mutation, while
-  persistence disabled (zero-config local mode) still runs with log-only
-  records as documented above. If the store fails *after* the mutation, the
-  caller still receives the outcome and the `initiated` entry stands as
-  outcome-unknown, logged at error level, instead of the attempt vanishing
-  into a 500.
+- **With persistence on, a real mutation is write-ahead audited.** Before any
+  `dry_run: false` action touches AWS, the service persists an `initiated`
+  entry; if that write fails, the action is refused with `audit_unavailable`
+  (503) — persistence *enabled but not writable*, whether the store is
+  unreachable or answers with an error, must not produce an unrecorded
+  mutation. Persistence disabled (zero-config local mode) still runs, with
+  log-only records as documented above. If the store fails *after* the
+  mutation, the caller still receives the outcome and the `initiated` entry
+  stands as outcome-unknown, logged at error level, instead of the attempt
+  vanishing into a 500.
 
 Because users are first-class (workspace + user id + role), every mutating action is
 attributable to a specific user.

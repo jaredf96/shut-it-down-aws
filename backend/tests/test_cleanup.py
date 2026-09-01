@@ -1,5 +1,6 @@
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from app.errors import PersistenceUnavailable
@@ -383,9 +384,20 @@ def test_failed_attempt_is_audited_even_without_persistence(monkeypatch):
 
 # --- Write-ahead audit (D13) ----------------------------------------------
 
+# Both ways a persistence-enabled audit write fails: the store unreachable
+# (translated to PersistenceUnavailable) and the store answering with an error
+# (ClientError passes through dynamo.py untranslated, on purpose).
+_STORE_FAILURES = [
+    PersistenceUnavailable("injected outage"),
+    ClientError({"Error": {"Code": "AccessDeniedException", "Message": "denied"}}, "PutItem"),
+]
 
-def test_unauditable_mutation_is_refused_before_acting(dynamo_table, cleanup_on, monkeypatch):
-    """Persistence enabled but unreachable -> no real mutation may start.
+
+@pytest.mark.parametrize("failure", _STORE_FAILURES, ids=["unreachable", "client_error"])
+def test_unauditable_mutation_is_refused_before_acting(
+    dynamo_table, cleanup_on, monkeypatch, failure
+):
+    """Persistence enabled but not writable -> no real mutation may start.
 
     The write-ahead `initiated` row IS the pre-flight check: if it cannot be
     written, there would be no durable record that anything ran, so the
@@ -397,7 +409,7 @@ def test_unauditable_mutation_is_refused_before_acting(dynamo_table, cleanup_on,
     ]
 
     def _down(workspace_id, entry):
-        raise PersistenceUnavailable("injected outage")
+        raise failure
 
     monkeypatch.setattr(audit_repository, "append", _down)
 
@@ -412,7 +424,7 @@ def test_unauditable_mutation_is_refused_before_acting(dynamo_table, cleanup_on,
         },
     )
     assert res.status_code == 503
-    assert "audit store is unreachable" in res.json()["detail"]
+    assert "could not durably record" in res.json()["detail"]
     # Refused before the mutation boundary: still running.
     state = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]["State"][
         "Name"
@@ -420,8 +432,9 @@ def test_unauditable_mutation_is_refused_before_acting(dynamo_table, cleanup_on,
     assert state == "running"
 
 
+@pytest.mark.parametrize("failure", _STORE_FAILURES, ids=["unreachable", "client_error"])
 def test_late_audit_failure_keeps_the_outcome_and_the_initiated_row(
-    dynamo_table, cleanup_on, monkeypatch
+    dynamo_table, cleanup_on, monkeypatch, failure
 ):
     """The store dies AFTER the mutation -> the client still learns the
     outcome, and the initiated row stands as outcome-unknown instead of the
@@ -438,7 +451,7 @@ def test_late_audit_failure_keeps_the_outcome_and_the_initiated_row(
         calls["n"] += 1
         if calls["n"] == 1:  # the write-ahead row goes through
             return real_append(workspace_id, entry)
-        raise PersistenceUnavailable("injected outage")
+        raise failure
 
     monkeypatch.setattr(audit_repository, "append", _dies_after_initiated)
 

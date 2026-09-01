@@ -101,12 +101,14 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
    must equal `resource_id`, `dry_run` defaults to true, a named `account_id`
    must be one the workspace registered (never fall back to default credentials —
    that runs the action against the host account), live precondition re-check
-   against AWS (never trust the client), **every attempt audited**
-   (including refusals/failures). A real mutation is **write-ahead audited**:
-   an `initiated` row is persisted before AWS is touched, the action is refused
-   (`audit_unavailable`, fail closed) if that row cannot be written, and a
-   store failure after the mutation leaves the row standing as outcome-unknown
-   rather than losing the attempt. Action catalog stays tiny: stop EC2, release
+   against AWS (never trust the client), **every authenticated attempt
+   audited** (including refusals/failures). With persistence on, a real
+   mutation is **write-ahead audited**: an `initiated` row is persisted before
+   AWS is touched, the action is refused (`audit_unavailable`, fail closed) if
+   that row cannot be written — store unreachable or a DynamoDB error alike —
+   and a store failure after the mutation leaves the row standing as
+   outcome-unknown rather than losing the attempt; zero-config installs stay
+   log-only. Action catalog stays tiny: stop EC2, release
    unassociated EIP, delete unattached EBS. Terminate/S3/RDS/NAT deletion are
    deliberately NOT in the catalog — listed in `NOT_SUPPORTED` instead. No bulk ops.
    The dashboard sends the account of the finding it is acting on: the service is

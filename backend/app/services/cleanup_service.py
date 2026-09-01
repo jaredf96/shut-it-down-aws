@@ -21,16 +21,19 @@ is numbered in README.md and docs/SECURITY.md:
 - **Dry run** — `dry_run` (default True at the API) reports what *would*
   happen.
 - **Audit** — every attempt, refused, failed, dry-run or executed, is recorded.
-  A real mutation is additionally preceded by a durable `initiated` entry, and
-  is refused outright if that entry cannot be written (D13): no mutation starts
-  without evidence of intent, and a persistence failure *after* the mutation
-  leaves the initiated row standing as outcome-unknown instead of losing the
-  attempt.
+  With persistence on, a real mutation is additionally preceded by a durable
+  `initiated` entry and refused outright if that entry cannot be written (D13):
+  no mutation starts without durable evidence of intent, and a persistence
+  failure *after* the mutation leaves the initiated row standing as
+  outcome-unknown instead of losing the attempt. Zero-config installs are
+  log-only, here as everywhere.
 """
 
 from __future__ import annotations
 
 import logging
+
+from botocore.exceptions import ClientError
 
 from app import config
 from app.aws.session import default_session, session_for_account
@@ -91,10 +94,13 @@ def _finish_after_mutation(
     A failed audit write here must not turn a known outcome into a 500: the
     `initiated` row written before the mutation stands as outcome-unknown, the
     outcome is logged at error level, and the caller still gets the result.
+    The catch is deliberately broad — connectivity failures arrive as
+    `PersistenceUnavailable`, but DynamoDB answering with an error
+    (`ClientError`: access denied, throttling) loses the outcome just the same.
     """
     try:
         return _finish(base, workspace_id, user_id, status, detail)
-    except PersistenceUnavailable as exc:
+    except (PersistenceUnavailable, ClientError) as exc:
         logger.error(
             "cleanup outcome could not be persisted; the initiated entry stands as "
             "outcome-unknown: workspace=%s user=%s status=%s detail=%s error=%s",
@@ -166,12 +172,13 @@ def execute(
             "Confirmation does not match the resource id.",
         )
 
-    # Write-ahead audit: no real mutation starts without durable evidence of
-    # intent. Dry runs skip this — they mutate nothing, so their single
-    # audited exit is enough. With persistence disabled entirely (zero-config
-    # local mode) `append` is a documented no-op and the gate passes; what it
-    # refuses is persistence *enabled but unreachable*, where acting would
-    # leave no record.
+    # Write-ahead audit: with persistence on, no real mutation starts without
+    # durable evidence of intent. Dry runs skip this — they mutate nothing, so
+    # their single audited exit is enough. With persistence disabled entirely
+    # (zero-config local mode) `append` is a documented no-op and the gate
+    # passes; what this refuses is persistence *enabled but not writable* —
+    # unreachable (`PersistenceUnavailable`) or answering with an error
+    # (`ClientError`) — where acting would leave no record.
     if not dry_run:
         try:
             _finish(
@@ -181,11 +188,8 @@ def execute(
                 "initiated",
                 f"About to run {action} on {resource_id}; the outcome follows as its own entry.",
             )
-        except PersistenceUnavailable as exc:
-            detail = (
-                "Refusing to act: the audit store is unreachable, so this attempt "
-                "cannot be durably recorded."
-            )
+        except (PersistenceUnavailable, ClientError) as exc:
+            detail = "Refusing to act: the audit store could not durably record this attempt."
             logger.error(
                 "cleanup refused, audit store unavailable: workspace=%s user=%s "
                 "action=%s resource=%s error=%s",
