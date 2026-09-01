@@ -46,6 +46,13 @@ the SaaS was labelled "shelved" in `CLAUDE.md` while remaining wired into
 `main.py` — tenant creation, plan limits, Stripe checkout, all in the request
 path. Every design question silently forked into "for which product?"
 
+**Consequences:** `CLAUDE.md` § What this is for and `README.md` § Status state
+this product and no other. Everything else is delegated — D2 removes the billing
+code, D3 renames the model, D4 and D5 align the docs. **That delegation is why
+this entry's `executed` cannot be verified on its own:** it is only as true as
+the four entries it names, and it was in fact false for a week, because D4
+aligned `docs/SECURITY.md` and not `README.md` (D9).
+
 ---
 
 ## D2 — The billing/subscription layer is removed, not shelved
@@ -75,6 +82,13 @@ regardless.
 
 **Sequence:** extract to the reference repo → verify it stands alone → remove here.
 Not the other way round.
+
+**Consequences:** the files and routes listed above are gone from `backend/app/`,
+and `git grep ADMIN_TOKEN` now returns only this entry's own record of it.
+`CLAUDE.md` states billing is gone rather than shelved; `docs/ARCHITECTURE.md`'s
+record table marks `TENANTMETA#` retired, because D2 deleted its owner. The
+extraction target lives outside this repo, at
+`~/Documents/Claude/fastapi-stripe-saas-reference`.
 
 ---
 
@@ -190,6 +204,14 @@ but the policy holds wherever the word appears. Permitted **only** in:
 Everything else is active logical vocabulary and says `workspace`. A new hit
 outside that list is a rename that was missed, not a new convention.
 
+**Consequences:** `workspace_id` in Python, on the wire, and in
+`frontend/src/data/contract.d.ts`. `DEFAULT_WORKSPACE_ID` is documented in
+`README.md`, `backend/README.md` and `backend/.env.example`, with
+`DEFAULT_TENANT_ID` kept as a deprecated fallback in `backend/app/config.py`.
+The frozen-storage mismatch is explained in `CLAUDE.md` § Data model and in
+`docs/ARCHITECTURE.md`'s record table — those explanations are load-bearing, not
+residue. `backend/tests/test_workspaces.py` pins both directions.
+
 ---
 
 ## D4 — Auth stays optional and local-first
@@ -208,6 +230,20 @@ about open tenant registration and public-API abuse protection are gone, since
 there is no public multi-tenant API for them to describe. The ones about
 credential handling, least-privilege IAM, and TLS stayed, and matter more.
 
+**Consequences:** `docs/SECURITY.md` § Production gaps drops the entries about
+open registration and public-API abuse protection. **`README.md` § Planned
+hardening needed the same pass and did not get it** — it kept listing "WAF and
+server-side quotas", the same concern under another name, until `db224df` a week
+later. Nothing else in the docs survived that sweep, verified by
+`git grep -inE "quota|plan limit|subscription|abuse|registration|multi-tenant|front door|stripe|billing|saas|waf|throttl" -- '*.md'`:
+every remaining hit is historical text in this file, a different sense of the
+word, or an affirmative post-D1 statement.
+
+This entry's Status — "already true in code, no change needed" — describes the
+code and not the two documents this decision changed, which is why no
+consequences review was ever triggered. The Status is left as written; this
+paragraph is the correction.
+
 ---
 
 ## D5 — The demo build boundary holds
@@ -221,6 +257,14 @@ client leaked into the demo bundle.
 
 D1 makes this **more** load-bearing, not less — the public simulation is now half
 the stated product rather than a marketing page.
+
+**Consequences:** no code change. The boundary is held by
+`frontend/scripts/check-demo-bundle.sh` in CI, `frontend/src/data/contract.d.ts`
+at compile time, and `providerContract.test.js` at runtime, and described in
+`README.md` § Try it and `CLAUDE.md`'s opening. **This is the half of D1's
+docs-alignment delegation that held**, and it held because something enforces it.
+The contrast with D4 is the whole argument for pinning a claim to a test wherever
+one can exist (D9).
 
 ---
 
@@ -277,6 +321,8 @@ finalize the registration with the resulting role ARN.
 trust-policy snippet now names a role rather than an account root;
 `docs/SECURITY.md` gains § Onboarding an account, including what the external ID
 does not do. No backend, API, or frontend change.
+
+---
 
 ## D7 — The walkthrough fixtures are a separate, ephemeral, billable stack
 
@@ -432,6 +478,15 @@ against it.
 AWS. They overlap because they answer different questions, and collapsing them
 into one list loses two of the three answers.
 
+**Consequences:** four contradictions closed — the README test count (`8bb48cc`),
+the misplaced mitigation sentence in `docs/SECURITY.md` (`1daa113`),
+`docs/img/README.md` turned from authoring scaffolding into a manifest
+(`f9452dc`), and D4's README leftover (`db224df`). This file's preamble rule for
+`executed` is tightened by the paragraph above, and every entry now carries a
+`**Consequences:**` line naming the documents it touched — the mechanism whose
+absence let D4's miss survive. `README.md`'s three unbuilt-work lists and
+`docs/SECURITY.md` § Production gaps stay exactly as they are, deliberately.
+
 ---
 
 ## D10 — Publication is gated on an independent security review, and the reviewer is not Claude
@@ -465,6 +520,10 @@ one is not hypothetical — it is precisely what D6 had to retract.
 **Why record this rather than just doing it:** "I looked at it and it seemed
 fine" is not a gate, and it is not repeatable. Naming the rows makes the review
 finite, and makes a second review a re-run rather than a fresh act of judgement.
+
+**Consequences:** no code or documentation change. The repository stays private
+until the rows above are checked, and D12 places this between D9 and the public
+flip. Every row is checkable today; the last one by `git ls-remote origin` (D11).
 
 ---
 
@@ -531,6 +590,11 @@ role stack, not after.
 the question "is this done?" from being asked, and each of these steps is
 individually easy to do out of order. Reviewing before the docs are true, or
 publishing before the review, both cost more to undo than to sequence.
+
+**Consequences:** no code or documentation change. The repository's private
+status becomes a gate with a defined exit rather than an open state, and the
+walkthrough recording is explicitly decoupled from it. `docs/DEMO.md` remains the
+procedure for standing the AWS side back up when that recording happens.
 
 ---
 
