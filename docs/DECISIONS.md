@@ -505,7 +505,7 @@ absence let D4's miss survive. `README.md`'s three unbuilt-work lists and
 
 ## D10 — Publication is gated on an independent security review, and the reviewer is not Claude
 
-**Decided:** 2026-09-01 · **Status:** decided
+**Decided:** 2026-09-01 · **Status:** executed
 
 The repository stays private until an adversarial review passes. The reviewer is
 Codex, via `/crosscheck`, alongside the repo's own `/security-review`. A second
@@ -535,9 +535,21 @@ one is not hypothetical — it is precisely what D6 had to retract.
 fine" is not a gate, and it is not repeatable. Naming the rows makes the review
 finite, and makes a second review a re-run rather than a fresh act of judgement.
 
-**Consequences:** no code or documentation change. The repository stays private
-until the rows above are checked, and D12 places this between D9 and the public
-flip. Every row is checkable today; the last one by `git ls-remote origin` (D11).
+**Consequences:** no code or documentation change from recording the gate
+itself. The repository stays private until the rows above are checked, and D12
+places this between D9 and the public flip. Every row is checkable today; the
+last one by `git ls-remote origin` (D11).
+
+**The review ran on 2026-09-01** — Codex over a clean clone of exactly the
+publishable tree (tracked files + full history; local untracked state excluded),
+four passes on one thread, alongside a Claude-side `/security-review` of the
+remediation diff, which found nothing. First verdict: **FAIL**, three findings —
+an unrevokable orphaned API key, refusals and post-mutation failures escaping
+the audit guarantee, and `backend/README.md` denying mutation exists. All fixed
+code-first (D13). The re-runs tightened the fix twice more (D13 records those
+edges too). Final verdict at `6eb3ef9`: **PASS**, all eight rows and the
+doc-claim clause. What remains of D12's sequence is the operator's: the flip
+itself.
 
 ---
 
