@@ -354,6 +354,35 @@ split. No backend, API, or frontend change — the new test reads files off disk
 
 ---
 
+## D8 — The platform role's `sts:AssumeRole` is scoped by tag, not by name or account list
+
+**Decided:** 2026-08-31 · **Status:** executed
+
+`platform-role.yaml` allows `sts:AssumeRole` on any role carrying
+`Project=shut-it-down-aws`, the tag `scanner-role.yaml` puts on every role it
+creates. Verified against real AWS in both directions: a tagged scanner role
+assumes; an untagged decoy that trusted the platform role was refused.
+
+**Why not `"*"`:** it was, and it granted more than the published policy claimed.
+
+**Why not a `ScannerRoleName` parameter.** One parameter means one name for the
+whole class. Accommodating a target that overrode `RoleName` removes access to
+every target still on the default — it cannot support a heterogeneous set at all.
+Tag-scoping is *why* an overridden `RoleName` works.
+
+**Why not a `CommaDelimitedList` of target account ids.** It needs a platform
+redeploy per student, which fights self-service onboarding.
+
+**The tag is a namespace guard, not an authorization boundary** — a target's
+owner controls its own tags. The boundary stays where it was: the target's trust
+policy plus its external ID (D6). The coupling is silent, so
+`test_platform_role_template.py` pins both templates to the same tag string.
+
+**Consequences:** recorded after the fact — the rationale was in `a05b872`'s
+commit message and nowhere a decisions reader would look.
+
+---
+
 ---
 
 ## Template
