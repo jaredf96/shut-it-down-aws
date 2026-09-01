@@ -121,7 +121,11 @@ def test_advertised_prices_match_the_backends_own_price_table(cost_metadata):
         "LabInstanceStopped": stopped_root,
         "LabInstanceRunning": round(monthly(EC2_HOURLY["t3.micro"]) + stopped_root, 2),
         "NatGateway": round(monthly(NAT_GATEWAY_HOURLY) + monthly(PUBLIC_IPV4_HOURLY), 2),
-        "LoadBalancer": monthly(ALB_HOURLY),
+        # An internet-facing ALB is billed its hourly rate PLUS the public
+        # IPv4 address AWS allocates for it. Pinning it at the hourly rate
+        # alone understated it by $3.65/mo until a real deploy showed the
+        # address in describe-addresses.
+        "LoadBalancer": round(monthly(ALB_HOURLY) + monthly(PUBLIC_IPV4_HOURLY), 2),
         "Database": round(monthly(RDS_HOURLY["db.t3.micro"]) + 20 * RDS_STORAGE_GB_MONTH, 2),
         "ArtifactBucket": 0.0,
     }
@@ -145,14 +149,24 @@ def test_the_totals_are_the_sum_of_what_is_on_by_default(cost_metadata):
 
 
 def test_the_script_quotes_the_same_rates_as_the_template(cost_metadata):
-    """`lab-fixtures.sh` prints these at the operator; they must be the same two."""
+    """`lab-fixtures.sh` prints these at the operator; they must be the same numbers.
+
+    It quotes the opt-in rates as well as the totals because it adds them up:
+    reporting only the baseline understated an all-opt-ins stack by $71/month,
+    in a tool whose entire subject is spend nobody noticed.
+    """
     script = SCRIPT_PATH.read_text()
-    quoted = {
-        name: float(re.search(rf'^{name}="([\d.]+)"$', script, re.MULTILINE).group(1))
-        for name in ("RATE_DEPLOYED_BASELINE", "RATE_RUNNING_EQUIVALENT")
+    expected = {
+        "RATE_DEPLOYED_BASELINE": cost_metadata["Totals"]["DeployedBaseline"],
+        "RATE_RUNNING_EQUIVALENT": cost_metadata["Totals"]["RunningRateEquivalent"],
+        "RATE_NAT_GATEWAY": cost_metadata["Resources"]["NatGateway"],
+        "RATE_LOAD_BALANCER": cost_metadata["Resources"]["LoadBalancer"],
+        "RATE_DATABASE": cost_metadata["Resources"]["Database"],
     }
-    assert quoted["RATE_DEPLOYED_BASELINE"] == cost_metadata["Totals"]["DeployedBaseline"]
-    assert quoted["RATE_RUNNING_EQUIVALENT"] == cost_metadata["Totals"]["RunningRateEquivalent"]
+    for name, value in expected.items():
+        match = re.search(rf'^{name}="([\d.]+)"$', script, re.MULTILINE)
+        assert match, f"{name} is not defined in lab-fixtures.sh"
+        assert float(match.group(1)) == value, name
 
 
 # --- what it creates, and when ----------------------------------------------

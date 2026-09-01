@@ -31,10 +31,13 @@ ALB_NAME="shut-it-down-lab-alb"
 # Monthly rates in USD, quoted so `up` can say what it just started charging.
 # These are duplicated from the template's ShutItDownFixtureCost metadata, which
 # in turn mirrors backend/app/pricing/static_prices.py.
-# tests/test_lab_fixtures_template.py pins all three against each other — do not
-# edit one of them alone.
+# tests/test_lab_fixtures_template.py pins every one of them against that
+# metadata — do not edit one of them alone.
 RATE_DEPLOYED_BASELINE="4.37"
 RATE_RUNNING_EQUIVALENT="11.96"
+RATE_NAT_GATEWAY="36.50"
+RATE_LOAD_BALANCER="20.08"
+RATE_DATABASE="14.71"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATE="$ROOT/deploy/cloudformation/lab-fixtures.yaml"
@@ -245,12 +248,52 @@ cmd_up() {
 
 # --- status -----------------------------------------------------------------
 
+# Decimal addition, because the rate is the one number here that must not be
+# rounded into a reassuring shape.
+_add() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.2f", a + b }'; }
+
+_enabled() { echo "$1" | grep -q "^$2[[:space:]]*true"; }
+
+# What the stack is actually charging, given which opt-ins are on. Quoting the
+# baseline alone here understated an all-opt-ins stack by $71/month — in a tool
+# whose entire subject is unnoticed spend.
+print_rate() {
+  local params="$1"
+  local stopped="$RATE_DEPLOYED_BASELINE" running="$RATE_RUNNING_EQUIVALENT" extra=""
+
+  if _enabled "$params" CreateNatGateway; then
+    stopped="$(_add "$stopped" "$RATE_NAT_GATEWAY")"
+    running="$(_add "$running" "$RATE_NAT_GATEWAY")"
+    extra+=" + NAT Gateway \$$RATE_NAT_GATEWAY"
+  fi
+  if _enabled "$params" CreateLoadBalancer; then
+    stopped="$(_add "$stopped" "$RATE_LOAD_BALANCER")"
+    running="$(_add "$running" "$RATE_LOAD_BALANCER")"
+    extra+=" + load balancer \$$RATE_LOAD_BALANCER"
+  fi
+  if _enabled "$params" CreateDatabase; then
+    stopped="$(_add "$stopped" "$RATE_DATABASE")"
+    running="$(_add "$running" "$RATE_DATABASE")"
+    extra+=" + database \$$RATE_DATABASE"
+  fi
+
+  echo
+  echo "Rate: \$$stopped/mo as configured, instance stopped."
+  echo "      \$$running/mo if it is left running."
+  if [[ -n "$extra" ]]; then
+    echo "      baseline \$$RATE_DEPLOYED_BASELINE$extra"
+  fi
+  echo "NAT data processing and S3 storage are unpriced, so both are floors."
+}
+
 cmd_status() {
+  local params=""
   if stack_exists; then
     echo "Stack $STACK_NAME in $REGION: PRESENT"
-    aws_ cloudformation describe-stacks --stack-name "$STACK_NAME" \
+    params="$(aws_ cloudformation describe-stacks --stack-name "$STACK_NAME" \
       --query "Stacks[0].Parameters[?starts_with(ParameterKey, 'Create')].[ParameterKey,ParameterValue]" \
-      --output text | sed 's/^/    /'
+      --output text)"
+    echo "$params" | sed 's/^/    /'
   else
     echo "Stack $STACK_NAME in $REGION: absent — the canonical state between walkthroughs"
   fi
@@ -266,10 +309,7 @@ cmd_status() {
 
   echo "$standing" | sed 's/^/    /'
   if echo "$standing" | grep -qv '^CHECK FAILED'; then
-    echo
-    echo "Rate: \$$RATE_DEPLOYED_BASELINE/mo at the stopped baseline,"
-    echo "      \$$RATE_RUNNING_EQUIVALENT/mo with the instance running."
-    echo "Opt-in fixtures add to both — see the cost table in the template."
+    print_rate "$params"
   fi
   # A check that could not run is a failed command here too, not a footnote.
   if echo "$standing" | grep -q '^CHECK FAILED'; then

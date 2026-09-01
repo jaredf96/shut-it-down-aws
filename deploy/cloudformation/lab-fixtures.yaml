@@ -20,7 +20,7 @@
 #
 #   * Deployed baseline, after the instance is stopped .... $4.37/month
 #   * Running-rate equivalent, before it is stopped ....... $11.96/month
-#   * All three opt-in resources enabled ................. $72.01/month
+#   * All three opt-in resources enabled ................. $75.66/month
 #
 # Those are monthly *rates*, not what a walkthrough costs. An hour of recording
 # at the baseline rate is under a cent. The rate only becomes a bill if the
@@ -77,7 +77,7 @@ Metadata:
       CreateNatGateway:
         default: NAT Gateway ($36.50/mo, and the floor is higher)
       CreateLoadBalancer:
-        default: Application load balancer ($16.43/mo)
+        default: Application load balancer ($20.08/mo)
       CreateDatabase:
         default: RDS database ($14.71/mo)
 
@@ -94,7 +94,7 @@ Metadata:
       LabInstanceStopped: 0.64
       LabInstanceRunning: 8.23
       NatGateway: 36.50
-      LoadBalancer: 16.43
+      LoadBalancer: 20.08
       Database: 14.71
       ArtifactBucket: 0.0
     Totals:
@@ -151,7 +151,14 @@ Parameters:
     Type: String
     Default: "false"
     AllowedValues: ["true", "false"]
-    Description: An internet-facing ALB with no targets behind it ($16.43/mo).
+    Description: >-
+      An internet-facing ALB with no targets behind it. $20.08/mo is what the
+      flag costs you: $16.43 for the balancer plus $3.65 for the public IPv4
+      address AWS allocates for it, which turns up in describe-addresses as an
+      untagged, requester-managed allocation owned by amazon-elb. The scanner
+      reports those as two findings — a $16.43 load balancer and a $3.65
+      associated Elastic IP — and is right to; it was this aggregate that was
+      wrong, and only a real deploy showed it. Like the NAT figure, a floor.
 
   CreateDatabase:
     Type: String

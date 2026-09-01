@@ -89,7 +89,7 @@ which is why stopping the instance costs the demo nothing.
 
 The expensive three are **off by default** and opt in one at a time — pass
 `--nat` ($36.50/mo, and that is a floor: the backend does not price NAT data
-processing at all), `--alb` ($16.43/mo), or `--rds` ($14.71/mo, and it needs
+processing at all), `--alb` ($20.08/mo), or `--rds` ($14.71/mo, and it needs
 `LAB_FIXTURES_DB_PASSWORD` in the environment). Enable them for a recording,
 not for a standing test bed.
 

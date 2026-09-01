@@ -327,6 +327,20 @@ can recompute every figure from `app/pricing/static_prices.py`. A cost written i
 a comment drifts the moment the price table changes, and this stack's one job is
 to be honest about what it costs.
 
+**Two figures were wrong until the stack was actually deployed** (2026-09-01,
+all opt-ins, ~12 minutes, $0.019). Both are recorded because both were invisible
+to a test that only compares the template against `static_prices.py`:
+
+- The advertised ALB cost was $16.43, the hourly rate alone. An internet-facing
+  ALB also gets a public IPv4 address AWS bills separately, visible in
+  `describe-addresses` as an untagged, requester-managed allocation owned by
+  `amazon-elb`. Enabling `--alb` costs $20.08. The scanner was right all along —
+  it reports the balancer and its address as two findings; the template's
+  aggregate was what lied.
+- `lab-fixtures.sh status` quoted the $4.37 baseline regardless of which opt-ins
+  were on, understating an all-opt-ins stack by $71/month. It now sums what is
+  actually enabled, and the test pins the per-opt-in rates too.
+
 **Considered and rejected:** folding the fixtures into `scanner-role.yaml` (that
 template is what students run — the rule that it creates nothing billable is
 worth more than one fewer file); using the account's default VPC (a deleted
