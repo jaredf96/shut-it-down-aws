@@ -207,12 +207,15 @@ Every scanned resource is stamped with an `estimated_monthly_cost` (USD) and a
 `cost_source`, and the scan `summary` carries a fleet total. Alerts are ranked by
 spend within each severity.
 
-**Read the number as a floor, not an estimate.** Fixed hourly rates, EBS
-GB-month storage and RDS allocated storage are priced. NAT Gateway data
-processing and S3 storage are not, so the figure can only be lower than the real
-bill. The UI says "minimum monthly exposure" for the same reason. (The field keeps the name
-`estimated_monthly_cost`: renaming it would churn persisted scans, the alert
-model, and the provider contract without making it any more accurate.)
+**Read the number as a floor at on-demand list prices, not an estimate of the
+bill.** Fixed hourly rates, EBS GB-month storage and RDS allocated storage are
+priced. NAT Gateway data processing and S3 storage are not, so list-price spend
+can only be higher than the figure — while Free Tier, credits, and Savings
+Plans/Reserved discounts sit outside the model and can bring the actual bill
+below it. The UI says "minimum monthly exposure" with the same scope. (The
+field keeps the name `estimated_monthly_cost`: renaming it would churn
+persisted scans, the alert model, and the provider contract without making it
+any more accurate.)
 
 - **`static`** (default) — a built-in price map (`app/pricing/static_prices.py`)
   for common lab resources. Credible ballpark, no AWS calls, always available.

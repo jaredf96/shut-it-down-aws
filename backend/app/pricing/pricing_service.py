@@ -1,12 +1,14 @@
-"""Cost floors: static baseline, with optional live Pricing API overrides.
+"""Cost floors at on-demand list prices: static baseline, optional live overrides.
 
-**What this produces is a minimum, not an estimate.** Fixed hourly rates, EBS
-GB-month storage and RDS allocated storage are priced. NAT Gateway data
-processing and S3 storage are not, so the number returned here can only be lower
-than the real bill — never higher. The UI and docs say "minimum monthly
-exposure" for that reason; the field is still named `estimated_monthly_cost`
-because renaming it would churn the persisted scans, the alert model, and the
-provider contract for no gain in accuracy.
+**What this produces is a minimum at on-demand list prices, not an estimate of
+the bill.** Fixed hourly rates, EBS GB-month storage and RDS allocated storage
+are priced. NAT Gateway data processing and S3 storage are not, so list-price
+spend can only be higher than this number — while Free Tier, credits, and
+Savings Plans/Reserved discounts sit outside the model and can bring the actual
+bill below it. The UI and docs say "minimum monthly exposure" with the same
+scope; the field is still named `estimated_monthly_cost` because renaming it
+would churn the persisted scans, the alert model, and the provider contract for
+no gain in accuracy.
 
 The two that remain unpriced are the expensive ones to fix: both need data a
 Describe call does not return (bytes processed, bytes stored), so both mean

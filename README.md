@@ -51,10 +51,12 @@ below is honest about which category it falls into.
   (ALB/NLB/Classic), RDS, S3
 - Concurrent multi-region sweeps (a 17-region scan runs in ~12s)
 - Cross-account access via **STS assume-role**, with per-account tagging
-- Minimum monthly exposure per resource — static price map, optional live AWS
-  Pricing API refinement. Deliberately a floor, not a forecast: NAT data
-  processing and S3 storage are unpriced, so the real bill is higher, never
-  lower
+- Minimum monthly exposure per resource **at on-demand list prices** — static
+  price map, optional live AWS Pricing API refinement. Deliberately a floor on
+  that basis, not a forecast: NAT data processing and S3 storage are unpriced,
+  so list-price spend is higher, never lower — while Free Tier, credits, and
+  Savings Plans/Reserved discounts sit outside the model and can bring the
+  actual bill below the figure
 - Risk levels + plain-English cost explanation and suggested action
 - Resource age from the AWS API's own launch/creation time, so a scan reads as a
   finding ("oldest running 87 days") rather than an inventory
@@ -74,7 +76,7 @@ below is honest about which category it falls into.
   audit attribution. The browser client reads `VITE_API_KEY` at build time, so the
   UI is an operator scaffold rather than a production multi-user login
 - Liveness/readiness split, structured `503`s, request correlation IDs
-- 213 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
+- 219 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 

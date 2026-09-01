@@ -340,13 +340,15 @@ export default function Dashboard() {
               )}
 
               {/* Said plainly rather than hidden in a tooltip: the headline
-                  figure is a floor, and a reader who takes it for a forecast
-                  will under-budget. */}
+                  figure is a floor at on-demand list prices, and a reader who
+                  takes it for a forecast will under-budget. */}
               {summary && (
                 <p className="summary__caveat">
-                  <strong>Minimum monthly exposure</strong> — hourly rates, EBS storage and RDS
-                  storage for the resources found. NAT data processing and S3 storage are not
-                  priced, so the real bill is higher, never lower.
+                  <strong>Minimum monthly exposure at on-demand list prices</strong> — hourly
+                  rates, EBS storage and RDS storage for the resources found. NAT data
+                  processing and S3 storage are not priced, so list-price spend is higher,
+                  never lower; Free Tier, credits, or reserved pricing can bring the actual
+                  bill below it.
                 </p>
               )}
 
