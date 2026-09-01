@@ -1,10 +1,12 @@
 # Decisions
 
 Why this file exists: the architecture here is sound, but several **seams** were
-built to keep options open — `AUTH_REQUIRED` optional, `tenant_id=None` falling
-back to local, billing behind `billing_enabled()`. An open seam with no recorded
-choice does not read as a decision. It reads as an open question, and it gets
-re-encountered and re-litigated every session, at a small cost each time.
+built to keep options open — `AUTH_REQUIRED` optional (still is, and that is the
+normal mode — D4), `tenant_id=None` falling back to local (now `workspace_id` —
+D3), billing behind `billing_enabled()` (removed outright — D2). An open seam
+with no recorded choice does not read as a decision. It reads as an open
+question, and it gets re-encountered and re-litigated every session, at a small
+cost each time.
 
 This file records which side of each seam is live. Add an entry when a decision
 gets made, not when the code changes — the point is to stop paying the tax before
@@ -216,7 +218,7 @@ residue. `backend/tests/test_workspaces.py` pins both directions.
 
 ## D4 — Auth stays optional and local-first
 
-**Confirmed:** 2026-08-25 · **Status:** already true in code, no change needed
+**Decided:** 2026-08-25 · **Status:** executed
 
 `AUTH_REQUIRED` unset is the **primary** mode, not a dev convenience: no API key,
 default workspace, admin `local` user. API keys are the opt-in path for shared
@@ -239,10 +241,12 @@ later. Nothing else in the docs survived that sweep, verified by
 every remaining hit is historical text in this file, a different sense of the
 word, or an affirmative post-D1 statement.
 
-This entry's Status — "already true in code, no change needed" — describes the
-code and not the two documents this decision changed, which is why no
-consequences review was ever triggered. The Status is left as written; this
-paragraph is the correction.
+This entry's Status was originally recorded as "already true in code, no change
+needed" — a description of the code and not of the two documents this decision
+changed, which is why no consequences review was ever triggered. It moved to
+`executed` only once the D9-tightened bar was met: `db224df` landed, both
+documents were re-read against the entry, and the suite passed. D5 keeps that
+original wording, because for D5 it is true.
 
 ---
 
@@ -424,8 +428,18 @@ owner controls its own tags. The boundary stays where it was: the target's trust
 policy plus its external ID (D6). The coupling is silent, so
 `test_platform_role_template.py` pins both templates to the same tag string.
 
-**Consequences:** recorded after the fact — the rationale was in `a05b872`'s
-commit message and nowhere a decisions reader would look.
+**Consequences:** the decision landed as `a05b872`, and this entry records it
+after the fact — the rationale sat in that commit's message and nowhere a
+decisions reader would look. What it changed:
+`deploy/cloudformation/platform-role.yaml` is created with the tag-conditioned
+`sts:AssumeRole` statement; `deploy/terraform/main.tf` moves `sts:AssumeRole`
+out of its `"*"`-resource statement into a matching tag-conditioned one;
+`docs/SECURITY.md` gains § The platform's own runtime role, and
+`deploy/README.md` says which existing role hosted deployments attach the
+policy to instead; `backend/tests/test_platform_role_template.py` is created to
+pin both templates to the same tag string, supported by the
+`policy_document_under()` helper in `backend/tests/conftest.py` and the
+heading-anchored block selection in `backend/tests/test_onboarding_template.py`.
 
 ---
 
@@ -558,7 +572,11 @@ publish. All three deleted, reflogs expired, objects pruned: 1190 loose objects
 to 921 packed.
 
 **Consequences:** `git for-each-ref` now returns three refs — `main` and the two
-the remote tracks. D10's last row became checkable in one command.
+the remote tracks. D10's last row became checkable in one command. `CLAUDE.md`
+§ Conventions gained the no-trailer rule in `51bc60e`, a consequence of this
+entry: the rewrite's one-author, zero-trailer history only holds if every
+session overrides the harness default that appends one, and `DECISIONS.md` is
+read on demand while `CLAUDE.md` loads every session.
 
 ---
 
