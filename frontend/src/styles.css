@@ -1098,6 +1098,13 @@ h1::before {
   border-radius: var(--radius-sm);
 }
 
+/* The text column must be allowed to shrink below its widest token, or a
+   role ARN forces the whole page to scroll sideways on phone widths. */
+.accounts__item > div,
+.users__item > div {
+  min-width: 0;
+}
+
 .accounts__list,
 .users__list {
   list-style: none;
@@ -1199,6 +1206,7 @@ h1::before {
   font-size: 0.75rem;
   color: var(--text-subtle);
   font-family: var(--font-mono);
+  overflow-wrap: anywhere; /* an ARN is one unbroken token */
 }
 
 .accounts__error,
@@ -1338,11 +1346,12 @@ h1::before {
 
 .cleanup__row {
   display: flex;
+  flex-wrap: wrap; /* the pair stacks on phone widths instead of overflowing */
   gap: 10px;
 }
 
 .cleanup__row label {
-  flex: 1;
+  flex: 1 1 180px;
 }
 
 .cleanup__desc {
