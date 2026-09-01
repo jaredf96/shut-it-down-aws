@@ -36,6 +36,12 @@ frontend/dist/
 .vscode/
 
 # Working handoff notes. They describe defects that are not fixed yet, which is
-# not something to publish, and they go stale the moment the work lands. Keep
-# them local; force-add only if you have decided a specific one belongs in git.
-docs/HANDOFF*.md
+# not something to publish, they go stale the moment the work lands, and they
+# carry live values — external IDs, account ids — that belong nowhere near a
+# remote. Keep them local; force-add only if you have decided a specific one
+# belongs in git.
+#
+# Unanchored on purpose. This said `docs/HANDOFF*.md` and so matched nothing
+# when the baton was written to the repo root, which is where every one of them
+# has actually landed.
+HANDOFF*.md
