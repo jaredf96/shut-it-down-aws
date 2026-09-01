@@ -468,6 +468,41 @@ finite, and makes a second review a re-run rather than a fresh act of judgement.
 
 ---
 
+## D11 — The commit history needs no further rewrite; what was left was local
+
+**Decided:** 2026-09-01 · **Status:** executed
+
+No squash, reword, rebase or author rewrite before publication. The one rewrite
+this repo needed already happened and is complete.
+
+**What was found.** `refs/original/refs/heads/main` was still present — the
+backup ref a `filter-branch` leaves behind. Its tree is byte-identical to the
+current tip, so the rewrite changed no content: it stripped `Co-Authored-By`
+trailers from four commits. `main` is 61 commits, linear, zero merge commits,
+zero trailers, one author identity throughout, using the GitHub noreply address
+that attributes to the account without publishing a personal one. `git ls-remote
+origin` returned exactly `HEAD` and `refs/heads/main` at the same commit, so
+nothing stale had ever been published.
+
+**Why not a cosmetic rewrite anyway.** Sixty-one linear commits with descriptive
+subjects are an asset in a portfolio repository — the history is part of what is
+being shown, not noise to flatten. A rewrite would also orphan the one place a
+document cites a commit by SHA: D8's consequences line names `a05b872`.
+
+**What was actually left, and is now done.** Three refs held dead objects alive
+in the working clone: the `filter-branch` backup above, carrying the four
+commits that still had trailers, and two `refs/codex/turn-diffs/checkpoints/…`
+snapshots from earlier sessions — one still containing `BillingPanel.jsx`, which
+D2 deleted. Git does not push these by default, which is why the remote was
+already clean, but they are exactly what a `git push --mirror` or `--all` would
+publish. All three deleted, reflogs expired, objects pruned: 1190 loose objects
+to 921 packed.
+
+**Consequences:** `git for-each-ref` now returns three refs — `main` and the two
+the remote tracks. D10's last row became checkable in one command.
+
+---
+
 ## Template
 
 ```markdown
