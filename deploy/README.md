@@ -56,7 +56,34 @@ The same image runs on Lambda via the Mangum adapter
 > "Image"), the IAM role, and the API Gateway — left out here to keep the
 > skeleton small.
 
-## 3. Frontend
+## 3. Lab fixtures — the one billable artifact here
+
+Everything above provisions the tool. `cloudformation/lab-fixtures.yaml` is the
+opposite: it creates the *leftovers* the tool is supposed to find, in a target
+account, so `docs/DEMO.md`'s walkthrough has something real to discover.
+
+```bash
+deploy/lab-fixtures.sh up     target      # deploy, then stop the instance
+deploy/lab-fixtures.sh status target      # what is standing, and its rate
+deploy/lab-fixtures.sh down   target      # delete, then verify nothing survived
+```
+
+Two things about it are load-bearing:
+
+**It is separate from `cloudformation/scanner-role.yaml`, permanently.** That
+template is what a student runs in their own account, and it must never create
+anything that costs money. This one exists to cost money. Do not merge them, and
+do not add a fixture to the onboarding template —
+`backend/tests/test_lab_fixtures_template.py` fails if this stack grows an IAM
+principal, which is the other half of the same separation.
+
+**It is ephemeral.** The canonical state between walkthroughs is that the stack
+does not exist. `down` deletes it and then re-checks by tag, exiting non-zero and
+naming survivors, because a project about resources left running cannot leave its
+own fixtures running. The expensive fixtures — NAT Gateway, load balancer, RDS —
+are off unless you pass `--nat`, `--alb` or `--rds`.
+
+## 4. Frontend
 
 Build the static site (`cd frontend && npm run build`) and host `dist/` on S3 +
 CloudFront (or any static host). Set `VITE_API_BASE_URL` to the deployed API and

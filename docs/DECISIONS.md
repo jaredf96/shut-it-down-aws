@@ -278,6 +278,68 @@ trust-policy snippet now names a role rather than an account root;
 `docs/SECURITY.md` gains § Onboarding an account, including what the external ID
 does not do. No backend, API, or frontend change.
 
+## D7 — The walkthrough fixtures are a separate, ephemeral, billable stack
+
+**Decided:** 2026-09-01 · **Status:** executed
+
+`deploy/cloudformation/lab-fixtures.yaml` creates the resources the scanner is
+supposed to find, in a target account, driven by `deploy/lab-fixtures.sh`
+(`up` / `status` / `down`). It is the only artifact in this repo that
+deliberately costs money, it is never merged into the onboarding template, and
+its canonical state between walkthroughs is **not deployed**.
+
+Defaults create an unassociated Elastic IP, an unattached 1 GiB volume, a
+t3.micro that `up` immediately stops, and an empty private bucket — $4.37/month
+at rest. NAT Gateway, load balancer and RDS are each opt-in and default off.
+
+**Why this came up.** `docs/DEMO.md` step 2 said "there is **no stack for
+these**" and told the operator to build four resources by hand, then listed the
+teardown as three account-wide `length()` checks. Every part of that was a
+liability: hand-built fixtures are not reproducible, an account-wide count means
+nothing in an account holding anything else, and the one project whose entire
+thesis is "you forgot to shut something down" was relying on the operator
+remembering to shut something down.
+
+**Why the instance launches running.** CloudFormation cannot declare a stopped
+instance; there is no `State` property on `AWS::EC2::Instance`. The alternatives
+were a custom resource (a Lambda, an execution role, and a new failure mode, to
+set one flag) or documenting the stop. Neither is good, so `up` owns the stop
+instead — a step inside the command that always runs, rather than a line in a
+document that gets skipped. The gap it closes is $11.96/month → $4.37/month.
+
+**Why the severity spread survives the stop.** The unattached volume carries
+MEDIUM whether or not the instance is running, so stopping it trades a MEDIUM
+finding for a LOW one and keeps all four severities. The running instance was
+buying $7.59/month of nothing. That is the whole argument, and it only became
+visible once the resource set was written down.
+
+**Why `down` verifies.** Teardown failures are silent — that is the premise of
+the product. The check filters on `Purpose=lab-fixture` rather than counting the
+account, so it names survivors and works in a shared account, and it looks for an
+RDS snapshot as well as an instance: `AWS::RDS::DBInstance` defaults to
+`DeletionPolicy: Snapshot`, so the default behaviour of the template would have
+left a billed, `describe-db-instances`-invisible leftover after every teardown.
+The template pins `Delete`; the script checks anyway.
+
+**Why the prices are in the template as data.** `ShutItDownFixtureCost` in the
+template metadata is machine-readable so `tests/test_lab_fixtures_template.py`
+can recompute every figure from `app/pricing/static_prices.py`. A cost written in
+a comment drifts the moment the price table changes, and this stack's one job is
+to be honest about what it costs.
+
+**Considered and rejected:** folding the fixtures into `scanner-role.yaml` (that
+template is what students run — the rule that it creates nothing billable is
+worth more than one fewer file); using the account's default VPC (a deleted
+default VPC breaks it, and the teardown stops being complete); enabling
+everything by default (~$80/month standing, for a demo that gains one extra
+severity); creating nothing by default (an elaborate no-op).
+
+**Consequences:** `docs/DEMO.md` § 2 and § After recording rewritten around the
+two commands; `deploy/README.md` gains § 3; `CLAUDE.md` records the two-template
+split. No backend, API, or frontend change — the new test reads files off disk.
+
+---
+
 ---
 
 ## Template

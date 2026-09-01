@@ -232,3 +232,11 @@ Read `deploy/terraform/demo/README.md` before touching `deploy/` — it carries 
 demo stack's rationale and the operational hazards that have caught people out
 (pricing-plan restrictions, the bucket policy as kill switch, edge caches
 surviving a grant removal, failed applies writing state).
+
+**Two CloudFormation templates, and the split is the point (D7).**
+`deploy/cloudformation/scanner-role.yaml` is what a *student* runs: one read-only
+role, nothing billable, ever. `deploy/cloudformation/lab-fixtures.yaml` is the
+only artifact in the repo that deliberately costs money — it creates the
+leftovers the scanner is supposed to find, for the `docs/DEMO.md` walkthrough,
+and it is ephemeral (`deploy/lab-fixtures.sh up|status|down`). Never merge them
+and never add a fixture to the onboarding template.

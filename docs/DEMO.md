@@ -21,7 +21,8 @@ my own account" and "I built a control plane that scans accounts it is not in."
 ## Before you record
 
 Two things have to exist in the target account: the role, and something worth
-finding. They are provisioned separately, and only the first is automated.
+finding. Each has its own stack, and they stay separate on purpose — the role
+costs nothing and the fixtures cost money.
 
 ### 1. The role — the same stack a student runs
 
@@ -59,27 +60,54 @@ aws cloudformation describe-stacks --profile target \
 The `RoleArn` output is what gets registered in the dashboard, together with the
 same external ID.
 
-### 2. Resources worth finding — by hand, for now
+### 2. Resources worth finding — the fixtures stack
 
-There is **no stack for these**. Create them in the target account yourself: an
-unassociated Elastic IP, an unattached EBS volume, a stopped instance with an
-attached volume, and — optional, and by far the priciest — a NAT Gateway.
+[`deploy/cloudformation/lab-fixtures.yaml`](../deploy/cloudformation/lab-fixtures.yaml)
+creates the leftovers, driven by
+[`deploy/lab-fixtures.sh`](../deploy/lab-fixtures.sh):
 
-Set a budget alarm at the same time. A forgotten teardown should page you rather
-than surprise you at the end of the month, and nothing here does that for you.
+```bash
+deploy/lab-fixtures.sh up target
+```
 
-> Automating this as a separate, explicitly opt-in fixtures stack is the obvious
-> next step. It is deliberately not folded into the onboarding template: that
-> template is what students run, and it must never create anything that costs
-> money.
+That deploys the stack and then **stops the instance**, which is not a tidy-up
+step — it is what takes the stack from $11.96/month to $4.37/month.
+CloudFormation cannot declare a stopped instance, so `up` owns the stop rather
+than leaving it to a line in this file that would get skipped.
+
+What you get, and what each one is for:
+
+| Fixture | Reported as | Rate |
+| --- | --- | --- |
+| Unassociated Elastic IP | HIGH | $3.65/mo |
+| Unattached 1 GiB gp3 volume | MEDIUM | $0.08/mo |
+| Stopped instance + 8 GiB root | LOW | $0.64/mo |
+| Empty private bucket | REVIEW | $0 |
+
+Four severities out of one stack. The unattached volume is what carries MEDIUM,
+which is why stopping the instance costs the demo nothing.
+
+The expensive three are **off by default** and opt in one at a time — pass
+`--nat` ($36.50/mo, and that is a floor: the backend does not price NAT data
+processing at all), `--alb` ($16.43/mo), or `--rds` ($14.71/mo, and it needs
+`LAB_FIXTURES_DB_PASSWORD` in the environment). Enable them for a recording,
+not for a standing test bed.
+
+Every figure above is pinned against `backend/app/pricing/static_prices.py` by
+`tests/test_lab_fixtures_template.py`, so the template cannot quietly start
+lying about what it costs. They are also monthly *rates*, not what a recording
+costs — an hour at the baseline is under a cent. The rate only becomes a bill if
+the stack is left standing.
+
+A budget alarm is still worth having, but it is no longer the only thing between
+you and a surprise: `down` verifies (see [After recording](#after-recording)).
 
 Verify CloudTrail is on in the target account before recording — the assumed-role
 event is the most convincing single frame in the video.
 
-> **Tear down the moment you stop recording** — see [After recording](#after-recording).
-> The NAT Gateway is the expensive one; an Elastic IP and a 1 GiB volume are
-> rounding errors, but they are not free. The role costs nothing and is still
-> worth deleting.
+> **The fixtures stack is ephemeral.** Between walkthroughs, the canonical state
+> is that it does not exist. `deploy/lab-fixtures.sh status target` will tell you
+> which it is.
 
 ---
 
@@ -174,21 +202,27 @@ reaches anything that can assume a role."*
 Two teardowns, because there were two setups:
 
 ```bash
+# The findable resources — these are the ones that cost money
+deploy/lab-fixtures.sh down target
+
 # The role — free to leave, but leave nothing behind
 aws cloudformation delete-stack --profile target --stack-name shut-it-down-onboarding
-
-# The findable resources — release the EIP, delete the volume and NAT Gateway,
-# terminate the instance. These are the ones that cost money.
 ```
 
-Then confirm the account is actually clean — teardown failures are quiet and
-expensive:
+`down` empties the bucket, deletes the stack, and then **re-checks**, because
+teardown failures here are quiet and expensive. It finds survivors by the
+`Purpose=lab-fixture` tag rather than by an account-wide count, so it names what
+is left instead of reporting that some number is not zero, and it works in an
+account that holds other things. It also looks for an RDS *snapshot*: an
+`AWS::RDS::DBInstance` defaults to `DeletionPolicy: Snapshot`, and a leftover
+snapshot is billed and invisible to `describe-db-instances`.
+
+**A failed teardown is a failed command** — `down` exits non-zero and prints
+what is still standing. Do not read a clean exit as optimism; it is a checked
+claim. Re-run it after deleting anything it named.
+
+To check the account without deleting anything:
 
 ```bash
-aws ec2 describe-addresses --profile target --query 'length(Addresses)'
-aws ec2 describe-volumes   --profile target --query 'length(Volumes)'
-aws ec2 describe-nat-gateways --profile target \
-  --query "length(NatGateways[?State=='available'])"
+deploy/lab-fixtures.sh status target
 ```
-
-All three should return `0`.

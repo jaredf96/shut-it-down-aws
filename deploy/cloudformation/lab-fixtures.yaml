@@ -1,0 +1,580 @@
+# Shut It Down — findable lab fixtures.
+#
+# Creates resources that are *supposed* to be found: the leftovers a student
+# forgets after a tutorial. It exists so docs/DEMO.md's cross-account
+# walkthrough has something real to discover instead of resources built by hand.
+#
+# THIS STACK COSTS MONEY. That is the entire difference between it and
+# deploy/cloudformation/scanner-role.yaml, which a student runs and which must
+# never create anything billable. The two are separate files for exactly that
+# reason — do not merge them, and do not add a fixture to the onboarding
+# template. Nothing here creates an IAM principal, and a test enforces that.
+#
+# It is also *ephemeral*. The canonical operational state between walkthroughs
+# is that this stack does not exist. deploy/lab-fixtures.sh drives that
+# lifecycle: `up` deploys and stops the instance, `down` deletes and then
+# verifies nothing survived. Teardown failures in a stack like this are quiet
+# and expensive, which is why `down` re-checks rather than trusting the delete.
+#
+# Cost posture (per-resource figures in ShutItDownFixtureCost below):
+#
+#   * Deployed baseline, after the instance is stopped .... $4.37/month
+#   * Running-rate equivalent, before it is stopped ....... $11.96/month
+#   * All three opt-in resources enabled ................. $72.01/month
+#
+# Those are monthly *rates*, not what a walkthrough costs. An hour of recording
+# at the baseline rate is under a cent. The rate only becomes a bill if the
+# stack is left standing, which is what `down` exists to prevent.
+#
+# Intrinsic functions are written in FULL form (`Ref:`, `Fn::GetAtt:`) rather
+# than the `!Ref` short form, matching scanner-role.yaml. Both are valid
+# CloudFormation; the full form is plain YAML, so `yaml.safe_load` can read this
+# file without a custom loader, and tests/test_lab_fixtures_template.py depends
+# on that — it pins the advertised costs against backend's own price table so
+# the two cannot drift.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Deliberately wasteful lab leftovers for a Shut It Down walkthrough: an idle
+  Elastic IP, an unattached volume, a small instance and an empty bucket, with
+  NAT Gateway, load balancer and database available opt-in. BILLABLE — delete
+  the stack when the recording is done.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Cheap fixtures (created by default)
+        Parameters:
+          - CreateIdleAddress
+          - CreateOrphanVolume
+          - CreateLabInstance
+          - CreateArtifactBucket
+      - Label:
+          default: Expensive fixtures (opt in one at a time)
+        Parameters:
+          - CreateNatGateway
+          - CreateLoadBalancer
+          - CreateDatabase
+          - DatabasePassword
+      - Label:
+          default: Sizing
+        Parameters:
+          - InstanceType
+          - RootVolumeSizeGb
+          - OrphanVolumeSizeGb
+          - LatestAmiId
+    ParameterLabels:
+      CreateIdleAddress:
+        default: Unassociated Elastic IP ($3.65/mo)
+      CreateOrphanVolume:
+        default: Unattached EBS volume ($0.08/mo)
+      CreateLabInstance:
+        default: EC2 instance ($0.64/mo stopped, $8.23/mo running)
+      CreateArtifactBucket:
+        default: Empty S3 bucket ($0)
+      CreateNatGateway:
+        default: NAT Gateway ($36.50/mo, and the floor is higher)
+      CreateLoadBalancer:
+        default: Application load balancer ($16.43/mo)
+      CreateDatabase:
+        default: RDS database ($14.71/mo)
+
+  # Advertised monthly cost in USD per resource, at the backend's own
+  # HOURS_PER_MONTH. Machine-readable on purpose: a doc comment claiming
+  # "$3.65" drifts silently the moment app/pricing/static_prices.py changes,
+  # and this stack's whole job is to be honest about what it costs. The test
+  # recomputes every figure below from that module.
+  ShutItDownFixtureCost:
+    Currency: USD
+    Resources:
+      IdleAddress: 3.65
+      OrphanVolume: 0.08
+      LabInstanceStopped: 0.64
+      LabInstanceRunning: 8.23
+      NatGateway: 36.50
+      LoadBalancer: 16.43
+      Database: 14.71
+      ArtifactBucket: 0.0
+    Totals:
+      DeployedBaseline: 4.37
+      RunningRateEquivalent: 11.96
+
+Parameters:
+  CreateIdleAddress:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Allocate an Elastic IP and attach it to nothing. The scanner's only HIGH
+      finding in the default set, and the cheapest way to produce one.
+
+  CreateOrphanVolume:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Create a small unattached gp3 volume. This is what makes the default set
+      report MEDIUM whether or not the instance is running.
+
+  CreateLabInstance:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Launch one small instance. CloudFormation cannot declare a stopped
+      instance, so this one starts running and deploy/lab-fixtures.sh stops it
+      immediately afterwards. Stopped it reports LOW and costs only its root
+      volume; left running it reports MEDIUM and costs twelve times as much.
+
+  CreateArtifactBucket:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Create an empty, fully private bucket. Free, and the scanner's REVIEW
+      finding. Nothing writes to it — an empty bucket is what lets the stack
+      delete cleanly.
+
+  CreateNatGateway:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      The single most expensive thing here, and the one most worth showing:
+      $36.50/month including its own address, plus data processing that the
+      backend does not price at all. Enable it for a recording, not for a
+      standing test bed.
+
+  CreateLoadBalancer:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: An internet-facing ALB with no targets behind it ($16.43/mo).
+
+  CreateDatabase:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      A db.t3.micro postgres instance with 20 GiB of storage ($14.71/mo).
+      Requires DatabasePassword — RDS rejects an empty one, so enabling this
+      without setting it fails the stack rather than creating anything.
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    Default: ""
+    MaxLength: 128
+    Description: >-
+      Master password, used only when CreateDatabase is true. Nothing ever
+      connects to this database; it exists to be listed by rds:DescribeDBInstances.
+      There is deliberately no default — a working default password in a
+      published template is worth more to an attacker than this fixture is to
+      anyone.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: >-
+      Instance type for the lab instance. Priced by the backend's static table,
+      so a type missing from EC2_HOURLY will be reported as an unpriced finding.
+
+  RootVolumeSizeGb:
+    Type: Number
+    Default: 8
+    MinValue: 8
+    MaxValue: 64
+    Description: >-
+      Root volume for the lab instance. This is the entire cost of the instance
+      once it is stopped, so keep it at the minimum unless a bigger number is
+      the point.
+
+  OrphanVolumeSizeGb:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 64
+    Description: Size of the unattached volume. 1 GiB is enough to be found.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: >-
+      Resolved from the SSM public parameter so the template carries no
+      hardcoded, region-specific AMI id.
+
+Conditions:
+  WantIdleAddress:
+    Fn::Equals: [{ Ref: CreateIdleAddress }, "true"]
+  WantOrphanVolume:
+    Fn::Equals: [{ Ref: CreateOrphanVolume }, "true"]
+  WantLabInstance:
+    Fn::Equals: [{ Ref: CreateLabInstance }, "true"]
+  WantArtifactBucket:
+    Fn::Equals: [{ Ref: CreateArtifactBucket }, "true"]
+  WantNatGateway:
+    Fn::Equals: [{ Ref: CreateNatGateway }, "true"]
+  WantLoadBalancer:
+    Fn::Equals: [{ Ref: CreateLoadBalancer }, "true"]
+  WantDatabase:
+    Fn::Equals: [{ Ref: CreateDatabase }, "true"]
+
+Resources:
+  # --- Network scaffolding -------------------------------------------------
+  #
+  # A VPC, two subnets, an internet gateway and a route table. Every one of
+  # these is free, which is why none of them is behind a condition: gating a
+  # $0 resource on whichever billable fixture happens to need it buys nothing
+  # and makes the conditions compound. The stack builds its own rather than
+  # using the account's default VPC so that deleting the stack is a complete
+  # teardown, and so it still works in an account whose default VPC is gone.
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-vpc
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # Two subnets in two AZs: an ALB requires it, and an RDS subnet group
+  # requires it. Neither sets MapPublicIpOnLaunch — a public IPv4 address on
+  # the instance would add $3.65/month for connectivity nothing here uses.
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone:
+        Fn::Select: [0, { "Fn::GetAZs": "" }]
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-subnet-a
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock: 10.20.2.0/24
+      AvailabilityZone:
+        Fn::Select: [1, { "Fn::GetAZs": "" }]
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-subnet-b
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-igw
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: Vpc
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: Vpc
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-public
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  SubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetA
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  SubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetB
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  # --- Cheap fixtures, on by default ---------------------------------------
+
+  # Unassociated Elastic IP. Billed hourly since February 2024 whether or not
+  # anything is attached, which is exactly why the scanner rates it HIGH.
+  IdleAddress:
+    Type: AWS::EC2::EIP
+    Condition: WantIdleAddress
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: left-over-lab-ip
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # The volume nobody remembers creating. Deliberately not attached to
+  # LabInstance: an unattached volume reports MEDIUM on its own, so the default
+  # set keeps that severity even once the instance is stopped down to LOW.
+  OrphanVolume:
+    Type: AWS::EC2::Volume
+    Condition: WantOrphanVolume
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AvailabilityZone:
+        Fn::Select: [0, { "Fn::GetAZs": "" }]
+      Size:
+        Ref: OrphanVolumeSizeGb
+      VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: tutorial-scratch-volume
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # The half-finished tutorial. Launches running because CloudFormation has no
+  # way to declare otherwise; deploy/lab-fixtures.sh stops it as part of `up`.
+  # The root volume is declared explicitly rather than inherited from the AMI
+  # so its size — the whole cost of a stopped instance — is a parameter rather
+  # than a property of whichever AMI the SSM parameter resolves to today.
+  LabInstance:
+    Type: AWS::EC2::Instance
+    Condition: WantLabInstance
+    Properties:
+      ImageId:
+        Ref: LatestAmiId
+      InstanceType:
+        Ref: InstanceType
+      SubnetId:
+        Ref: SubnetA
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize:
+              Ref: RootVolumeSizeGb
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: tutorial-web-server
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # Empty and private. Free to keep, and the only fixture whose severity is
+  # REVIEW rather than a cost claim — the scanner cannot see what a bucket
+  # holds, so it says so instead of guessing.
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Condition: WantArtifactBucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName:
+        Fn::Sub: shut-it-down-lab-fixtures-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: cloud-lab-artifacts
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # --- Expensive fixtures, opt in ------------------------------------------
+
+  NatAddress:
+    Type: AWS::EC2::EIP
+    Condition: WantNatGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: lab-vpc-nat-address
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # The classic surprise line item. Its address is tagged too, or the scanner
+  # falls back to showing the raw public IP as the resource name.
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: WantNatGateway
+    Properties:
+      SubnetId:
+        Ref: SubnetA
+      AllocationId:
+        Fn::GetAtt: [NatAddress, AllocationId]
+      Tags:
+        - Key: Name
+          Value: lab-vpc-nat
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # An explicit security group rather than the VPC's default: the default group
+  # is not tagged and not deleted with the stack, so attaching to it would leave
+  # the teardown check unable to tell whether anything survived.
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: WantLoadBalancer
+    Properties:
+      GroupDescription: Ingress for the fixture load balancer. No targets behind it.
+      VpcId:
+        Ref: Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP, to the nothing that is registered here
+      Tags:
+        - Key: Name
+          Value: shut-it-down-lab-alb-sg
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: WantLoadBalancer
+    DependsOn: GatewayAttachment
+    Properties:
+      Name: shut-it-down-lab-alb
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+        - Ref: SubnetA
+        - Ref: SubnetB
+      SecurityGroups:
+        - Ref: LoadBalancerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: lab-alb
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: WantDatabase
+    Properties:
+      DBSubnetGroupDescription: Subnets for the fixture database.
+      SubnetIds:
+        - Ref: SubnetA
+        - Ref: SubnetB
+      Tags:
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+  # DeletionPolicy is spelled out because AWS::RDS::DBInstance defaults to
+  # Snapshot, not Delete. Inheriting that default would leave a snapshot behind
+  # after every teardown — billed, invisible to `describe-db-instances`, and
+  # precisely the kind of leftover this whole project exists to find.
+  Database:
+    Type: AWS::RDS::DBInstance
+    Condition: WantDatabase
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: shut-it-down-lab-postgres
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      AllocatedStorage: "20"
+      StorageType: gp2
+      MasterUsername: labadmin
+      MasterUserPassword:
+        Ref: DatabasePassword
+      DBSubnetGroupName:
+        Ref: DatabaseSubnetGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 0
+      Tags:
+        - Key: Name
+          Value: training-postgres
+        - Key: Project
+          Value: shut-it-down-aws
+        - Key: Purpose
+          Value: lab-fixture
+
+Outputs:
+  LabInstanceId:
+    Condition: WantLabInstance
+    Description: >-
+      The instance to stop. deploy/lab-fixtures.sh reads this and stops it as
+      part of `up`; stopping it is what takes the stack from $11.96/month to
+      $4.37/month.
+    Value:
+      Ref: LabInstance
+
+  ArtifactBucketName:
+    Condition: WantArtifactBucket
+    Description: >-
+      Emptied before the stack is deleted. CloudFormation refuses to delete a
+      bucket with anything in it, and nothing writes here, so this is a
+      belt-and-braces step rather than an expected one.
+    Value:
+      Ref: ArtifactBucket
+
+  FixtureTag:
+    Description: >-
+      The tag every billable fixture carries. `lab-fixtures.sh down` filters
+      the post-teardown check on it, so a survivor is reported by name rather
+      than by an account-wide count that a shared account would make useless.
+    Value: Purpose=lab-fixture
