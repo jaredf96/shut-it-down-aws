@@ -619,6 +619,11 @@ status becomes a gate with a defined exit rather than an open state, and the
 walkthrough recording is explicitly decoupled from it. `docs/DEMO.md` remains the
 procedure for standing the AWS side back up when that recording happens.
 
+**Step 4 happened on 2026-09-01**, performed by the operator, with D9–D11
+closed and D10's review passed. The public demo was redeployed the same day so
+the published bundle matches the published source. What remains of the sequence
+is step 5; the walkthrough stays decoupled (D9).
+
 ---
 
 ## D13 — The audit guarantee is delivered by the code, not scoped down in the docs
