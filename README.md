@@ -112,12 +112,12 @@ it is not claimed today.
 
 ## 📸 Screenshots
 
-| Dashboard | Scan comparison |
-| --- | --- |
-| ![Dashboard](docs/img/dashboard.png) | ![Diff between two scans](docs/img/history-diff.png) |
+| Dashboard | Scan comparison | Guided cleanup |
+| --- | --- | --- |
+| ![Dashboard](docs/img/dashboard.png) | ![Diff between two scans](docs/img/history-diff.png) | ![Cleanup panel mid dry-run](docs/img/cleanup-preview.png) |
 
-_Both captured from the fixture demo, so no real account or resource identifiers
-appear._
+_All three captured from the fixture demo, so no real account or resource
+identifiers appear._
 
 ---
 
