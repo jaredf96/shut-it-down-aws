@@ -299,9 +299,9 @@ it must clear **seven independent gates**:
    which would run the action against the wrong account entirely.
 6. **Live precondition re-check** — state is re-verified against AWS at execution
    time; the client is never trusted.
-7. **Audited** — every authenticated attempt is logged, including refusals and
-   failures — even a non-admin caller or the feature flag being off leaves an
-   entry. With persistence on, a real mutation is additionally preceded by a
+7. **Audited** — every authenticated, well-formed attempt is logged, including
+   refusals and failures — even a non-admin caller or the feature flag being
+   off leaves an entry. With persistence on, a real mutation is additionally preceded by a
    durable `initiated` entry; if that entry cannot be written, the action is
    refused outright (fail closed), so no mutation runs without durable
    evidence of intent. A zero-config install (no DynamoDB) keeps its records

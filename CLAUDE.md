@@ -101,8 +101,8 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
    must equal `resource_id`, `dry_run` defaults to true, a named `account_id`
    must be one the workspace registered (never fall back to default credentials —
    that runs the action against the host account), live precondition re-check
-   against AWS (never trust the client), **every authenticated attempt
-   audited** (including refusals/failures). With persistence on, a real
+   against AWS (never trust the client), **every authenticated, well-formed
+   attempt audited** (including refusals/failures). With persistence on, a real
    mutation is **write-ahead audited**: an `initiated` row is persisted before
    AWS is touched, the action is refused (`audit_unavailable`, fail closed) if
    that row cannot be written — store unreachable or a DynamoDB error alike —

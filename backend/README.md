@@ -170,8 +170,11 @@ workflow. It is safe by construction — every layer must pass:
    you must send `dry_run: false` to actually mutate.
 5. **Live precondition re-check.** State is verified against AWS at execution
    time, never trusting the client (e.g. an EIP must still be unassociated).
-6. **Everything is audited.** Every attempt — refused, failed, dry-run, or
-   executed — is written to the audit log (`GET /cleanup/audit`).
+6. **Everything is audited.** Every authenticated, well-formed attempt —
+   refused, failed, dry-run, or executed — is recorded: to the audit log
+   (`GET /cleanup/audit`) when persistence is on, and always to the
+   application log. Real mutations are write-ahead audited
+   (`docs/SECURITY.md` § Audit logging).
 
 **Supported actions** (intentionally small):
 
