@@ -255,7 +255,10 @@ _CLEANUP_STATUS_CODE = {
     "dry_run": 200,
     "confirmation_mismatch": 400,
     "unsupported_action": 400,
+    "forbidden": 403,
+    "disabled": 403,
     "unknown_account": 404,
+    "audit_unavailable": 503,
     "precondition_failed": 409,
     "error": 502,
 }
@@ -279,19 +282,18 @@ def cleanup_audit(limit: int = 50, workspace: str = Depends(get_current_workspac
 
 
 @app.post("/cleanup/execute")
-def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_admin)):
+def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(get_current_principal)):
     """Run one guided cleanup action (admin only).
 
-    Hard-gated by `ENABLE_CLEANUP_ACTIONS`. Requires `confirm_resource_id` to
-    equal `resource_id`. Defaults to a dry run; pass `dry_run=false` to mutate.
-    An `account_id` the workspace has not registered is refused (404), never run
-    against the server's own credentials.
+    Deliberately not `Depends(require_admin)`: every gate — the admin role and
+    the `ENABLE_CLEANUP_ACTIONS` flag included — lives in
+    `cleanup_service.execute`, so refused attempts are audited like any other
+    outcome (D13). This route resolves the principal and maps statuses to HTTP
+    codes, nothing more. Requires `confirm_resource_id` to equal `resource_id`.
+    Defaults to a dry run; pass `dry_run=false` to mutate. An `account_id` the
+    workspace has not registered is refused (404), never run against the
+    server's own credentials.
     """
-    if not config.cleanup_enabled():
-        raise HTTPException(
-            status_code=403, detail="Cleanup actions are disabled in this environment."
-        )
-
     result = cleanup_service.execute(
         action=payload.action,
         resource_id=payload.resource_id,
@@ -299,8 +301,7 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(require_a
         region=payload.region,
         account_id=payload.account_id,
         dry_run=payload.dry_run,
-        workspace_id=principal["workspace_id"],
-        user_id=principal["user_id"],
+        principal=principal,
     )
 
     code = _CLEANUP_STATUS_CODE.get(result["status"], 400)

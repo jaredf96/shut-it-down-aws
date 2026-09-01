@@ -252,8 +252,11 @@ The single mutating feature is **off unless explicitly enabled**, and even then
 clears seven independent gates:
 
 1. **Env flag** — without `ENABLE_CLEANUP_ACTIONS=true`, `POST /cleanup/execute`
-   returns `403 "Cleanup actions are disabled in this environment."`
-2. **Admin role** — members are rejected (`403`).
+   returns `403 "Cleanup actions are disabled in this environment."` The
+   refusal is audited (`disabled`).
+2. **Admin role** — members are rejected (`403`, audited as `forbidden`). This
+   check runs *before* the env flag, so a non-admin's refusal never reveals
+   whether cleanup is enabled.
 3. **Typed confirmation** — `confirm_resource_id` must equal `resource_id`.
 4. **Dry-run by default** — the request body defaults `dry_run: true`; you must
    send `dry_run: false` to mutate.
@@ -286,13 +289,26 @@ Every cleanup attempt — refused, failed, dry-run, or executed — produces an
 audit entry (`app/repositories/audit_repository.py`,
 `app/services/cleanup_service.py`) capturing **who** (workspace + user), **what**
 (action, resource, region, account), the **outcome** (`success` / `dry_run` /
-`confirmation_mismatch` / `unsupported_action` / `unknown_account` /
-`precondition_failed` / `error`), a detail message, and a timestamp.
+`forbidden` / `disabled` / `confirmation_mismatch` / `unsupported_action` /
+`unknown_account` / `precondition_failed` / `error` / `audit_unavailable`), a
+detail message, and a timestamp. "Every attempt" includes the two refusals that
+used to happen before the service was reached: a non-admin caller (`forbidden`)
+and the feature flag being off (`disabled`) — all gates live in the service
+precisely so no refusal can bypass the trail (D13).
 
 - Durable entries live in DynamoDB (`AUDIT#<workspace>`), workspace-scoped and
   time-sortable; `GET /cleanup/audit` lists them newest-first.
 - The service **also** logs every attempt to the application logger, so there is
   a record even when persistence is disabled.
+- **A real mutation is write-ahead audited.** Before any `dry_run: false`
+  action touches AWS, the service persists an `initiated` entry; if that write
+  fails, the action is refused with `audit_unavailable` (503) — persistence
+  *enabled but unreachable* must not produce an unrecorded mutation, while
+  persistence disabled (zero-config local mode) still runs with log-only
+  records as documented above. If the store fails *after* the mutation, the
+  caller still receives the outcome and the `initiated` entry stands as
+  outcome-unknown, logged at error level, instead of the attempt vanishing
+  into a 500.
 
 Because users are first-class (workspace + user id + role), every mutating action is
 attributable to a specific user.

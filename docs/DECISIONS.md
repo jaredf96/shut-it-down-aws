@@ -616,6 +616,66 @@ procedure for standing the AWS side back up when that recording happens.
 
 ---
 
+## D13 — The audit guarantee is delivered by the code, not scoped down in the docs
+
+**Decided:** 2026-09-01 · **Status:** executed
+
+D10's first run (reviewer: Codex) returned FAIL with three findings: user
+deletion could strand a live API key with no revocation path; the admin-role
+and env-flag refusals — and any mutation whose audit write failed afterwards —
+escaped the "every attempt audited" guarantee; and `backend/README.md`'s opening
+claimed no mutating actions exist at all. Each had a cheap docs-side fix
+(weaken the claim); the code-side fix was chosen for all three, and the shape of
+the two non-trivial ones was settled in one conferral round that converged with
+two hardenings Codex added.
+
+What was built:
+
+- **Key-first deletion.** `delete_user` revokes the `APIKEY#` row before the
+  `USERS#` row. The two writes are independent, and only this order fails safe:
+  cut short, it leaves a listed user with a dead key and a working retry — the
+  reverse left a key that authenticated forever, unrevokable because the retry
+  404'd before reaching it.
+- **Every cleanup gate lives in the service.** The route no longer checks the
+  env flag or uses `require_admin`; it resolves the principal, and
+  `cleanup_service.execute` runs role and flag as its first two audited gates
+  (`forbidden`, `disabled`). Role stays ahead of flag on purpose — the order the
+  route used to enforce — so a member's refusal never reveals whether cleanup is
+  enabled.
+- **Write-ahead audit for real mutations.** Before any `dry_run: false` action
+  touches AWS, an `initiated` entry is persisted; if it cannot be, the action is
+  refused (`audit_unavailable`, 503) — the initiated write *is* the pre-flight,
+  so there is no check-then-act race. A store failure after the mutation returns
+  the outcome to the caller and leaves the initiated row standing as
+  outcome-unknown, logged at error level. The guarantee this buys is exact: **no
+  mutation starts without durable evidence of intent.** Zero-config mode
+  (persistence disabled) is unchanged — log-only records, by design.
+
+**Deliberately not built:** idempotency keys / a full attempt state machine
+(conditional writes so a client retry cannot mutate twice). The live
+precondition re-check already blunts retries — stopping a stopped instance
+no-ops, a released EIP and a deleted volume fail their preconditions. Revisit if
+an action whose retry is not naturally idempotent ever enters the catalog, or if
+reconciliation of outcome-unknown rows becomes a real operator task.
+
+**Also rejected:** scoping the docs claim to "attempts that reach the service"
+(abandons the guarantee); auditing at the route layer (splits the audit
+vocabulary across layers and puts business logic in routes); a per-request
+user-row check in auth (closes orphaned keys generally, at the cost of doubling
+reads on every authenticated request).
+
+**Consequences:** `backend/app/repositories/user_repository.py` (delete order),
+`backend/app/services/cleanup_service.py` (gates, write-ahead, guarded terminal
+write), `backend/app/main.py` (route + status map), and
+`backend/app/repositories/audit_repository.py` (`build_record` extracted) carry
+the code; `backend/tests/test_cleanup.py` and `test_users.py` pin the new
+behavior, including both injected-outage paths. `frontend/src/data/contract.d.ts`
+widens the status union. Docs re-read against the change: `backend/README.md`'s
+opening warning rewritten (the third finding), root `README.md` gate 7,
+`docs/SECURITY.md` §§ Cleanup gates + Audit logging, and `CLAUDE.md` invariant 2.
+
+---
+
 ## Template
 
 ```markdown

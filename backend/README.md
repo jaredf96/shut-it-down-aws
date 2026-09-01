@@ -3,9 +3,14 @@
 FastAPI + boto3 service that **read-only** scans an AWS account for resources
 commonly left running after labs and tutorials.
 
-> ⚠️ This version only **reads** and **recommends**. There are no delete, stop,
-> terminate, or release actions. Any cleanup is something you do manually in the
-> AWS console after reviewing the dashboard.
+> ⚠️ **Scanning never mutates AWS.** The one feature that can is guided
+> cleanup: a deliberately tiny catalog (stop EC2, release an unassociated
+> Elastic IP, delete an unattached EBS volume) that is **off by default** and
+> clears seven independent gates before acting
+> (`docs/SECURITY.md` § Cleanup actions are disabled by default). Terminating
+> instances and deleting S3/RDS/NAT are deliberately unsupported — anything
+> beyond the catalog you do manually in the AWS console after reviewing the
+> dashboard.
 
 > Requires **Python 3.10+** (the models use the `X | None` typing syntax).
 > The Docker image and CI use Python 3.12.

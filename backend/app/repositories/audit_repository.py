@@ -21,6 +21,17 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def build_record(entry: dict) -> dict:
+    """Stamp an entry with `id` + `created_at` without persisting it.
+
+    Exists for the one caller that must hand back a well-formed record when
+    persistence is enabled but unreachable (the cleanup service's fail-closed
+    and post-mutation paths); everything else goes through `append`.
+    """
+    created_at = _now()
+    return {**entry, "created_at": created_at, "id": f"{created_at}_{uuid.uuid4().hex[:8]}"}
+
+
 def append(workspace_id: str, entry: dict) -> dict:
     """Persist an audit entry and return it (with id + created_at).
 
@@ -28,8 +39,7 @@ def append(workspace_id: str, entry: dict) -> dict:
     cleanup service additionally logs every entry to the application logger, so
     there is always a record somewhere.
     """
-    created_at = _now()
-    record = {**entry, "created_at": created_at, "id": f"{created_at}_{uuid.uuid4().hex[:8]}"}
+    record = build_record(entry)
 
     if is_enabled():
         get_table().put_item(Item={"pk": f"AUDIT#{workspace_id}", "sk": record["id"], **record})

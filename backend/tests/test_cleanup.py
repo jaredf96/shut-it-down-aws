@@ -2,12 +2,15 @@ import boto3
 import pytest
 from fastapi.testclient import TestClient
 
+from app.errors import PersistenceUnavailable
 from app.main import app
 from app.repositories import audit_repository
 from app.services import cleanup_service
 from tests.conftest import REGION
 
 client = TestClient(app)
+
+ADMIN = {"workspace_id": "t", "user_id": "u", "role": "admin"}
 
 
 @pytest.fixture
@@ -30,6 +33,25 @@ def test_cleanup_disabled_by_default_returns_clear_error():
     )
     assert res.status_code == 403
     assert res.json()["detail"] == "Cleanup actions are disabled in this environment."
+
+
+def test_disabled_refusal_is_audited(dynamo_table):
+    """The env-flag refusal used to 403 in the route, invisibly to the audit
+    trail — the exact gap the D10 review found. It now flows through the
+    service like every other refused attempt."""
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": "i-1",
+            "confirm_resource_id": "i-1",
+            "region": REGION,
+        },
+    )
+    assert res.status_code == 403
+    entries = client.get("/cleanup/audit").json()["entries"]
+    refusal = next(e for e in entries if e["status"] == "disabled")
+    assert refusal["resource_id"] == "i-1"
 
 
 def test_catalog_excludes_dangerous_actions():
@@ -101,6 +123,9 @@ def test_stop_ec2_dry_run_does_not_stop(dynamo_table, cleanup_on):
         "Name"
     ]
     assert state == "running"
+    # A dry run mutates nothing, so it gets no write-ahead `initiated` entry.
+    entries = client.get("/cleanup/audit").json()["entries"]
+    assert not any(e["status"] == "initiated" for e in entries)
 
 
 def test_stop_ec2_real_execution_stops_and_audits_success(dynamo_table, cleanup_on):
@@ -125,8 +150,12 @@ def test_stop_ec2_real_execution_stops_and_audits_success(dynamo_table, cleanup_
         "Name"
     ]
     assert state in ("stopping", "stopped")
+    # A real mutation leaves two entries: the write-ahead `initiated` row and
+    # the outcome. (No order assertion — both can land in the same millisecond,
+    # where the sort key's uuid suffix breaks the tie arbitrarily.)
     entries = client.get("/cleanup/audit").json()["entries"]
-    assert any(e["status"] == "success" and e["resource_id"] == iid for e in entries)
+    statuses = sorted(e["status"] for e in entries if e["resource_id"] == iid)
+    assert statuses == ["initiated", "success"]
 
 
 # --- Preconditions (live state re-check) ---------------------------------
@@ -324,6 +353,12 @@ def test_member_cannot_execute_cleanup(dynamo_table, cleanup_on):
         },
     )
     assert res.status_code == 403  # admin role required
+    # The refusal must not reveal whether cleanup is even enabled.
+    assert res.json()["detail"] == "Admin role required."
+    # ...and it is audited, under the member's own workspace (D13).
+    refusals = [e for e in audit_repository.list_entries("t") if e["status"] == "forbidden"]
+    assert len(refusals) == 1
+    assert refusals[0]["resource_id"] == "i-1"
 
 
 # --- Service-level audit guarantee ---------------------------------------
@@ -338,10 +373,92 @@ def test_failed_attempt_is_audited_even_without_persistence(monkeypatch):
         resource_id="i-1",
         confirm_resource_id="i-2",
         region=REGION,
-        workspace_id="t",
-        user_id="u",
+        principal=ADMIN,
     )
     assert record["status"] == "confirmation_mismatch"
     assert record["id"]  # audit record was created
     # Nothing persisted (disabled), so listing is empty.
     assert audit_repository.list_entries("t") == []
+
+
+# --- Write-ahead audit (D13) ----------------------------------------------
+
+
+def test_unauditable_mutation_is_refused_before_acting(dynamo_table, cleanup_on, monkeypatch):
+    """Persistence enabled but unreachable -> no real mutation may start.
+
+    The write-ahead `initiated` row IS the pre-flight check: if it cannot be
+    written, there would be no durable record that anything ran, so the
+    service refuses before touching AWS.
+    """
+    ec2 = boto3.client("ec2", region_name=REGION)
+    iid = ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)["Instances"][0][
+        "InstanceId"
+    ]
+
+    def _down(workspace_id, entry):
+        raise PersistenceUnavailable("injected outage")
+
+    monkeypatch.setattr(audit_repository, "append", _down)
+
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": iid,
+            "confirm_resource_id": iid,
+            "region": REGION,
+            "dry_run": False,
+        },
+    )
+    assert res.status_code == 503
+    assert "audit store is unreachable" in res.json()["detail"]
+    # Refused before the mutation boundary: still running.
+    state = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]["State"][
+        "Name"
+    ]
+    assert state == "running"
+
+
+def test_late_audit_failure_keeps_the_outcome_and_the_initiated_row(
+    dynamo_table, cleanup_on, monkeypatch
+):
+    """The store dies AFTER the mutation -> the client still learns the
+    outcome, and the initiated row stands as outcome-unknown instead of the
+    attempt vanishing into a 500."""
+    ec2 = boto3.client("ec2", region_name=REGION)
+    iid = ec2.run_instances(ImageId="ami-12345678", MinCount=1, MaxCount=1)["Instances"][0][
+        "InstanceId"
+    ]
+
+    real_append = audit_repository.append
+    calls = {"n": 0}
+
+    def _dies_after_initiated(workspace_id, entry):
+        calls["n"] += 1
+        if calls["n"] == 1:  # the write-ahead row goes through
+            return real_append(workspace_id, entry)
+        raise PersistenceUnavailable("injected outage")
+
+    monkeypatch.setattr(audit_repository, "append", _dies_after_initiated)
+
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": iid,
+            "confirm_resource_id": iid,
+            "region": REGION,
+            "dry_run": False,
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+    state = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]["State"][
+        "Name"
+    ]
+    assert state in ("stopping", "stopped")
+    # Only the initiated row persisted — the trail shows intent, not a hole.
+    entries = client.get("/cleanup/audit").json()["entries"]
+    statuses = [e["status"] for e in entries if e["resource_id"] == iid]
+    assert statuses == ["initiated"]

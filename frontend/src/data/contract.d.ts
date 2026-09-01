@@ -228,12 +228,20 @@ export interface CleanupResult {
   status:
     | "success"
     | "dry_run"
+    /** Caller is not an admin — refused before any other gate. */
+    | "forbidden"
+    /** ENABLE_CLEANUP_ACTIONS is off — the whole feature is disabled. */
+    | "disabled"
     | "confirmation_mismatch"
     | "unsupported_action"
     /** The named account is not registered to this workspace — refused, never retargeted. */
     | "unknown_account"
     | "precondition_failed"
-    | "error";
+    | "error"
+    /** Audit store enabled but unreachable — a real mutation is refused, fail closed. */
+    | "audit_unavailable"
+    /** Audit-log only, never returned: a real mutation was about to run (write-ahead). */
+    | "initiated";
   detail: string;
   created_at: string;
   id: string;

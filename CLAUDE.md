@@ -92,14 +92,21 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 ## Hard invariants — do not relax these
 
 1. **Scanning never mutates AWS.** Only `Describe*`/`List*`/`Get*` calls in scanners.
-2. **Cleanup safety gates** (`services/cleanup_service.py` + routes): env flag
-   `ENABLE_CLEANUP_ACTIONS` off by default (403 with exact message "Cleanup
-   actions are disabled in this environment."), admin-only, `confirm_resource_id`
+2. **Cleanup safety gates** — every one of them in
+   `services/cleanup_service.py`, so every refusal is audited (D13; the route
+   only resolves the principal and maps statuses to HTTP codes): admin-only
+   (checked first, so a member's refusal never reveals the flag's state), env
+   flag `ENABLE_CLEANUP_ACTIONS` off by default (403 with exact message
+   "Cleanup actions are disabled in this environment."), `confirm_resource_id`
    must equal `resource_id`, `dry_run` defaults to true, a named `account_id`
    must be one the workspace registered (never fall back to default credentials —
    that runs the action against the host account), live precondition re-check
    against AWS (never trust the client), **every attempt audited**
-   (including refusals/failures). Action catalog stays tiny: stop EC2, release
+   (including refusals/failures). A real mutation is **write-ahead audited**:
+   an `initiated` row is persisted before AWS is touched, the action is refused
+   (`audit_unavailable`, fail closed) if that row cannot be written, and a
+   store failure after the mutation leaves the row standing as outcome-unknown
+   rather than losing the attempt. Action catalog stays tiny: stop EC2, release
    unassociated EIP, delete unattached EBS. Terminate/S3/RDS/NAT deletion are
    deliberately NOT in the catalog — listed in `NOT_SUPPORTED` instead. No bulk ops.
    The dashboard sends the account of the finding it is acting on: the service is

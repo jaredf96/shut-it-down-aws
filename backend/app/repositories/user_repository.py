@@ -131,7 +131,14 @@ def get_user(workspace_id: str, user_id: str) -> dict | None:
 
 
 def delete_user(workspace_id: str, user_id: str) -> bool:
-    """Delete a user and revoke their API key. Returns True if it existed."""
+    """Delete a user and revoke their API key. Returns True if it existed.
+
+    The key row goes first. These are two independent deletes, and only one
+    order fails safe: if the second delete is lost, this order leaves a listed
+    user with a dead key and a retry that works, while the reverse leaves a
+    live key whose user row is gone — authenticating forever, unrevokable,
+    because a retry 404s before reaching the key.
+    """
     if not is_enabled():
         return False
     item = _get_raw(workspace_id, user_id)
@@ -139,9 +146,9 @@ def delete_user(workspace_id: str, user_id: str) -> bool:
         return False
 
     table = get_table()
-    table.delete_item(Key={"pk": _users_pk(workspace_id), "sk": user_id})
     if item.get("key_hash"):
         table.delete_item(Key={"pk": f"APIKEY#{item['key_hash']}", "sk": "#"})
+    table.delete_item(Key={"pk": _users_pk(workspace_id), "sk": user_id})
     return True
 
 
