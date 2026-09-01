@@ -317,6 +317,8 @@ you would want afterwards.
   secrets manager (AWS Secrets Manager / SSM) rather than plain environment
   variables.
 - **Cleanup blast radius.** Even the safe actions are irreversible for EIP/EBS.
+  Consider soft-delete/snapshot-first, per-workspace allow-lists, and a second
+  approver for destructive actions.
 - **Outbound notifications are unthrottled.** There is no deduplication,
   cooldown, or send-rate limit, so a persistent finding re-alerts on every scan
   and a noisy account can flood a channel. Delivery is also synchronous: a slow
@@ -326,8 +328,6 @@ you would want afterwards.
   outbound messages to that workspace's configured Slack/email channels. Whether
   sending should be admin-only is a product decision, deliberately left open —
   but it is an abuse vector worth closing before untrusted members exist.
-  Consider soft-delete/snapshot-first, per-workspace allow-lists, and a second
-  approver for destructive actions.
 - **Data lifecycle.** No retention/TTL on scans or audit entries; add DynamoDB
   TTL and a workspace data-deletion path.
 - **Observability.** Add structured logging, metrics, tracing, and alerting on
