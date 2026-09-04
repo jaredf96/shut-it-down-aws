@@ -235,7 +235,7 @@ credential handling, least-privilege IAM, and TLS stayed, and matter more.
 **Consequences:** `docs/SECURITY.md` § Production gaps drops the entries about
 open registration and public-API abuse protection. **`README.md` § Planned
 hardening needed the same pass and did not get it** — it kept listing "WAF and
-server-side quotas", the same concern under another name, until `db224df` a week
+server-side quotas", the same concern under another name, until `3139a64` a week
 later. Nothing else in the docs survived that sweep, verified by
 `git grep -inE "quota|plan limit|subscription|abuse|registration|multi-tenant|front door|stripe|billing|saas|waf|throttl" -- '*.md'`:
 every remaining hit is historical text in this file, a different sense of the
@@ -244,7 +244,7 @@ word, or an affirmative post-D1 statement.
 This entry's Status was originally recorded as "already true in code, no change
 needed" — a description of the code and not of the two documents this decision
 changed, which is why no consequences review was ever triggered. It moved to
-`executed` only once the D9-tightened bar was met: `db224df` landed, both
+`executed` only once the D9-tightened bar was met: `3139a64` landed, both
 documents were re-read against the entry, and the suite passed. D5 keeps that
 original wording, because for D5 it is true.
 
@@ -428,7 +428,7 @@ owner controls its own tags. The boundary stays where it was: the target's trust
 policy plus its external ID (D6). The coupling is silent, so
 `test_platform_role_template.py` pins both templates to the same tag string.
 
-**Consequences:** the decision landed as `a05b872`, and this entry records it
+**Consequences:** the decision landed as `91aa8c1`, and this entry records it
 after the fact — the rationale sat in that commit's message and nowhere a
 decisions reader would look. What it changed:
 `deploy/cloudformation/platform-role.yaml` is created with the tag-conditioned
@@ -492,10 +492,10 @@ against it.
 AWS. They overlap because they answer different questions, and collapsing them
 into one list loses two of the three answers.
 
-**Consequences:** four contradictions closed — the README test count (`8bb48cc`),
-the misplaced mitigation sentence in `docs/SECURITY.md` (`1daa113`),
+**Consequences:** four contradictions closed — the README test count (`edeb3d4`),
+the misplaced mitigation sentence in `docs/SECURITY.md` (`70c36f7`),
 `docs/img/README.md` turned from authoring scaffolding into a manifest
-(`f9452dc`), and D4's README leftover (`db224df`). This file's preamble rule for
+(`791f46e`), and D4's README leftover (`3139a64`). This file's preamble rule for
 `executed` is tightened by the paragraph above, and every entry now carries a
 `**Consequences:**` line naming the documents it touched — the mechanism whose
 absence let D4's miss survive. `README.md`'s three unbuilt-work lists and
@@ -547,7 +547,7 @@ remediation diff, which found nothing. First verdict: **FAIL**, three findings �
 an unrevokable orphaned API key, refusals and post-mutation failures escaping
 the audit guarantee, and `backend/README.md` denying mutation exists. All fixed
 code-first (D13). The re-runs tightened the fix twice more (D13 records those
-edges too). Final verdict at `6eb3ef9`: **PASS**, all eight rows and the
+edges too). Final verdict at `edbe59f`: **PASS**, all eight rows and the
 doc-claim clause. What remains of D12's sequence is the operator's: the flip
 itself.
 
@@ -567,7 +567,7 @@ subjects.
 
 **Why not a cosmetic rewrite anyway.** The linear history is part of what the
 repository shows, not noise to flatten — and a rewrite would orphan every place
-this file cites a commit by SHA (D8 names `a05b872`; D10 records its verdict
+this file cites a commit by SHA (D8 names `91aa8c1`; D10 records its verdict
 against a tip).
 
 **What was actually left, and is now done.** Three local-only refs held
@@ -579,7 +579,7 @@ deleted, reflogs expired, objects pruned.
 
 **Consequences:** `git for-each-ref` now returns three refs — `main` and the two
 the remote tracks. D10's last row became checkable in one command. `CLAUDE.md`
-§ Conventions carries the author-identity rule (`51bc60e`), a consequence of
+§ Conventions carries the author-identity rule (`f9eebe3`), a consequence of
 this entry: the convention only holds if every session applies it, and
 `DECISIONS.md` is read on demand while `CLAUDE.md` loads every session.
 
@@ -704,7 +704,7 @@ opening warning rewritten (the third finding), root `README.md` gate 7,
 
 ## D14 — The interview-prep file and the toolchain narration come out of the history
 
-**Decided:** 2026-09-04 · **Status:** decided
+**Decided:** 2026-09-04 · **Status:** executed
 
 D11 said no further rewrite. This supersedes it for one case it did not weigh:
 removing content that should not have been published, rather than tidying
@@ -724,7 +724,7 @@ checkable rather than a matter of trust.
 
 **Why this and not D11.** D11 argues against a *cosmetic* squash, and its
 stated cost is that a rewrite orphans every commit this file cites by SHA (it
-names D8's `a05b872`). That cost is real and is paid here — `git filter-repo`
+names D8's `91aa8c1`). That cost is real and is paid here — `git filter-repo`
 remaps the hashes inside commit messages on its own, and the citations in this
 file are repaired in the commit that follows the rewrite. What D11 never weighs
 is content that should not be in the repository at all, because when it was
@@ -740,10 +740,16 @@ old objects, and an unreferenced commit can still be served by URL until it is
 garbage-collected. This reduces exposure; it does not revoke it. That is a
 reason to act sooner, not a reason to skip it.
 
-**Consequences:** `main` is rewritten and force-pushed; every SHA changes. D11
-moves to *superseded by D14* — its account of what the earlier rewrite did, and
-the author-identity rule it carries, both still stand. The SHA citations in
-this file are repaired against the new history. `CLAUDE.md` § Conventions is
+**Consequences:** `main` is rewritten; every SHA changed. All 88 commits
+survive, the tip tree is byte-identical to the one before the rewrite, one
+author identity throughout, and `git for-each-ref` returns `refs/heads/main`
+alone. `git filter-repo` remapped the hashes commit *messages* cite; the seven
+this file cites were repaired by hand from its commit map (`a05b872` →
+`91aa8c1`, `db224df` → `3139a64`, `8bb48cc` → `edeb3d4`, `1daa113` →
+`70c36f7`, `f9452dc` → `791f46e`, `6eb3ef9` → `edbe59f`, `51bc60e` →
+`f9eebe3`) and every one resolves to the same commit it named before. D11 moves
+to *superseded by D14* — its account of what the earlier rewrite did, and the
+author-identity rule it carries, both still stand. `CLAUDE.md` § Conventions is
 unchanged: the no-trailer, one-author rules are exactly what kept this rewrite
 to a single concern.
 
