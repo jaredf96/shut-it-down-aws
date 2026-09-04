@@ -120,12 +120,19 @@ Resources:
                   - rds:DescribeDBInstances
                   - s3:ListAllMyBuckets
                   - s3:GetBucketLocation
-                # The scanner has to enumerate resources it has not seen yet, so
-                # it cannot name them in advance. The EC2/ELB/RDS describes and
-                # s3:ListAllMyBuckets have no resource-level form at all.
-                # s3:GetBucketLocation does take a bucket ARN, but the only one
-                # that fits an account-wide sweep is arn:aws:s3:::*, which is the
-                # same set of buckets. So "*" is the narrowest this can be.
+                # Seven of the nine do not support resource-level permissions
+                # and require "*": the five EC2 describes, the ELB describe, and
+                # s3:ListAllMyBuckets. Two do — rds:DescribeDBInstances takes a
+                # db resource, s3:GetBucketLocation takes a bucket.
+                #
+                # Both stay in this wildcard statement deliberately. This role is
+                # created inside the account being scanned and neither action has
+                # a cross-account path, so an ARN naming this account's own
+                # db/bucket resources covers exactly what "*" already reaches
+                # here — it would express the intent without removing a
+                # permission. The scanner also has nothing narrower to name: it
+                # enumerates DB instances it has not seen and queries whichever
+                # buckets ListAllMyBuckets returned.
                 Resource: "*"
       Tags:
         - Key: Project
