@@ -33,7 +33,10 @@ There are two credential modes, by design:
   deployments. Give those credentials a **read-only** policy.
 - **Multi-account** — a workspace registers AWS accounts with a cross-account
   **role ARN**; the app calls `sts:AssumeRole` to get short-lived credentials per
-  account (`session_for_account`). The app's own principal never holds standing
+  account (`session_for_account`); each assumed session is named
+  `shutitdown.<workspace>.<user>`, so the target account's own trail shows who
+  caused the reads (scope and limits under Audit logging). The app's own
+  principal never holds standing
   access to the scanned accounts — only the ability to assume narrowly-scoped
   roles they explicitly grant, with an `ExternalId`. The API treats the external
   ID as optional, for manually-configured roles; the onboarding template below
@@ -337,8 +340,26 @@ validation (422) resolves no workspace to record under.
   stands as outcome-unknown, logged at error level, instead of the attempt
   vanishing into a 500.
 
-Because users are first-class (workspace + user id + role), every mutating action is
-attributable to a specific user.
+Because users are first-class (workspace + user id + role), every mutating
+action in **this app's** audit trail is attributable to a specific user.
+
+The scanned account's *own* CloudTrail is a second trail, and it is the one that
+account's owner reads. Every `sts:AssumeRole` the app makes names its session
+after the principal that caused it — `shutitdown.<workspace>.<user>` — so an
+event there arrives as
+`assumed-role/ShutItDownScannerRole/shutitdown.class-101.<user id>` rather than
+as one constant shared by every user of every workspace.
+
+Two limits, because this is an attribution aid and not an identity assertion.
+The name is **asserted by the caller**: STS does not verify it, so it is
+evidence about which principal this app believed was acting, not proof to the
+account's owner. And with `AUTH_REQUIRED` unset there is exactly one principal
+(`default`/`local`), so the name is the same for everyone using that install —
+per-user attribution in the target account needs `AUTH_REQUIRED=true` and a key
+per user. `SourceIdentity`, which STS does propagate and lock, is deliberately
+not used: the target's trust policy would have to grant `sts:SetSourceIdentity`
+or the AssumeRole fails outright, which would break every account already
+onboarded with the published template (D18).
 
 ## Outbound email transport
 

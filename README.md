@@ -50,7 +50,8 @@ below is honest about which category it falls into.
 - Seven read-only scanners: EC2, EBS, Elastic IPs, NAT Gateways, Load Balancers
   (ALB/NLB/Classic), RDS, S3
 - Concurrent multi-region sweeps (a 17-region scan runs in ~12s)
-- Cross-account access via **STS assume-role**, with per-account tagging
+- Cross-account access via **STS assume-role**, with per-account tagging and
+  sessions named after the caller
 - Minimum monthly exposure per resource **at on-demand list prices** — static
   price map, optional live AWS Pricing API refinement. Deliberately a floor on
   that basis, not a forecast: NAT data processing and S3 storage are unpriced,
@@ -78,7 +79,7 @@ below is honest about which category it falls into.
 - Liveness/readiness split, structured `503`s, request correlation IDs — the
   id and the server's own error wording reach the dashboard, rather than being
   replaced by a bare status line
-- 260 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
+- 272 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 

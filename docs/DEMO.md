@@ -168,7 +168,8 @@ grep AssumeRole <backend log>
 ```
 
 Then CloudTrail **in the target account**, filtered to `AssumeRole`. The event
-shows the platform account as the caller and the temporary session as the actor.
+shows the platform account as the caller and the temporary session as the actor
+— and the session name says *which user*: `shutitdown.<workspace>.<user>`.
 
 Say: *"Temporary credentials, scoped to a read-only role, in an account whose
 keys I do not have."*

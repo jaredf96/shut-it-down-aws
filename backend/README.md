@@ -275,7 +275,11 @@ credentials are used (single-account / local — unchanged).
 **Cross-account setup:** in each target account, create a read-only IAM role
 (the [least-privilege policy](#required-iam-permissions-read-only) above) whose
 trust policy allows the scanner's principal to `sts:AssumeRole` — optionally
-with an `external_id`. The scanner's own role needs `sts:AssumeRole` on those
+with an `external_id`. Each assumed session is named
+`shutitdown.<workspace>.<user>`, so the target account's CloudTrail attributes
+the reads to the caller rather than to the tool as a whole; with `AUTH_REQUIRED`
+unset that is the install's single `local` user (see `docs/SECURITY.md`
+§ Audit logging). The scanner's own role needs `sts:AssumeRole` on those
 role ARNs. See `app/aws/session.py` and `app/services/multi_account_service.py`.
 
 ### Alerts

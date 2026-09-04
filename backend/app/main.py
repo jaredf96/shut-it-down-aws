@@ -350,7 +350,7 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(get_curre
 
 
 @app.get("/scan")
-def scan_everything(save: bool = True, workspace: str = Depends(get_current_workspace)):
+def scan_everything(save: bool = True, principal: dict = Depends(get_current_principal)):
     """Run all scanners and return a combined, summarized result.
 
     The response includes `alerts` (derived from this scan, and the previous
@@ -360,9 +360,12 @@ def scan_everything(save: bool = True, workspace: str = Depends(get_current_work
 
     If the workspace has registered AWS accounts, every account is scanned
     (assume-role) and each resource is tagged with its account; otherwise the
-    server's own credentials are used.
+    server's own credentials are used. Each assumed-role session is named after
+    the caller, so the scanned account's own CloudTrail attributes the reads
+    (`docs/SECURITY.md` § Audit logging).
     """
-    result = scan_accounts(workspace)
+    workspace = principal["workspace_id"]
+    result = scan_accounts(workspace, principal=principal)
 
     # Compare against the most recent saved scan (the "previous" one) for
     # change-aware alerts. Fetch it before saving the new scan.

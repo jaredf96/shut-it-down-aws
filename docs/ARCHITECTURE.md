@@ -251,8 +251,8 @@ sequenceDiagram
 
     FE->>API: GET /scan (X-API-Key)
     API->>API: resolve principal (workspace, role)
-    API->>MA: scan_accounts(workspace)
-    MA->>SC: scan each account (assume-role)
+    API->>MA: scan_accounts(workspace, principal)
+    MA->>SC: scan each account (assume-role, session named for principal)
     SC->>PR: annotate cost
     MA-->>API: resources + summary (+ fleet total)
     API->>DB: previous scan (for change-aware alerts)

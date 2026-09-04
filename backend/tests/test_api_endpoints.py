@@ -332,7 +332,7 @@ def test_scan_tags_resources_when_accounts_registered(dynamo_table, monkeypatch)
     )
     monkeypatch.setattr(
         "app.services.multi_account_service.session_for_account",
-        lambda account: boto3.Session(),
+        lambda account, principal=None: boto3.Session(),
     )
     boto3.client("ec2", region_name=REGION).allocate_address(Domain="vpc")
 
@@ -355,7 +355,7 @@ def test_unreadable_regions_are_attributed_to_their_account(dynamo_table, monkey
     )
     monkeypatch.setattr(
         "app.services.multi_account_service.session_for_account",
-        lambda account: boto3.Session(),
+        lambda account, principal=None: boto3.Session(),
     )
 
     def boom(region, session):
@@ -388,7 +388,7 @@ def test_unavailable_scanners_are_attributed_to_their_account(dynamo_table, monk
     )
     monkeypatch.setattr(
         "app.services.multi_account_service.session_for_account",
-        lambda account: boto3.Session(),
+        lambda account, principal=None: boto3.Session(),
     )
 
     def boom(*args, **kwargs):

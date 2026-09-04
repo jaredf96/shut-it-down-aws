@@ -51,19 +51,23 @@ class UnknownAccountError(Exception):
     """The caller named an AWS account this workspace has not registered."""
 
 
-def _session(workspace_id: str, account_id: str | None):
+def _session(principal: dict, account_id: str | None):
     """Default credentials, or assume-role into a registered account.
 
     A named account must resolve to a registration this workspace owns. Falling
     back to `default_session()` when the lookup misses would point a mutating
     action at the *server's own* credentials rather than the account the caller
     asked for — and `execute()` would then audit that misfire as a success.
+
+    The assumed session is named after `principal`, so the target account's own
+    CloudTrail attributes the mutation too. The default-credentials branch
+    assumes no role and so has no session name to attribute.
     """
     if account_id:
-        account = account_repository.get_account(workspace_id, account_id)
+        account = account_repository.get_account(principal["workspace_id"], account_id)
         if account is None:
             raise UnknownAccountError(f"AWS account {account_id} is not registered.")
-        return session_for_account(account)
+        return session_for_account(account, principal=principal)
     return default_session()
 
 
@@ -205,7 +209,7 @@ def execute(
 
     finish = _finish if dry_run else _finish_after_mutation
     try:
-        session = _session(workspace_id, account_id)
+        session = _session(principal, account_id)
         detail = spec["run"](session, region, resource_id, dry_run)
     except UnknownAccountError as exc:
         # Ahead of the broad handler below, and inside this try so an STS

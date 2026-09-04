@@ -918,6 +918,60 @@ to. No code change: the load-bearing half is already pinned by
 
 ---
 
+## D18 — Assumed sessions are named after the caller; SourceIdentity is not used
+
+**Decided:** 2026-09-04 · **Status:** decided
+
+Every `sts:AssumeRole` this app makes carries
+`RoleSessionName = shutitdown.<workspace>.<user>`, so the *scanned* account's
+own CloudTrail records `assumed-role/<RoleName>/shutitdown.<workspace>.<user>`
+instead of one constant shared by every user of every workspace. `/scan` and
+`cleanup_service._session` carry the authenticated principal down to the
+assume-role call; a caller with no request behind it is named
+`shutitdown.unattributed` rather than borrowing an identity.
+
+**What this buys, and what it does not.** `docs/SECURITY.md` claimed every
+mutating action was attributable to a specific user. That was true of *this
+app's* audit trail and false of the trail the account's owner reads, which is
+the one that matters when they are asking who touched their account. The name
+is **asserted by the caller** — STS does not verify it — so it is evidence
+about which principal this app believed was acting, not proof. With
+`AUTH_REQUIRED` unset there is one principal, so the name identifies the
+install rather than a person; the docs now say both things.
+
+**Deliberately not built: `SourceIdentity`.** It is the field STS actually
+propagates and locks, and it was the first design. It is cut for three
+independent reasons, any one of which is sufficient:
+
+1. The target role's trust policy must grant `sts:SetSourceIdentity` or the
+   AssumeRole **fails outright**. Every account already onboarded with the
+   published `scanner-role.yaml` lacks it, so shipping this breaks working
+   installs — a fix worse than the finding.
+2. It hard-fails on a role chain whose caller already has a source identity,
+   which is exactly the shape of a platform assuming into student accounts from
+   a role someone else assumed.
+3. Making it opt-in per registered account means a stored flag, a migration for
+   existing rows, and a template change — new machinery for a guarantee that,
+   once optional, tells a reader nothing they can rely on.
+
+Revisit if the onboarding template is ever reissued for another reason; adding
+the grant then costs nothing extra.
+
+**Consequences:** `backend/app/aws/session.py` (`session_name_for`,
+`session_for_account(principal=)`), `backend/app/services/multi_account_service.py`
+and `cleanup_service.py` (the principal threaded down), and
+`backend/app/main.py` (`/scan` now depends on the principal rather than only the
+workspace) carry the code. `backend/tests/test_session_attribution.py` is new —
+12 tests, including one that asserts the assumed ARN moto reports, not just the
+kwargs we passed. No IAM template, terraform, storage field, request body or
+frontend file changes, and nothing new is granted. Docs re-read against it:
+`docs/SECURITY.md` §§ Local profiles vs. assume-role + Audit logging,
+`docs/ARCHITECTURE.md` (the `GET /scan` sequence), `backend/README.md`
+§ Multi-account scanning, `docs/DEMO.md` scene 4, and root `README.md`'s
+cross-account bullet.
+
+---
+
 ## Template
 
 ```markdown

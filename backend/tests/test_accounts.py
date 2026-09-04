@@ -72,7 +72,7 @@ def test_scan_accounts_tags_resources(dynamo_table, monkeypatch):
     )
     monkeypatch.setattr(
         "app.services.multi_account_service.session_for_account",
-        lambda account: boto3.Session(),
+        lambda account, principal=None: boto3.Session(),
     )
     boto3.client("ec2", region_name=REGION).run_instances(
         ImageId="ami-12345678", MinCount=1, MaxCount=1
@@ -92,7 +92,7 @@ def test_scan_accounts_collects_per_account_errors(dynamo_table, monkeypatch):
         "workspace-1", {"name": "Broken", "role_arn": "arn:aws:iam::333333333333:role/R"}
     )
 
-    def boom(account):
+    def boom(account, principal=None):
         raise RuntimeError("assume role denied")
 
     monkeypatch.setattr("app.services.multi_account_service.session_for_account", boom)
@@ -220,7 +220,7 @@ def test_scanning_still_receives_the_real_external_id(dynamo_table, monkeypatch)
 
     seen = {}
 
-    def capture(account):
+    def capture(account, principal=None):
         seen.update(account)
         raise RuntimeError("stop here — we only care what was handed over")
 

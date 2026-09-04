@@ -266,7 +266,9 @@ def test_unregistered_account_is_refused_and_never_uses_default_credentials(
     resolved: list[str] = []
     monkeypatch.setattr(cleanup_service, "default_session", lambda: resolved.append("default"))
     monkeypatch.setattr(
-        cleanup_service, "session_for_account", lambda account: resolved.append("assumed")
+        cleanup_service,
+        "session_for_account",
+        lambda account, principal=None: resolved.append("assumed"),
     )
 
     res = client.post(
@@ -307,7 +309,7 @@ def test_registered_account_still_assumes_its_role(dynamo_table, cleanup_on, mon
 
     assumed: list[dict] = []
 
-    def _fake_assume(account):
+    def _fake_assume(account, principal=None):
         assumed.append(account)
         return boto3.Session()
 

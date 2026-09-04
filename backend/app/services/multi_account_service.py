@@ -38,8 +38,15 @@ def _tag_failure(failure: dict, account: dict) -> dict:
     return {**failure, "account_id": account["account_id"], "account_label": _label(account)}
 
 
-def scan_accounts(workspace_id: str | None = None) -> dict:
-    """Scan all of a workspace's registered accounts (or default creds if none)."""
+def scan_accounts(workspace_id: str | None = None, *, principal: dict | None = None) -> dict:
+    """Scan all of a workspace's registered accounts (or default creds if none).
+
+    `principal` is attribution only — it names each assumed session so the
+    scanned account's own CloudTrail shows who caused the reads. `workspace_id`
+    remains the sole authority for *which* accounts are listed; the one
+    production caller derives it from the same principal, so the two cannot
+    disagree.
+    """
     accounts = account_repository.list_accounts(workspace_id) if workspace_id else []
 
     if not accounts:
@@ -54,7 +61,7 @@ def scan_accounts(workspace_id: str | None = None) -> dict:
 
     for account in accounts:
         try:
-            session = session_for_account(account)
+            session = session_for_account(account, principal=principal)
             result = scan_all(regions=account.get("regions"), session=session)
             all_resources.extend(_tag(r, account) for r in result["resources"])
             regions_failed.extend(
