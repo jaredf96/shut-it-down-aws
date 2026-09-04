@@ -461,10 +461,16 @@ For **multi-account** scanning, the scanner's role additionally needs
 `sts:AssumeRole` on each registered account's role ARN, and each target account
 must grant the read-only policy above to a role that trusts the scanner.
 
-If you enable **guided cleanup** (`ENABLE_CLEANUP_ACTIONS=true`), the role also
-needs the matching write actions — only these three:
-`ec2:StopInstances`, `ec2:ReleaseAddress`, `ec2:DeleteVolume`. Grant them only
-in environments where cleanup is intended.
+If you enable **guided cleanup** (`ENABLE_CLEANUP_ACTIONS=true`), the write
+actions have to be granted as well — only these three: `ec2:StopInstances`,
+`ec2:ReleaseAddress`, `ec2:DeleteVolume`. They go on the backend's *own* role,
+which is what a cleanup request with no `account_id` runs as. A request naming a
+registered account runs as the assumed scanner role in that account, and
+`deploy/cloudformation/scanner-role.yaml` grants no write at all — deliberately —
+so cross-account cleanup is not possible in this build (root `README.md`
+§ Planned hardening). Neither deploy template grants the three actions; see
+`docs/SECURITY.md` § Least-privilege IAM. Grant them only in environments where
+cleanup is intended.
 
 If you enable **live pricing** (`ENABLE_LIVE_PRICING=true`), the role needs
 `pricing:GetProducts` (the Pricing API is global, queried via `us-east-1`).

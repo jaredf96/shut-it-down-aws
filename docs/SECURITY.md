@@ -69,22 +69,14 @@ Scanning needs only describe/list permissions. Attach the AWS-managed
 }
 ```
 
-Grant the rest **only when you opt into the corresponding feature**:
+That is the entire grant onboarding asks a scanned account for. Persistence,
+assume-role and live pricing are permissions the *platform* holds in its own
+account — nothing here asks a student to grant any of them, and the next section
+is where they belong. The cleanup writes are not here either: which role would
+need them depends on where the resource is, and cross-account cleanup is not
+possible in this build at all — see § The platform's own runtime role.
 
-| Feature | Extra permissions | Scope |
-| --- | --- | --- |
-| Persistence | `dynamodb:GetItem/PutItem/UpdateItem/DeleteItem/Query` (+ `CreateTable` for auto-create) | the app's table ARN |
-| Multi-account | `sts:AssumeRole` | roles tagged `Project=shut-it-down-aws` (see below) |
-| Live pricing | `pricing:GetProducts` | `*` (Pricing API is global) |
-| **Guided cleanup** | `ec2:StopInstances`, `ec2:ReleaseAddress`, `ec2:DeleteVolume` | only where cleanup is intended |
-
-The cleanup write permissions are the **only** mutating actions the app can
-take, and they map exactly to the three supported cleanup actions — nothing more.
-They belong to the **platform's own** runtime role: the Terraform skeleton emits
-that policy document (`deploy/terraform/outputs.tf: app_policy_json`).
-
-The policy above is the other one — what a **scanned** account grants. It is what
-`deploy/cloudformation/scanner-role.yaml` creates, and
+The policy above is what `deploy/cloudformation/scanner-role.yaml` creates, and
 `backend/tests/test_onboarding_template.py` parses both this document and that
 template to assert they still say the same thing. An equal action list is only
 least privilege if it is the whole grant, so the test also pins that the role
@@ -96,8 +88,9 @@ action lists.
 
 What the backend itself runs as. `deploy/cloudformation/platform-role.yaml`
 creates it, `deploy/terraform/main.tf` emits the same document for an existing
-role, and `backend/tests/test_platform_role_template.py` pins the template
-against this block:
+role (as the `app_policy_json` output), and
+`backend/tests/test_platform_role_template.py` pins the template against this
+block:
 
 ```json
 {
@@ -148,6 +141,36 @@ every role `scanner-role.yaml` creates carries. It is a **namespace guard, not a
 authorization boundary** — the account's owner controls its tags exactly as it
 controls its trust policy. The boundary remains where it always was: the target's
 trust policy plus its external ID.
+
+Grant the rest **only when you opt into the corresponding feature**. No row below
+is in the policy printed above:
+
+| Feature | Extra permissions | Held by | Scope |
+| --- | --- | --- | --- |
+| Auto-create (dev) | `dynamodb:CreateTable` | the platform's runtime role | the app's table ARN, only with `DYNAMODB_AUTO_CREATE` |
+| Live pricing | `pricing:GetProducts` | the platform's runtime role | `*` (the Pricing API is global) |
+| **Guided cleanup** | `ec2:StopInstances`, `ec2:ReleaseAddress`, `ec2:DeleteVolume` | the platform's runtime role — single-account only, see below | only where cleanup is intended |
+
+Those three cleanup writes are the **only** mutating actions the app can take,
+and they map exactly to the three supported cleanup actions — nothing more.
+`deploy/cloudformation/platform-role.yaml` and `deploy/terraform/main.tf` emit
+exactly the three statements published above, and neither carries any action in
+this table. That is what everything-off-by-default looks like at the IAM layer:
+setting `ENABLE_CLEANUP_ACTIONS=true` grants nothing, and an operator has to
+widen a policy on purpose.
+
+**Where the cleanup writes have to live.** `cleanup_service._session` uses the
+platform's own credentials for a request that names no `account_id`, and assumes
+the registered scanner role for a request that names an account. So cleanup in
+the platform's own account needs the three actions on the platform role — and
+cleanup in a *registered* account would need them on the role the platform
+assumes there, which is the read-only role `scanner-role.yaml` creates and
+`backend/tests/test_onboarding_template.py` pins as read-only. **Cross-account
+cleanup is therefore not possible in this build.** It refuses at IAM rather than
+in the app, which is what `docs/DEMO.md` § 5 demonstrates; the separate
+narrowly-scoped cleanup role it would need is listed under root `README.md`
+§ Planned hardening. Do not widen a scanned account's role instead — that is the
+grant this document exists to keep small.
 
 ## Onboarding an account
 
@@ -355,7 +378,10 @@ you would want afterwards.
 
 - **API keys, not sessions.** Auth is a single API key per user (hashed, but
   long-lived and not rotatable/expirable yet). Add key rotation/expiry, or move
-  to OIDC/JWT sessions; consider per-key scopes.
+  to OIDC/JWT sessions; consider per-key scopes. The browser client has no login
+  at all: it reads `VITE_API_KEY` at build time, which Vite inlines into the
+  bundle, so a build carrying a key must only ever be served to people entitled
+  to that key.
 - **No transport hardening in-app.** TLS, HSTS, security headers, and CORS lock-
   down are deployment concerns — the dev CORS config allows `localhost:5173`.
   Restrict origins and terminate TLS at the edge in production.

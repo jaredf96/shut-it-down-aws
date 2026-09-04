@@ -85,6 +85,25 @@ are off unless you pass `--nat`, `--alb` or `--rds`.
 
 ## 4. Frontend
 
-Build the static site (`cd frontend && npm run build`) and host `dist/` on S3 +
-CloudFront (or any static host). Set `VITE_API_BASE_URL` to the deployed API and
-`VITE_API_KEY` if you want a baked-in key.
+Two builds come out of `frontend/`, and only one of them belongs on a public
+origin.
+
+**The authenticated UI** — `cd frontend && npm run build`. Set
+`VITE_API_BASE_URL` to the API you deployed above. Leave `VITE_API_KEY` unset
+unless the built files stay private: Vite inlines every `VITE_*` variable into
+the JavaScript it emits, so a key set there is published to everyone who can
+fetch the bundle, and an API key is a credential — `user_repository` stores only
+its SHA-256 hash precisely because it is one. Bake one in only when the audience
+for `dist/` is exactly the people you would hand that key to: your own machine,
+or a host that authenticates before it serves a file. There is no third option
+here. The UI has no runtime login to fall back on (root `README.md` § Planned
+hardening: OIDC), so an API running with `AUTH_REQUIRED=true` has no anonymous
+public front end in this repo.
+
+**The fixture demo** — `cd frontend && npm run build:demo`. This is the build for
+S3 + CloudFront. It carries no API client, no endpoints and no credentials, and
+`make demo-bundle-check` fails if any of that leaks in. Its hosting is already
+written: `deploy/terraform/demo/` provisions a private bucket behind CloudFront
+and `deploy/deploy-demo.sh` publishes to it. Read
+`deploy/terraform/demo/README.md` first — the pricing-plan and cache constraints
+it records have caught people out.

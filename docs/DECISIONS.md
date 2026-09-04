@@ -508,10 +508,10 @@ absence let D4's miss survive. `README.md`'s three unbuilt-work lists and
 **Decided:** 2026-09-01 · **Status:** executed
 
 The repository stays private until an adversarial review passes. The reviewer is
-Codex, via `/crosscheck`, alongside the repo's own `/security-review`. A second
-Claude pass does not satisfy this: the blind spot being guarded against is one
-shared with whatever wrote the code, so more depth from the same model buys
-nothing that independence buys.
+Codex, alongside the repo's own security review. A second Claude pass does not
+satisfy this: this code was written with Claude Code's assistance, so a second
+pass by the same model shares the blind spots of the first. What is missing is
+not depth — it is independence.
 
 What the review must cover, and what already holds each claim up — so the review
 checks these rather than re-deriving them:
@@ -872,6 +872,49 @@ downgrade caveat), `docs/ARCHITECTURE.md` § Data model, and `docs/SECURITY.md`
 § Production gaps. Root `README.md` needs no change — no new env var, no new
 capability, and the response contract is unchanged, which is why the refusal is
 routed through the existing `persisted` field rather than a new one.
+
+---
+
+## D17 — The authenticated UI is never served from a public origin; only the fixture demo is
+
+**Decided:** 2026-09-04 · **Status:** decided
+
+`VITE_API_KEY` may be baked into a build whose files stay private — an
+operator's own machine, or a host that authenticates before it serves a file.
+It may not be baked into a build served from a public origin, and neither may
+an unkeyed build be pointed at an API running without `AUTH_REQUIRED`. The
+build for a public origin is the fixture demo, which has no API client in it to
+carry a key.
+
+**Why this came up.** `deploy/README.md` § 4 told the operator to host `dist/`
+on S3 + CloudFront and to set `VITE_API_KEY` "if you want a baked-in key", two
+sentences apart. `README.md` said the opposite in one line — Vite inlines every
+`VITE_*` variable into public JavaScript, never put a secret in one — and
+`frontend/.env.demo` gives that exact rule as the reason the demo profile omits
+the variable. An API key is a secret: `user_repository` persists only its
+SHA-256 hash precisely because it is one.
+
+**Why the answer is not "soften the deploy sentence".** The reader needs an
+instruction, and the honest instruction is a narrowing. This frontend has no
+runtime login — the key is a build-time constant, which `README.md` already
+concedes when it calls the UI an operator scaffold rather than a production
+multi-user login, and OIDC sits under *Planned hardening*, designed and not
+built. So there is no third configuration in which an anonymous visitor can
+usefully load the authenticated UI. D5's build boundary is not only a demo
+convenience; it is the reason there is anything safe to publish at all.
+
+**Revisit trigger:** OIDC landing. A runtime login removes the build-time key,
+and with it this entry's whole premise.
+
+**Consequences:** `deploy/README.md` § 4 rewritten to name both builds and point
+the public case at `deploy/terraform/demo/`; `README.md`'s `VITE_*` paragraph
+restated as a rule about where the bundle goes; `frontend/.env.example` says
+what setting the variable costs; `docs/SECURITY.md` § Production gaps notes the
+build-time key in the bullet that already owns API-key auth.
+`frontend/.env.demo` is unchanged — it is the file the other three were aligned
+to. No code change: the load-bearing half is already pinned by
+`frontend/scripts/check-demo-bundle.sh` in CI, which fails the build if
+`VITE_API_KEY` appears in the published bundle.
 
 ---
 

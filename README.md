@@ -285,8 +285,13 @@ Everything is **off by default** — set only what you need. Full annotated list
 | `ENABLE_CLEANUP_ACTIONS` | **Master safety switch — off by default** |
 
 Frontend builds use `VITE_API_BASE_URL` (API mode) or `VITE_DEMO_MODE=true`
-(fixture demo, see [.env.demo](frontend/.env.demo)). Note that Vite inlines every
-`VITE_*` variable into public JavaScript — never put a secret in one.
+(fixture demo, see [.env.demo](frontend/.env.demo)). Vite inlines every `VITE_*`
+variable into the JavaScript it emits, so anything set there ships to everyone
+who can fetch the bundle. `VITE_API_KEY` is a credential — the backend stores
+only its SHA-256 hash — so set it only for a build whose files stay private:
+your own machine, or a host that authenticates before serving them. Never for a
+build going to a public origin; the build that belongs there is the fixture
+demo, which has no API client to carry a key.
 
 ---
 
