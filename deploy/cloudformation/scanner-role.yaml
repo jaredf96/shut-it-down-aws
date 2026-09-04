@@ -105,7 +105,9 @@ Resources:
               # IAM. Describe/List/Get only: this role cannot change anything in
               # the account, including the three cleanup actions the app supports
               # elsewhere. Cross-account cleanup needs a separate role that does
-              # not exist yet (see docs/DECISIONS.md D6).
+              # not exist yet (see docs/SECURITY.md § The platform's own runtime
+              # role; the role itself is listed under README.md § Planned
+              # hardening).
               - Sid: ReadOnlyScanning
                 Effect: Allow
                 Action:
@@ -118,8 +120,12 @@ Resources:
                   - rds:DescribeDBInstances
                   - s3:ListAllMyBuckets
                   - s3:GetBucketLocation
-                # These describe/list APIs are account-wide and do not support
-                # resource-level permissions, so "*" is the narrowest this can be.
+                # The scanner has to enumerate resources it has not seen yet, so
+                # it cannot name them in advance. The EC2/ELB/RDS describes and
+                # s3:ListAllMyBuckets have no resource-level form at all.
+                # s3:GetBucketLocation does take a bucket ARN, but the only one
+                # that fits an account-wide sweep is arn:aws:s3:::*, which is the
+                # same set of buckets. So "*" is the narrowest this can be.
                 Resource: "*"
       Tags:
         - Key: Project
