@@ -16,7 +16,10 @@ from boto3.dynamodb.conditions import Key
 
 from app.repositories.dynamo import get_table, is_enabled
 
-_ROLE_ARN_ACCOUNT = re.compile(r"arn:aws[^:]*:iam::(\d{12}):")
+# Anchored, role-only, ASCII digits — deliberately the same shape the request
+# model enforces. An unanchored `search` accepted `...:user/Alice` and ARNs
+# embedded in surrounding text, which made the docstring below false.
+_ROLE_ARN_ACCOUNT = re.compile(r"^arn:aws[a-z-]*:iam::([0-9]{12}):role/.+$")
 
 
 def _now() -> str:
@@ -40,7 +43,7 @@ def account_id_from_role_arn(role_arn: str) -> str:
     boundary; this raise is defence in depth for the callers that build a
     payload directly.
     """
-    match = _ROLE_ARN_ACCOUNT.search(role_arn or "")
+    match = _ROLE_ARN_ACCOUNT.match(role_arn or "")
     if not match:
         raise ValueError(f"Not an IAM role ARN: {role_arn!r}")
     return match.group(1)

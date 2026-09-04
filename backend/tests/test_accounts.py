@@ -24,9 +24,21 @@ def test_unparseable_role_arn_raises_instead_of_inventing_an_account_id():
     account id, so a typo produced a record keyed on a number that matches no
     account in AWS.
     """
-    for bad in ["", "not-an-arn", "arn:aws:iam::12345:role/TooShort"]:
+    bad = [
+        "",
+        "not-an-arn",
+        "arn:aws:iam::12345:role/TooShort",
+        # Not a role. The helper used to return the account id for any IAM ARN.
+        "arn:aws:iam::123456789012:user/Alice",
+        # A valid ARN inside other text. `re.search` used to find it anyway.
+        "prefix arn:aws:iam::123456789012:role/R suffix",
+        # Arabic-Indic numerals. `\d` matches these; `[0-9]` does not. Without
+        # that, this parsed and returned a non-ASCII string as the account id.
+        "arn:aws:iam::\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669\u0660\u0661\u0662:role/R",
+    ]
+    for arn in bad:
         with pytest.raises(ValueError, match="Not an IAM role ARN"):
-            account_repository.account_id_from_role_arn(bad)
+            account_repository.account_id_from_role_arn(arn)
 
 
 def test_malformed_role_arn_is_rejected_at_the_api_boundary():
@@ -38,6 +50,13 @@ def test_malformed_role_arn_is_rejected_at_the_api_boundary():
     # the account id parsed back out would be the wrong twelve digits.
     with pytest.raises(ValidationError):
         AccountCreate(name="Smuggled", role_arn="999999999999 arn:aws:iam::111111111111:role/R")
+
+    # Non-ASCII digits must not satisfy the twelve-digit account id.
+    with pytest.raises(ValidationError):
+        AccountCreate(
+            name="Unicode",
+            role_arn="arn:aws:iam::\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669\u0660\u0661\u0662:role/R",
+        )
 
     # Partitions and role paths stay valid.
     assert AccountCreate(name="GovCloud", role_arn="arn:aws-us-gov:iam::111111111111:role/R")

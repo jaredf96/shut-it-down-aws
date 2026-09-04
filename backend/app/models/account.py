@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 # account id is parsed back out of this string and stored as the record's
 # primary key — a value that only *contains* an ARN would key the record on
 # whatever twelve digits appeared first.
-_ROLE_ARN = r"^arn:aws[a-z-]*:iam::\d{12}:role/.+$"
+#
+# `[0-9]`, not `\d`: `\d` matches every Unicode decimal digit, so an ARN
+# written with Arabic-Indic numerals validated and then became the record's
+# sort key. That is worse than the malformed input this pattern exists to
+# reject, because it looks like it worked.
+_ROLE_ARN = r"^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
 
 
 class AccountCreate(BaseModel):
