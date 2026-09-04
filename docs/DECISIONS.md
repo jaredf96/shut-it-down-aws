@@ -555,7 +555,7 @@ itself.
 
 ## D11 — The commit history needs no further rewrite; what was left was local
 
-**Decided:** 2026-09-01 · **Status:** executed
+**Decided:** 2026-09-01 · **Status:** superseded by D14
 
 No squash, reword, rebase or author rewrite before publication. The one rewrite
 this repo needed already happened: it removed four automatically added commit
@@ -699,6 +699,53 @@ unreachable store and a store error. `frontend/src/data/contract.d.ts` widens
 the status union. Docs re-read against the change: `backend/README.md`'s
 opening warning rewritten (the third finding), root `README.md` gate 7,
 `docs/SECURITY.md` §§ Cleanup gates + Audit logging, and `CLAUDE.md` invariant 2.
+
+---
+
+## D14 — The interview-prep file and the toolchain narration come out of the history
+
+**Decided:** 2026-09-04 · **Status:** decided
+
+D11 said no further rewrite. This supersedes it for one case it did not weigh:
+removing content that should not have been published, rather than tidying
+content that was fine.
+
+`docs/INTERVIEW_TALKING_POINTS.md` — 276 lines, added in the root commit and
+deleted at the rebrand — is still in every clone. It is written to a different
+audience than the rest of the repo, and three lines in the historical
+`README.md` and `CLAUDE.md` point at it by name, so removing the file alone
+would leave the signpost standing. Eight commit messages narrate the toolchain
+that produced the work rather than the work itself.
+
+The rewrite removes the file from every commit that carried it, strips those
+three signposts, and rewords the eight messages. Nothing else changes: the tip
+tree is byte-identical before and after, which is the property that makes this
+checkable rather than a matter of trust.
+
+**Why this and not D11.** D11 argues against a *cosmetic* squash, and its
+stated cost is that a rewrite orphans every commit this file cites by SHA (it
+names D8's `a05b872`). That cost is real and is paid here — `git filter-repo`
+remaps the hashes inside commit messages on its own, and the citations in this
+file are repaired in the commit that follows the rewrite. What D11 never weighs
+is content that should not be in the repository at all, because when it was
+written nothing in the history was in that category. A decision reached without
+that fact in front of it does not settle the question.
+
+The cost only rises. The repository has been public since 2026-09-01 with no
+stars and no forks, so this is the cheapest it will ever be, and every clone
+taken from here on carries the file.
+
+**What a rewrite cannot do.** Anyone who cloned before the force-push keeps the
+old objects, and an unreferenced commit can still be served by URL until it is
+garbage-collected. This reduces exposure; it does not revoke it. That is a
+reason to act sooner, not a reason to skip it.
+
+**Consequences:** `main` is rewritten and force-pushed; every SHA changes. D11
+moves to *superseded by D14* — its account of what the earlier rewrite did, and
+the author-identity rule it carries, both still stand. The SHA citations in
+this file are repaired against the new history. `CLAUDE.md` § Conventions is
+unchanged: the no-trailer, one-author rules are exactly what kept this rewrite
+to a single concern.
 
 ---
 
