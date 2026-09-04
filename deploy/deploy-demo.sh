@@ -35,6 +35,17 @@ npm --prefix "$ROOT/frontend" run build:demo
 DIST="$ROOT/frontend/dist"
 [ -f "$DIST/index.html" ] || { echo "build produced no index.html" >&2; exit 1; }
 
+# The bundle that ships has to be the one that gets checked. CI runs this same
+# script (.github/workflows/ci.yml) against a dist/ it then throws away, so
+# until this line existed the artifact actually uploaded was never inspected —
+# a stray `import ... from "../api/client.js"` landing after the last green run,
+# or a build off a dirty tree, would have reached the edge unexamined. D5's
+# isolation is a property of the artifact, not of the profile it was built with,
+# so verify the artifact. Before the first upload: a leak must fail the deploy,
+# not get invalidated afterwards.
+echo "==> Verifying the built bundle carries no API client"
+bash "$ROOT/frontend/scripts/check-demo-bundle.sh" "$DIST"
+
 echo "==> Uploading fingerprinted assets (immutable, 1 year)"
 aws s3 sync "$DIST" "s3://$BUCKET" \
   --profile "$PROFILE" \
