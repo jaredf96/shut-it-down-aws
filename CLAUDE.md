@@ -200,6 +200,22 @@ repository. Persistence is optional: no
   `SMTP_PORT` — escapes through `GET /scan` instead of becoming one channel's
   error. Resolve fallible config lazily inside `send()`, and coerce (never
   raise on) an out-of-range enum in `__init__`.
+- **The committed screenshots have a capture recipe, and every part of it is
+  load-bearing.** `docs/img/dashboard.png` is a full-page capture of the
+  *built* demo (`npm --prefix frontend run build:demo`, then
+  `npm --prefix frontend run preview:demo`) at **1860 CSS px wide, DPR 2**, with
+  the viewport sized to `document.documentElement.scrollHeight` so no
+  full-page stitching is involved. Run the browser under
+  `TZ=America/New_York` and `--lang=en-US`: every timestamp in the history
+  sidebar renders through `toLocaleString()`, so a UTC or en-GB machine
+  silently rewrites the whole sidebar. Set `localStorage.theme = "dark"` before
+  first paint rather than inheriting the OS appearance, hide scrollbars, and
+  blur the active element so no focus ring lands in frame. The demo **starts
+  its scan on load** — wait for `.summary__caveat` to exist and for no button
+  to read "Scanning…", not for a click. The other two images are element crops
+  at two *different* widths, so there is no single viewport that reproduces all
+  three: recapture only the image whose inputs moved.
+  `backend/tests/test_screenshot_claims.py` lists what each one depends on.
 - **A new scan-table column can silently clip the last one.** `.page`'s
   max-width is sized to fit the table beside the history sidebar; re-measure
   `.table-wrapper` scrollWidth vs clientWidth (the CSS comment has the numbers).
