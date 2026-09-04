@@ -171,14 +171,14 @@ export const demoScanProvider = {
 
   async getScan(scanId) {
     const scan = SCANS.find((s) => s.scan_id === scanId);
-    if (!scan) throw new Error(`Unknown demo scan: ${scanId}`);
+    if (!scan) throw new Error(`Unknown demo scan: ${scanId}.`);
     return scan;
   },
 
   async compareScans(fromId, toId) {
     const from = SCANS.find((s) => s.scan_id === fromId);
     const to = SCANS.find((s) => s.scan_id === toId);
-    if (!from || !to) throw new Error("Unknown demo scan id");
+    if (!from || !to) throw new Error("Unknown demo scan id.");
     return diff(from, to);
   },
 

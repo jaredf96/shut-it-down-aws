@@ -86,6 +86,28 @@ boto3 picks up credentials automatically from any of:
 
 `GET /scan` accepts `?save=false` to skip persistence for that call.
 
+### What a failure looks like
+
+The dashboard renders a `detail` verbatim, so these shapes are a contract, not
+an implementation detail. Three of them exist:
+
+| Source | Body | When |
+| --- | --- | --- |
+| A route refusal | `{"detail": "<sentence>"}` | every raised `HTTPException` — the 400s, 403s, 404s and 409s |
+| Request validation | `{"detail": [{"loc": …, "msg": …, "type": …}]}` | FastAPI's own 422 |
+| The middleware | `{"detail": …, "error": "<code>", "correlation_id": "<id>"}` | `PersistenceUnavailable` (503) and any unhandled exception (500) |
+
+`X-Correlation-ID` is on **every** response, envelope or not, and is listed in
+`Access-Control-Expose-Headers` so a browser client can read it — the two
+envelope paths are the only ones that also put it in the body.
+
+Because a `detail` is displayed, it must be something a user can act on and
+nothing else. Do not interpolate an exception into one: a botocore
+`ClientError` stringifies with the assumed-role ARN and the account id in it.
+Cleanup's AWS-failure path reports a fixed sentence and keeps the real text in
+the audit row; `cleanup_actions._describe_or_fail` keeps the AWS error *code*
+and logs the message.
+
 Each resource carries **`created_at`** — the launch or creation time the AWS API
 itself reports (EC2 `LaunchTime`, EBS/NAT `CreateTime`, RDS `InstanceCreateTime`,
 ELB `CreatedTime`, S3 `CreationDate`). It is null for Elastic IPs, whose API

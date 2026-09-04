@@ -100,6 +100,7 @@ path — see [SECURITY.md](SECURITY.md).
 | Layer | Modules | Responsibility |
 | --- | --- | --- |
 | **Routes** | `app/main.py` | HTTP surface, status codes, dependency wiring |
+| **Middleware** | `app/main.py` → `ErrorEnvelopeMiddleware` | Correlation id on every response; any escaped exception becomes JSON *inside* the CORS layer |
 | **Auth** | `app/auth.py` | API key → principal; `get_current_workspace`, `require_admin` |
 | **Services** | `app/services/` | Orchestration: scan, diff, history, alerts, notification, multi_account, cleanup |
 | **Scanners** | `app/scanners/` | One read-only `scan(regions=None, session=None, failed_regions=None) -> list[Resource]` per AWS service |
@@ -109,6 +110,12 @@ path — see [SECURITY.md](SECURITY.md).
 | **Models** | `app/models/` | Pydantic shapes: Resource, Alert, Account, Cleanup |
 | **AWS sessions** | `app/aws/session.py` | Default + assume-role boto3 sessions |
 | **Sessions/Lambda** | `app/lambda_handler.py` | Mangum adapter for Lambda |
+
+The envelope is the client's error contract, not just a log line.
+`frontend/src/api/client.js` unpacks it into an `ApiError` and renders
+`detail` as the message — so a sentence written in a service is the sentence a
+user reads, and `backend/README.md` § What a failure looks like says what may
+go in one.
 
 Design rule: **scanners are account-agnostic and read-only**; everything
 workspace-aware (saving, listing, diffing) lives in services/repositories and

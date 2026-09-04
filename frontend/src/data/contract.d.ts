@@ -299,6 +299,31 @@ export interface ScanProvider {
 
   getCleanupActions(): Promise<{ enabled: boolean; actions: unknown[]; not_supported: unknown[] }>;
   getCleanupAudit(limit?: number): Promise<{ entries: CleanupResult[] }>;
-  /** Rejects (non-200 from the API) for every refusal; resolves on dry_run/success. */
+  /** Rejects with a ProviderError for every refusal — its message is the refusal's own wording; resolves on dry_run/success. */
   executeCleanup(request: CleanupRequest): Promise<CleanupResult>;
+}
+
+/**
+ * What every provider guarantees about a rejection.
+ *
+ * Errors sat outside this contract until now, and that is precisely how the
+ * two providers drifted: the demo rejected with the refusal sentence as its
+ * message, while the live provider rejected with "Request failed: 403
+ * Forbidden" and dropped the sentence the backend had sent. Every consumer
+ * renders `err.message` and nothing else, so the contract is on `message`: a
+ * readable sentence ending in terminal punctuation — the backend's own
+ * `detail` wherever there is one, never a bare status line when a sentence
+ * was available.
+ *
+ * `status`, `detail`, `code` and `correlationId` are a one-sided enrichment
+ * the API provider adds, declared optional because the demo has no HTTP
+ * exchange to describe: no status line, and no server log for a correlation
+ * id to point into. Read them defensively; do not branch UI on them unless
+ * the demo is taught to supply them too.
+ */
+export interface ProviderError extends Error {
+  status?: number | null;
+  detail?: string | null;
+  code?: string | null;
+  correlationId?: string | null;
 }

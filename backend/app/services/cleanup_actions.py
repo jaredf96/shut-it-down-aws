@@ -14,7 +14,11 @@ deleting S3 buckets, deleting RDS, deleting NAT Gateways (warning-only).
 
 from __future__ import annotations
 
+import logging
+
 from botocore.exceptions import BotoCoreError, ClientError
+
+logger = logging.getLogger(__name__)
 
 
 class PreconditionError(Exception):
@@ -25,7 +29,14 @@ def _describe_or_fail(call, label: str):
     try:
         return call()
     except (BotoCoreError, ClientError) as exc:
-        raise PreconditionError(f"{label}: {exc}") from exc
+        # The label is the client-facing half; the exception's own text is not.
+        # A botocore ClientError stringifies with the assumed-role ARN and the
+        # account id in it, and this becomes a `precondition_failed` detail,
+        # which the dashboard renders verbatim. Keep the AWS error code — the
+        # part with diagnostic value — and log the rest.
+        code = getattr(exc, "response", {}).get("Error", {}).get("Code") or type(exc).__name__
+        logger.warning("precondition check failed: %s: %s", label, exc)
+        raise PreconditionError(f"{label} ({code}).") from exc
 
 
 def _stop_ec2_instance(session, region: str, resource_id: str, dry_run: bool) -> str:

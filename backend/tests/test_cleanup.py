@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.errors import PersistenceUnavailable
 from app.main import app
 from app.repositories import audit_repository
-from app.services import cleanup_service
+from app.services import cleanup_actions, cleanup_service
 from tests.conftest import REGION
 
 client = TestClient(app)
@@ -475,3 +475,94 @@ def test_late_audit_failure_keeps_the_outcome_and_the_initiated_row(
     entries = client.get("/cleanup/audit").json()["entries"]
     statuses = [e["status"] for e in entries if e["resource_id"] == iid]
     assert statuses == ["initiated"]
+
+
+# --- What the client is allowed to see -----------------------------------
+
+
+def test_aws_failure_detail_is_opaque_to_the_client_but_kept_in_the_audit_row(
+    dynamo_table, cleanup_on, monkeypatch
+):
+    """A cleanup `detail` is rendered verbatim in the dashboard banner, and the
+    `error` branch builds its detail out of the exception — a botocore
+    ClientError stringifies with the assumed-role ARN and the account id in it.
+    The caller gets a fixed sentence; the diagnostic stays in the audit row."""
+    leaky = ClientError(
+        {
+            "Error": {
+                "Code": "UnauthorizedOperation",
+                "Message": (
+                    "User: arn:aws:sts::476646938033:assumed-role/lab-scanner/x is not "
+                    "authorized to perform: ec2:StopInstances"
+                ),
+            }
+        },
+        "StopInstances",
+    )
+    monkeypatch.setattr(
+        cleanup_service,
+        "_session",
+        lambda *a, **k: (_ for _ in ()).throw(leaky),
+    )
+
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": "i-1",
+            "confirm_resource_id": "i-1",
+            "region": REGION,
+        },
+    )
+
+    assert res.status_code == 502
+    assert res.json()["detail"] == (
+        "The cleanup action failed against AWS. Check the audit entry for details."
+    )
+    assert "arn:aws" not in res.json()["detail"]
+
+    entries = client.get("/cleanup/audit").json()["entries"]
+    row = next(e for e in entries if e["status"] == "error")
+    assert "arn:aws:sts::476646938033" in row["detail"]
+
+
+def test_describe_failure_keeps_the_aws_code_and_drops_the_message():
+    """The second leak site, one layer down: a precondition check's failure
+    becomes a 409 detail, which the opaque map at the route does not cover."""
+    leaky = ClientError(
+        {
+            "Error": {
+                "Code": "UnauthorizedOperation",
+                "Message": "User: arn:aws:sts::476646938033:assumed-role/x is not authorized",
+            }
+        },
+        "DescribeInstances",
+    )
+
+    with pytest.raises(cleanup_actions.PreconditionError) as excinfo:
+        cleanup_actions._describe_or_fail(
+            lambda: (_ for _ in ()).throw(leaky),
+            "Instance i-1 not found in us-east-1",
+        )
+
+    message = str(excinfo.value)
+    assert "Instance i-1 not found in us-east-1" in message
+    assert "UnauthorizedOperation" in message  # the half with diagnostic value
+    assert "arn:aws" not in message
+    assert message.endswith(".")
+
+
+def test_describe_failure_without_a_response_falls_back_to_the_class_name():
+    """`BotoCoreError` has no `.response`; reading it unguarded would turn a
+    connection failure into an AttributeError."""
+    from botocore.exceptions import EndpointConnectionError
+
+    with pytest.raises(cleanup_actions.PreconditionError) as excinfo:
+        cleanup_actions._describe_or_fail(
+            lambda: (_ for _ in ()).throw(
+                EndpointConnectionError(endpoint_url="https://ec2.us-east-1.amazonaws.com")
+            ),
+            "Instance i-1 not found in us-east-1",
+        )
+
+    assert "EndpointConnectionError" in str(excinfo.value)

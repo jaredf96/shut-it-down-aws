@@ -75,8 +75,10 @@ below is honest about which category it falls into.
   keys issued once, workspace-scoped AWS accounts with assume-role isolation, and
   audit attribution. The browser client reads `VITE_API_KEY` at build time, so the
   UI is an operator scaffold rather than a production multi-user login
-- Liveness/readiness split, structured `503`s, request correlation IDs
-- 219 offline backend tests + 65 frontend tests, CI, Docker, Lambda adapter
+- Liveness/readiness split, structured `503`s, request correlation IDs — the
+  id and the server's own error wording reach the dashboard, rather than being
+  replaced by a bare status line
+- 224 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 

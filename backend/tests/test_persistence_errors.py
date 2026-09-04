@@ -9,6 +9,10 @@ Covers three guarantees:
 3. Error responses still carry CORS headers. Unhandled exceptions bypass
    Starlette's CORS layer, which makes any 500 look like a CORS failure in the
    browser and hides the real cause.
+4. The correlation id is readable by the dashboard. It is stamped on every
+   response, but a browser hides any response header the CORS layer does not
+   name — so without `expose_headers` the id exists on the wire and no client
+   can quote it.
 """
 
 import pytest
@@ -148,3 +152,34 @@ def test_ready_503_when_persistence_unreachable(monkeypatch, dynamo_table):
     res = client.get("/ready")
     assert res.status_code == 503
     assert res.json()["error"] == "persistence_unavailable"
+
+
+# --- The correlation id has to reach the client that would quote it ------
+
+
+def test_correlation_id_header_is_exposed_to_the_browser():
+    """Stamping the id is half the job; a cross-origin client still cannot read
+    a header the CORS layer does not list."""
+    res = client.get("/health", headers={"Origin": ORIGIN})
+    assert res.headers["X-Correlation-ID"]
+    assert "x-correlation-id" in res.headers["access-control-expose-headers"].lower()
+
+
+def test_route_refusal_carries_the_correlation_id_in_the_header_only():
+    """The asymmetry the frontend depends on: a plain HTTPException gets no
+    envelope, so most refusals carry the id in the header and nowhere else.
+    Moving it into every body, or dropping it from the header, breaks the
+    client silently — so pin both halves here instead."""
+    res = client.post(
+        "/cleanup/execute",
+        json={
+            "action": "stop_ec2_instance",
+            "resource_id": "i-1",
+            "confirm_resource_id": "i-1",
+            "region": "us-east-1",
+        },
+    )
+    assert res.status_code == 403
+    assert res.json()["detail"] == "Cleanup actions are disabled in this environment."
+    assert "correlation_id" not in res.json()
+    assert res.headers["X-Correlation-ID"]

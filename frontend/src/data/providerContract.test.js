@@ -335,3 +335,76 @@ describe("demo cleanup preview walks the real gates", () => {
     expect(entries.slice(0, 2).every((e) => e.dry_run === true)).toBe(true);
   });
 });
+
+describe("both providers reject the same way", () => {
+  /**
+   * Errors sat outside this contract until the API client started unpacking
+   * them, and that is exactly how the two sides drifted: the demo rejected
+   * with the refusal's own wording while the live provider rejected with
+   * "Request failed: 403 Forbidden" and dropped the sentence the backend had
+   * sent. Four paths both providers actually have, so the guarantee is
+   * checked rather than asserted in a comment.
+   */
+  function stubFailure(status, statusText, body) {
+    // Same direct-assignment style as `stubApi`; `beforeEach` has already run.
+    global.fetch = vi.fn(async () => ({
+      ok: false,
+      status,
+      statusText,
+      headers: { get: () => "corr-1" },
+      text: async () => JSON.stringify(body),
+    }));
+  }
+
+  /** A provider that resolves here must fail loudly, not pass silently. */
+  async function rejectionOf(promise) {
+    return promise.then(
+      () => {
+        throw new Error("expected a rejection");
+      },
+      (e) => e
+    );
+  }
+
+  const mismatched = {
+    action: "stop_ec2_instance",
+    resource_id: "i-1",
+    confirm_resource_id: "not-the-id",
+    region: "us-east-1",
+    dry_run: true,
+  };
+
+  it.each([
+    [
+      "getScan",
+      (p) => p.getScan("no-such-scan"),
+      () => stubFailure(404, "Not Found", { detail: "Scan not found: no-such-scan." }),
+    ],
+    [
+      "compareScans",
+      (p) => p.compareScans("no-such-scan", "also-missing"),
+      () => stubFailure(404, "Not Found", { detail: "Scan not found: no-such-scan." }),
+    ],
+    [
+      "createAccount",
+      (p) => p.createAccount({ account_id: "1" }),
+      () => stubFailure(403, "Forbidden", { detail: "Admin role required." }),
+    ],
+    [
+      "executeCleanup",
+      (p) => p.executeCleanup(mismatched),
+      () => stubFailure(400, "Bad Request", { detail: "Confirmation does not match the resource id." }),
+    ],
+  ])("%s rejects with a readable sentence, not a status line", async (_name, call, stubFail) => {
+    const demoError = await rejectionOf(call(demoScanProvider));
+    stubFail();
+    const apiError = await rejectionOf(call(apiScanProvider));
+
+    for (const err of [demoError, apiError]) {
+      expect(typeof err.message).toBe("string");
+      expect(err.message.length).toBeGreaterThan(0);
+      expect(err.message).not.toMatch(/^Request failed: \d+/);
+      expect(err.message).toMatch(/[.!?)]$/);
+    }
+  });
+});

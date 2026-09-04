@@ -129,6 +129,11 @@ app.add_middleware(
     ],
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
+    # The dashboard is a different origin from the API, so the browser hides
+    # every response header not named here. Without this, the correlation id
+    # the middleware stamps on every response is unreadable by the one client
+    # that would quote it in a bug report.
+    expose_headers=["X-Correlation-ID"],
 )
 
 
@@ -263,6 +268,16 @@ _CLEANUP_STATUS_CODE = {
     "error": 502,
 }
 
+# A cleanup `detail` is rendered verbatim in the dashboard banner, so a status
+# whose detail is built *from an exception* must not reach the client. The
+# `error` branch of `cleanup_service.execute` stringifies the AWS failure, and
+# a botocore ClientError carries the assumed-role ARN and the account id in its
+# message. The full text stays in the audit row and the application log, which
+# is where an operator looks.
+_OPAQUE_CLEANUP_DETAIL = {
+    "error": "The cleanup action failed against AWS. Check the audit entry for details.",
+}
+
 
 @app.get("/cleanup/actions")
 def cleanup_actions():
@@ -306,7 +321,8 @@ def cleanup_execute(payload: CleanupRequest, principal: dict = Depends(get_curre
 
     code = _CLEANUP_STATUS_CODE.get(result["status"], 400)
     if code >= 400:
-        raise HTTPException(status_code=code, detail=result["detail"])
+        detail = _OPAQUE_CLEANUP_DETAIL.get(result["status"], result["detail"])
+        raise HTTPException(status_code=code, detail=detail)
     return result
 
 

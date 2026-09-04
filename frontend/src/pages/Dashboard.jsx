@@ -192,12 +192,17 @@ export default function Dashboard() {
       // Let the bar finish; the reveal happens when it dismisses itself.
       setProgress((p) => (p ? { ...p, done: true } : p));
     } catch (e) {
+      // Join without doubling the punctuation. An ApiError message is already
+      // a terminated sentence; a SyntaxError from a malformed 200 body, or
+      // anything thrown above the client, is not — so test rather than assume.
+      const raw = e?.message || "The scan failed.";
+      const lead = /[.!?)]$/.test(raw) ? raw : `${raw}.`;
       // The demo has no API, so pointing a visitor at one would be nonsense —
       // and would leak a localhost URL into the public bundle.
       setError(
         isDemoMode
-          ? `${e.message}. The demo runs on bundled sample data; try reloading the page.`
-          : `${e.message}. Is the API reachable at ${
+          ? `${lead} The demo runs on bundled sample data; try reloading the page.`
+          : `${lead} Is the API reachable at ${
               import.meta.env.VITE_API_BASE_URL || "the configured base URL"
             }, and are its AWS credentials configured?`
       );
