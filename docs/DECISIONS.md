@@ -75,12 +75,12 @@ Removed:
 
 ~230 lines plus a handful of endpoints. Not a rewrite.
 
-**Not lost:** extracted first to `~/Documents/Claude/fastapi-stripe-saas-reference`
-as a standalone reusable reference implementation — see that repo's `SPEC.md`.
-The extraction target is deliberately *more* than what exists here (webhook
-signature verification, idempotency, a real subscription state machine), because a
-thin copy of these files is not worth keeping. Git history holds the originals
-regardless.
+**Not lost:** extracted first to a standalone `fastapi-stripe-saas-reference`
+project, kept outside this repo as a reusable reference implementation. The
+extraction target is deliberately *more* than what existed here — idempotent
+webhook handling and a real subscription state machine, neither of which the
+removed code had — because a thin copy of these files is not worth keeping.
+Git history holds the originals regardless: they are in the initial commit.
 
 **Sequence:** extract to the reference repo → verify it stands alone → remove here.
 Not the other way round.
@@ -88,9 +88,7 @@ Not the other way round.
 **Consequences:** the files and routes listed above are gone from `backend/app/`,
 and `git grep ADMIN_TOKEN` now returns only this entry's own record of it.
 `CLAUDE.md` states billing is gone rather than shelved; `docs/ARCHITECTURE.md`'s
-record table marks `TENANTMETA#` retired, because D2 deleted its owner. The
-extraction target lives outside this repo, at
-`~/Documents/Claude/fastapi-stripe-saas-reference`.
+record table marks `TENANTMETA#` retired, because D2 deleted its owner.
 
 ---
 
