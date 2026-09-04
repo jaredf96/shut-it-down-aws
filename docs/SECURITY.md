@@ -361,6 +361,15 @@ you would want afterwards.
   Restrict origins and terminate TLS at the edge in production.
 - **Audit log is append-only but not tamper-evident.** For compliance, ship
   audit events to an immutable store (e.g. CloudTrail Lake / S3 Object Lock).
+- **Scan history has a hard per-scan ceiling.** A scan whose zlib-compressed
+  resource list would push its DynamoDB item past ~290 KB is refused rather
+  than split or truncated; the scan is still returned with `persisted: false`
+  and the refusal is logged. On scan-shaped data that is roughly 6,800
+  resources — pinned two-sidedly at 5,000 and 8,000 by
+  `backend/tests/test_persistence.py::test_scan_ceiling_is_where_the_docs_say`
+  — and a scan whose per-resource text is largely unique compresses about 3.5x
+  instead of 14.7x and hits the ceiling nearer 3,500. An install at that scale
+  needs the payload moved to S3 with the item holding a pointer.
 - **Secrets in env.** Move SMTP credentials and anything else sensitive to a
   secrets manager (AWS Secrets Manager / SSM) rather than plain environment
   variables.

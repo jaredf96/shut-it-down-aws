@@ -58,8 +58,8 @@ def list_accounts(workspace_id: str) -> list[dict]:
     """All accounts registered by a workspace. Empty if disabled."""
     if not is_enabled():
         return []
-    response = get_table().query(KeyConditionExpression=Key("pk").eq(_accounts_pk(workspace_id)))
-    return [_strip_keys(item) for item in response.get("Items", [])]
+    items = get_table().query_items(KeyConditionExpression=Key("pk").eq(_accounts_pk(workspace_id)))
+    return [_strip_keys(item) for item in items]
 
 
 def get_account(workspace_id: str, account_id: str) -> dict | None:

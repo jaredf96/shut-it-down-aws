@@ -51,9 +51,9 @@ def list_entries(workspace_id: str, limit: int = 50) -> list[dict]:
     """Return recent audit entries for a workspace (newest first). Empty if disabled."""
     if not is_enabled():
         return []
-    response = get_table().query(
+    items = get_table().query_items(
         KeyConditionExpression=Key("pk").eq(f"AUDIT#{workspace_id}"),
         ScanIndexForward=False,
-        Limit=limit,
+        limit=limit,
     )
-    return [{k: v for k, v in item.items() if k not in ("pk", "sk")} for item in response["Items"]]
+    return [{k: v for k, v in item.items() if k not in ("pk", "sk")} for item in items]

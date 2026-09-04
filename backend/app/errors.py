@@ -17,3 +17,22 @@ class PersistenceUnavailable(RuntimeError):
     as botocore ``ClientError`` so callers can handle them meaningfully, e.g.
     ``ResourceInUseException`` during table creation).
     """
+
+
+class ScanTooLarge(RuntimeError):
+    """A scan's resource list does not fit in one DynamoDB item.
+
+    Distinct from `PersistenceUnavailable`: the store is reachable and
+    answered. The scan itself is fine and is still returned to the caller;
+    only its history row is refused. Raised rather than truncated, because a
+    saved scan holding some of its resources would be read back as a complete
+    one and would make every missing resource look removed.
+    """
+
+
+class ResultSetTooLarge(RuntimeError):
+    """A repository read did not finish within its page budget.
+
+    Raised instead of returning what was read so far: a short page returned as
+    a complete answer is "couldn't see" rendered as "nothing there".
+    """

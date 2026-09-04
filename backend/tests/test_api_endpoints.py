@@ -472,3 +472,38 @@ def test_admin_removes_member_revokes_access(dynamo_table):
     assert client.delete(f"/users/{member['user_id']}", headers=admin_headers).status_code == 200
     # Revoked key no longer authenticates.
     assert client.get("/me", headers=member_headers).status_code == 401
+
+
+# --- Bounded limits, and a scan that outgrows its history row ------------
+
+
+def test_out_of_range_limit_is_rejected_as_a_bad_parameter(dynamo_table):
+    """An unbounded `?limit=` reached DynamoDB as `Limit=0`, which botocore
+    rejects client-side — surfacing as 503 "Persistence backend is
+    unavailable." and blaming the store for a client error."""
+    for path in ("/scans?limit=0", "/cleanup/audit?limit=0", "/scans?limit=101"):
+        res = client.get(path)
+        assert res.status_code == 422, path
+        assert "limit" in res.text
+
+    assert client.get("/scans?limit=20").status_code == 200
+
+
+def test_scan_survives_a_history_row_it_cannot_save(monkeypatch, dynamo_table):
+    """The scan is what the product is for; only its history row is refused.
+    `persisted: false` already models exactly this state, so nothing new
+    appears in the response."""
+    from app.errors import ScanTooLarge
+    from app.repositories import scan_repository
+
+    def _too_large(*a, **k):
+        raise ScanTooLarge("8000 resources compress to a 340000-byte item")
+
+    monkeypatch.setattr(scan_repository, "save_scan", _too_large)
+
+    res = client.get("/scan")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["persisted"] is False
+    assert body["scan_id"] is None
+    assert "resources" in body

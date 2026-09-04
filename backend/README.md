@@ -75,12 +75,12 @@ boto3 picks up credentials automatically from any of:
 | POST   | `/accounts`            | Register an AWS account (admin only)            |
 | DELETE | `/accounts/{id}`       | Remove an account registration (admin only)     |
 | GET    | `/cleanup/actions`     | Supported cleanup actions + what's excluded     |
-| GET    | `/cleanup/audit`       | Recent cleanup attempts (audit log)             |
+| GET    | `/cleanup/audit`       | Recent cleanup attempts (audit log); `?limit=` 1–500, default 50 |
 | POST   | `/cleanup/execute`     | Run one cleanup action (admin, opt-in, audited) |
 | POST   | `/notify`              | Send latest scan's alerts to channels (503 if off) |
 | GET    | `/scan`                | Run every scanner; includes `alerts` (saves if on) |
 | GET    | `/alerts`              | Alerts from the latest saved scan (503 if off)   |
-| GET    | `/scans`               | List saved scans + `vs_previous` deltas (503 if off) |
+| GET    | `/scans`               | List saved scans + `vs_previous` deltas (503 if off); `?limit=` 1–100, default 20 |
 | GET    | `/scans/diff`          | Compare two scans: `?from_id=…&to_id=…`          |
 | GET    | `/scans/{scan_id}`     | Fetch one saved scan (503 if off, 404 if gone)  |
 
@@ -375,12 +375,20 @@ dashboard sidebar light up.
 | `created_at`     | ISO timestamp                                               |
 | `resource_count` | number of resources found                                   |
 | `summary_json`   | small summary (counts by risk level)                        |
-| `resources_json` | full resource list                                          |
+| `resources_gz`   | full resource list — JSON, zlib-compressed (binary)         |
+| `resources_json` | *legacy* — the uncompressed list earlier builds wrote; still read, never migrated |
 
 Because `sk` is time-prefixed, listing a workspace's history is a single `Query`
-with `ScanIndexForward=False` — no secondary index needed. Other record types
-share the table under distinct prefixes (`APIKEY#`, `USERS#`, `ACCOUNTS#`,
-`AUDIT#`).
+with `ScanIndexForward=False` — no secondary index needed, though the read is
+paged: a Query returns at most 1 MB of items and every repository read follows
+`LastEvaluatedKey`. Other record types share the table under distinct prefixes
+(`APIKEY#`, `USERS#`, `ACCOUNTS#`, `AUDIT#`).
+
+A scan whose compressed item would exceed ~290 KB is **refused**, not split and
+not truncated: `GET /scan` still returns the scan, `persisted` is `false`, and
+the refusal is logged at ERROR. On scan-shaped data that ceiling is around
+6,800 resources. Note the one-way step: an older build reads only
+`resources_json`, so scans written after this change are unreadable to it.
 
 **Create the table** (idempotent):
 

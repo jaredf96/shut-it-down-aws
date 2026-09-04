@@ -16,9 +16,10 @@ Covers three guarantees:
 """
 
 import pytest
+from botocore.exceptions import ParamValidationError
 from fastapi.testclient import TestClient
 
-from app.errors import PersistenceUnavailable
+from app.errors import PersistenceUnavailable, ResultSetTooLarge
 from app.main import app
 from app.repositories import dynamo, user_repository
 
@@ -183,3 +184,29 @@ def test_route_refusal_carries_the_correlation_id_in_the_header_only():
     assert res.json()["detail"] == "Cleanup actions are disabled in this environment."
     assert "correlation_id" not in res.json()
     assert res.headers["X-Correlation-ID"]
+
+
+def test_a_malformed_request_is_not_reported_as_an_unreachable_backend(dynamo_table):
+    """`ParamValidationError` is a BotoCoreError subclass raised client-side
+    because *we* built a bad request. Translating it to a 503 sent the
+    operator off to check a DynamoDB that was never involved."""
+    from boto3.dynamodb.conditions import Key
+
+    with pytest.raises(ParamValidationError):
+        dynamo.get_table().query(KeyConditionExpression=Key("pk").eq("x"), Limit=0)
+
+
+def test_result_set_too_large_returns_structured_500(monkeypatch, dynamo_table):
+    """A read that could not be completed is nameable, not an anonymous
+    `internal_error` — and never a partial answer."""
+
+    def _too_large(*a, **k):
+        raise ResultSetTooLarge("read did not complete within 25 pages (60 items)")
+
+    monkeypatch.setattr(user_repository, "list_users", _too_large)
+
+    res = client.get("/users")
+    assert res.status_code == 500
+    body = res.json()
+    assert body["error"] == "result_set_too_large"
+    assert body["correlation_id"] == res.headers["X-Correlation-ID"]

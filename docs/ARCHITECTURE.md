@@ -190,8 +190,13 @@ Key properties:
 - **Time-sortable sort keys** mean "newest first" is `ScanIndexForward=False`
   with no secondary index. History deltas fetch `limit + 1` so even the oldest
   row on a page has a predecessor to diff against.
-- Bulk scan payloads are stored as JSON strings; lightweight metadata stays
-  native so the history list projects cheaply.
+- Bulk scan payloads are stored zlib-compressed; lightweight metadata
+  (`created_at`, `resource_count`, `summary_json`) stays native so the history
+  list projects cheaply and a saved scan stays legible in the console.
+- **Every repository read follows `LastEvaluatedKey`**, via
+  `dynamo.query_items`. A Query is capped at 1 MB of items *read* — before any
+  `ProjectionExpression` — and a short page returned as a complete answer is
+  the same failure the scanner contract forbids by name.
 
 `app/repositories/dynamo.py` is the shared table accessor + idempotent
 `ensure_table()`. Persistence is **optional**: with no `DYNAMODB_TABLE_NAME`,

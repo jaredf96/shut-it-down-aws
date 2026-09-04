@@ -18,7 +18,7 @@ migration would have to be idempotent, partial-failure-safe and tested on every
 install — for a name no caller can see. The one stored `tenant_id` *attribute*
 that reaches a caller is translated in `user_repository`.
 
-Two behaviors live here so no repository has to repeat them:
+Three behaviors live here so no repository has to repeat them:
 
 1. **Local-endpoint credential isolation.** When the configured endpoint is a
    recognized local DynamoDB, the client is built with dummy credentials
@@ -27,6 +27,13 @@ Two behaviors live here so no repository has to repeat them:
    (possibly expired) AWS session.
 2. **Error translation.** Connectivity/credential failures become
    `PersistenceUnavailable` so the API can answer 503 rather than leaking a 500.
+   `ParamValidationError` is excluded — it means *we* built a bad request, and
+   reporting our own bug as an unreachable backend sends the operator off to
+   check DynamoDB.
+3. **Pagination.** `query_items` follows `LastEvaluatedKey`. DynamoDB caps a
+   Query at 1 MB of items read and reports the cut with a continuation key; a
+   caller that ignores it gets a short page indistinguishable from an
+   exhausted partition. Every repository read goes through it.
 """
 
 from __future__ import annotations
@@ -35,10 +42,10 @@ import functools
 from urllib.parse import urlparse
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, ParamValidationError
 
 from app import config
-from app.errors import PersistenceUnavailable
+from app.errors import PersistenceUnavailable, ResultSetTooLarge
 from app.utils import default_region
 
 # Hosts we are willing to treat as a local DynamoDB. Deliberately a narrow
@@ -58,6 +65,14 @@ _LOCAL_CREDENTIALS = {
     "aws_access_key_id": "local",
     "aws_secret_access_key": "local",
 }
+
+# Pagination budget, in round trips per read. A Query with no FilterExpression
+# always returns at least one item, so a read with a `limit` needs at most
+# `limit` pages by construction and cannot loop: for those the budget is the
+# limit itself, and `/scans` and `/cleanup/audit` bound theirs at the route.
+# This floor is what covers the *unbounded* reads — accounts and users — where
+# 25 pages is ~25 MB of 300-byte rows, far outside any workspace this is for.
+_MAX_PAGES = 25
 
 
 def is_enabled() -> bool:
@@ -87,8 +102,10 @@ class _TranslatingTable:
     """Wraps a boto3 Table so infrastructure failures become domain errors.
 
     Only `BotoCoreError` (credentials, endpoint connectivity, timeouts) is
-    translated. A `ClientError` means DynamoDB was reached and replied, so it
-    passes through untouched for callers that handle specific codes.
+    translated, and `ParamValidationError` is excluded from that: it is raised
+    client-side because *we* built a malformed request. A `ClientError` means
+    DynamoDB was reached and replied, so it passes through untouched for
+    callers that handle specific codes.
     """
 
     def __init__(self, table):
@@ -103,10 +120,60 @@ class _TranslatingTable:
         def wrapped(*args, **kwargs):
             try:
                 return attr(*args, **kwargs)
+            except ParamValidationError:
+                # We built a malformed request. That is our bug, not the
+                # store's: let it surface as a loud 500 rather than a 503 that
+                # sends the operator to check DynamoDB. (`Limit=0`, from an
+                # unbounded `?limit=` query string, was reaching callers as
+                # "Persistence backend is unavailable.")
+                raise
             except BotoCoreError as exc:
                 raise PersistenceUnavailable(str(exc)) from exc
 
         return wrapped
+
+    def query_items(self, *, limit: int | None = None, **kwargs) -> list[dict]:
+        """Query, following `LastEvaluatedKey`, and return the items.
+
+        DynamoDB caps a Query at 1 MB of items *read* — before any
+        `ProjectionExpression`, so projecting saves bandwidth, not pages — and
+        reports the cut with a `LastEvaluatedKey`. A caller that ignores it
+        gets a short page indistinguishable from an exhausted partition:
+        "couldn't see" rendered as "nothing there".
+
+        `limit` counts items *returned*, filled across pages. That is not
+        DynamoDB's `Limit`, which caps how far a single request scans forward;
+        passing `Limit` yourself is refused so the two cannot be confused.
+
+        Error handling is `query`'s, unchanged: this calls the wrapped method,
+        so `BotoCoreError` becomes `PersistenceUnavailable`, `ClientError`
+        still passes through untouched mid-pagination, and a malformed request
+        still raises `ParamValidationError`.
+        """
+        if "Limit" in kwargs or "ExclusiveStartKey" in kwargs:
+            raise TypeError("query_items owns Limit/ExclusiveStartKey; pass limit=")
+        if limit is not None and limit <= 0:
+            return []
+
+        # A page always carries at least one item (no read uses a
+        # FilterExpression), so a bounded read terminates in at most `limit`
+        # pages; `_MAX_PAGES` is the floor that covers the unbounded reads.
+        budget = _MAX_PAGES if limit is None else max(_MAX_PAGES, limit)
+
+        items: list[dict] = []
+        for _ in range(budget):
+            if limit is not None:
+                kwargs["Limit"] = limit - len(items)
+            response = self.query(**kwargs)
+            items.extend(response.get("Items", []))
+            start_key = response.get("LastEvaluatedKey")
+            if start_key is None:
+                return items
+            if limit is not None and len(items) >= limit:
+                return items[:limit]
+            kwargs["ExclusiveStartKey"] = start_key
+
+        raise ResultSetTooLarge(f"read did not complete within {budget} pages ({len(items)} items)")
 
 
 def get_table():

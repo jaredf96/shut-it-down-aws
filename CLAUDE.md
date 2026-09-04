@@ -85,8 +85,15 @@ a generic mapper to `dynamo.py`. `TENANTMETA#<w>` is **retired** — D2 deleted 
 owner, nothing reads or writes it, and existing rows are left in place on purpose
 (D3); they are not garbage to sweep.
 `scan_id = <ISO-8601-UTC>_<uuid8>` — time-sortable, so newest-first is a Query
-with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
-(avoids Decimal issues); metadata native. Persistence is optional: no
+with `ScanIndexForward=False`; **no GSIs**. Bulk scan payloads are stored
+zlib-compressed in `resources_gz`; the plain `resources_json` written by earlier
+builds is still read and never migrated (D16). Metadata (`created_at`,
+`resource_count`, `summary_json`) stays native/plain so the history list
+projects cheaply. **Every repository read goes through `dynamo.query_items`,
+which follows `LastEvaluatedKey`** — a Query caps at 1 MB of items *read*,
+before any projection, and a short page returned as a complete answer is the
+failure this codebase forbids by name. Do not call `table.query` directly from a
+repository. Persistence is optional: no
 `DYNAMODB_TABLE_NAME` → repositories are safe no-ops, history endpoints 503.
 
 ## Hard invariants — do not relax these
@@ -161,7 +168,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   stays outermost (later `add_middleware` wraps earlier) — keep that order.
 - Repository connectivity/credential failures raise `PersistenceUnavailable`
   (→ structured 503). `ClientError` is *not* translated: it means DynamoDB
-  answered, and callers like `ensure_table` depend on reading its code.
+  answered, and callers like `ensure_table` depend on reading its code. Neither
+  is `ParamValidationError`, even though it is a `BotoCoreError`: it is raised
+  client-side because *we* built a bad request, and a 503 sends the operator to
+  check a store that was never involved.
 - **The provider boundary is a contract.** Demo and live providers obtain data
   differently but return identical shapes, enforced by `src/data/contract.d.ts`
   (compile time), the provider-contract test (runtime), and

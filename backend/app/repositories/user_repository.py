@@ -116,8 +116,8 @@ def create_user(workspace_id: str, name: str, role: str = "member") -> dict:
 def list_users(workspace_id: str) -> list[dict]:
     if not is_enabled():
         return []
-    response = get_table().query(KeyConditionExpression=Key("pk").eq(_users_pk(workspace_id)))
-    return [{k: item.get(k) for k in _PUBLIC_FIELDS} for item in response.get("Items", [])]
+    items = get_table().query_items(KeyConditionExpression=Key("pk").eq(_users_pk(workspace_id)))
+    return [{k: item.get(k) for k in _PUBLIC_FIELDS} for item in items]
 
 
 def _get_raw(workspace_id: str, user_id: str) -> dict | None:

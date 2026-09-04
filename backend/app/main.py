@@ -12,14 +12,14 @@ import logging
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import config
 from app.auth import get_current_principal, get_current_workspace, require_admin
-from app.errors import PersistenceUnavailable
+from app.errors import PersistenceUnavailable, ResultSetTooLarge, ScanTooLarge
 from app.logging_setup import configure_logging
 from app.models import AccountCreate, CleanupRequest, UserCreate
 from app.repositories import (
@@ -78,6 +78,26 @@ async def _persistence_unavailable(request: Request, exc: PersistenceUnavailable
         content={
             "detail": "Persistence backend is unavailable.",
             "error": "persistence_unavailable",
+            "correlation_id": correlation_id,
+        },
+    )
+
+
+@app.exception_handler(ResultSetTooLarge)
+async def _result_set_too_large(request: Request, exc: ResultSetTooLarge):
+    """A read that could not be completed -> a named 500, not a partial answer."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.error(
+        "result set too large path=%s correlation_id=%s: %s",
+        request.url.path,
+        correlation_id,
+        exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "The result set was too large to return completely.",
+            "error": "result_set_too_large",
             "correlation_id": correlation_id,
         },
     )
@@ -290,7 +310,10 @@ def cleanup_actions():
 
 
 @app.get("/cleanup/audit")
-def cleanup_audit(limit: int = 50, workspace: str = Depends(get_current_workspace)):
+def cleanup_audit(
+    limit: int = Query(50, ge=1, le=500),
+    workspace: str = Depends(get_current_workspace),
+):
     """Recent cleanup attempts for this workspace (newest first)."""
     _require_persistence()
     return {"entries": audit_repository.list_entries(workspace, limit)}
@@ -353,7 +376,13 @@ def scan_everything(save: bool = True, workspace: str = Depends(get_current_work
 
     scan_id = None
     if save and scan_repository.is_enabled():
-        scan_id = scan_repository.save_scan(result, workspace_id=workspace)
+        try:
+            scan_id = scan_repository.save_scan(result, workspace_id=workspace)
+        except ScanTooLarge as exc:
+            # The scan is what the product is for; only its history row is
+            # refused. `persisted: false` already models exactly this state
+            # (persistence off, or ?save=false), so no contract changes.
+            logger.error("scan not saved for workspace=%s: %s", workspace, exc)
 
     response = {**result, "alerts": alerts, "scan_id": scan_id, "persisted": scan_id is not None}
 
@@ -408,7 +437,10 @@ def get_alerts(workspace: str = Depends(get_current_workspace)):
 
 
 @app.get("/scans")
-def list_scans(limit: int = 20, workspace: str = Depends(get_current_workspace)):
+def list_scans(
+    limit: int = Query(20, ge=1, le=100),
+    workspace: str = Depends(get_current_workspace),
+):
     """List recent saved scans (newest first), each with a `vs_previous` delta.
 
     503 if persistence is disabled.

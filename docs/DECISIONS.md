@@ -805,6 +805,76 @@ layer or request-flow step.
 
 ---
 
+## D16 — A scan too big for one item is refused, not split and not truncated
+
+**Decided:** 2026-09-04 · **Status:** decided
+
+Saved scans keep their resource list in a single DynamoDB item, now
+zlib-compressed (`resources_gz`; the older plain `resources_json` is read
+forever and never migrated). Measured on scan-shaped data — 624 B/resource raw,
+42 B compressed, a 14.7x ratio — that moves the ceiling from ~630 resources to
+roughly 6,800, pinned two-sidedly at 5,000 and 8,000 by
+`test_scan_ceiling_is_where_the_docs_say`. A scan that still will not fit raises
+`ScanTooLarge`; `GET /scan` returns the scan with `persisted: false` and logs
+the refusal. A scan whose per-resource text is largely unique compresses about
+3.5x instead, so the honest floor is nearer 3,500.
+
+**Why not split across items.** Chunking has no ceiling, but multi-item writes
+are not atomic (`TransactWriteItems` caps at 100 items / 4 MB, so atomicity is
+not free either), and a partially written scan reads back short — which is the
+exact invariant this change exists to defend. It also puts chunk rows in the
+scan partition, so `list_scans` has to learn to skip them. New machinery and a
+new silent failure mode, to serve a workspace scanning thousands of leftover
+resources in one run.
+
+**Why not truncate with a marker.** A saved scan holding some of its resources
+is read by `diff_service`, `history_service` and `evaluate_alerts` as a complete
+one, so every omitted resource surfaces as *removed* and every one that returns
+surfaces as *new*. Marking it honestly means a new field on the saved scan and
+three consumers each learning to refuse it. Truncation does not degrade the
+feature; it corrupts the three features built on it.
+
+**Why the refusal is narrow.** `ScanTooLarge` comes from our own pre-flight size
+gate, and from a `ClientError` only when the code is `ValidationException` *and*
+the message mentions size. `ValidationException` is DynamoDB's generic 400 —
+malformed expression, bad attribute value, empty key — and `scan_everything`
+swallows `ScanTooLarge` into `persisted: false`, so relabelling the whole family
+would trade a loud failure for a silent one.
+
+**Why the ceiling is 290 KB and not 400.** DynamoDB's item cap is 400 KB, but
+moto — the only backend the suite runs against — sizes a binary attribute by its
+base64 length against 405,000 bytes, giving an effective raw ceiling of ~303 KB.
+Refusing at 290 KB means the pre-flight gate binds first under both accountings,
+so the branch the tests exercise is the branch production takes.
+
+**The same change closes the read side.** No repository followed
+`LastEvaluatedKey`; `grep` for it exited 1. `history_service` asks for 21 *full*
+scans, so the 1 MB page cap bit at about 75 resources per scan and `/scans`
+silently rendered 20 saved scans as a handful. A shared `query_items` on the
+table wrapper owns the loop, and `limit` now counts items *returned* rather than
+being passed through as DynamoDB's scan-forward `Limit` — the ambiguity the bug
+was made of. `ProjectionExpression` does not help: the cap is applied to items
+read, before projection.
+
+**Consequences:** `backend/app/repositories/dynamo.py` (`query_items`, the
+`ParamValidationError` carve-out), `scan_repository.py` (compression, the size
+gate, the two-generation read), `audit_repository.py`, `account_repository.py`,
+`user_repository.py` (all five reads moved onto `query_items`),
+`backend/app/errors.py` (`ScanTooLarge`, `ResultSetTooLarge`) and
+`backend/app/main.py` (the 500 handler, bounded `?limit=` on `/scans` and
+`/cleanup/audit`, the swallowed save failure) carry the code.
+`backend/tests/test_persistence_paging.py` is new — 11 tests, including a
+control that fails if moto ever stops enforcing the page cap — with 10 more
+across `test_persistence.py`, `test_persistence_errors.py` and
+`test_api_endpoints.py`. Docs re-read against the change: `CLAUDE.md` § Data
+model + § Gotchas, `backend/README.md` (record table, endpoint table, the
+downgrade caveat), `docs/ARCHITECTURE.md` § Data model, and `docs/SECURITY.md`
+§ Production gaps. Root `README.md` needs no change — no new env var, no new
+capability, and the response contract is unchanged, which is why the refusal is
+routed through the existing `persisted` field rather than a new one.
+
+---
+
 ## Template
 
 ```markdown
