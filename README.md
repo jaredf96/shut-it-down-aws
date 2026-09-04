@@ -79,7 +79,7 @@ below is honest about which category it falls into.
 - Liveness/readiness split, structured `503`s, request correlation IDs — the
   id and the server's own error wording reach the dashboard, rather than being
   replaced by a bare status line
-- 277 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
+- 279 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 

@@ -1,6 +1,9 @@
 import boto3
+import pytest
+from pydantic import ValidationError
 
 from app.aws.session import session_for_account
+from app.models.account import AccountCreate
 from app.repositories import account_repository
 from app.services import diff_scans, scan_accounts
 from app.services.multi_account_service import _tag
@@ -12,6 +15,33 @@ from tests.conftest import REGION
 def test_account_id_parsed_from_role_arn():
     arn = "arn:aws:iam::123456789012:role/CloudLabReadOnly"
     assert account_repository.account_id_from_role_arn(arn) == "123456789012"
+
+
+def test_unparseable_role_arn_raises_instead_of_inventing_an_account_id():
+    """A registration that cannot be parsed is a bad request, not an account.
+
+    The old fallback returned `uuid4().hex[:12]` and stored it as the AWS
+    account id, so a typo produced a record keyed on a number that matches no
+    account in AWS.
+    """
+    for bad in ["", "not-an-arn", "arn:aws:iam::12345:role/TooShort"]:
+        with pytest.raises(ValueError, match="Not an IAM role ARN"):
+            account_repository.account_id_from_role_arn(bad)
+
+
+def test_malformed_role_arn_is_rejected_at_the_api_boundary():
+    """`AccountCreate` refuses it before the route runs, so it is a 422."""
+    with pytest.raises(ValidationError):
+        AccountCreate(name="Typo", role_arn="arn:aws:iam::123:role/Nope")
+
+    # An unanchored pattern would accept this: it *contains* a valid ARN, but
+    # the account id parsed back out would be the wrong twelve digits.
+    with pytest.raises(ValidationError):
+        AccountCreate(name="Smuggled", role_arn="999999999999 arn:aws:iam::111111111111:role/R")
+
+    # Partitions and role paths stay valid.
+    assert AccountCreate(name="GovCloud", role_arn="arn:aws-us-gov:iam::111111111111:role/R")
+    assert AccountCreate(name="Path", role_arn="arn:aws:iam::111111111111:role/team/Read")
 
 
 def test_create_list_get_delete_account(dynamo_table):

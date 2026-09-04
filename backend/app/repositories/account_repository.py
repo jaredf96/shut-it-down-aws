@@ -10,7 +10,6 @@ scans never sees account records.
 from __future__ import annotations
 
 import re
-import uuid
 from datetime import UTC, datetime
 
 from boto3.dynamodb.conditions import Key
@@ -29,9 +28,22 @@ def _accounts_pk(workspace_id: str) -> str:
 
 
 def account_id_from_role_arn(role_arn: str) -> str:
-    """Parse the 12-digit account id from a role ARN, or a short uuid fallback."""
+    """Parse the 12-digit account id from a role ARN. Raises on anything else.
+
+    This used to fall back to `uuid4().hex[:12]`, which stored a fabricated
+    value in the field the rest of the app reads as *the AWS account id* — the
+    record's own key, the join key for diffs and alerts, and the id an operator
+    matches against the AWS console. A registration that could not be parsed is
+    a bad request, not an account with a made-up identity.
+
+    `AccountCreate` already rejects a malformed ARN with a 422 at the API
+    boundary; this raise is defence in depth for the callers that build a
+    payload directly.
+    """
     match = _ROLE_ARN_ACCOUNT.search(role_arn or "")
-    return match.group(1) if match else uuid.uuid4().hex[:12]
+    if not match:
+        raise ValueError(f"Not an IAM role ARN: {role_arn!r}")
+    return match.group(1)
 
 
 def create_account(workspace_id: str, payload: dict) -> dict:
@@ -39,7 +51,7 @@ def create_account(workspace_id: str, payload: dict) -> dict:
     if not is_enabled():
         raise RuntimeError("Persistence is required to register accounts")
 
-    account_id = payload.get("account_id") or account_id_from_role_arn(payload["role_arn"])
+    account_id = account_id_from_role_arn(payload["role_arn"])
     item = {
         "pk": _accounts_pk(workspace_id),
         "sk": account_id,

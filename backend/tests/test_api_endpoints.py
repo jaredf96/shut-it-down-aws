@@ -299,7 +299,11 @@ def test_notify_delivers_latest_scan_alerts(dynamo_table, monkeypatch):
 
 def test_accounts_503_without_persistence():
     assert client.get("/accounts").status_code == 503
-    assert client.post("/accounts", json={"name": "x", "role_arn": "y"}).status_code == 503
+    # A well-formed ARN on purpose: `AccountCreate` validates the body before
+    # the route runs, so a placeholder would 422 and never reach the
+    # persistence check this test exists to pin.
+    body = {"name": "x", "role_arn": "arn:aws:iam::123456789012:role/Read"}
+    assert client.post("/accounts", json=body).status_code == 503
 
 
 def test_account_crud_endpoints(dynamo_table):
