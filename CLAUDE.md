@@ -184,6 +184,12 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
 - **Demo fixtures are generated, never hand-edited.** `make demo-fixtures` runs
   the real scanners over a seeded moto sandbox. The seed matters: without it,
   every regeneration churns all IDs and invalidates the committed screenshots.
+- **Notifiers are constructed outside the per-channel try.** `notify()` calls
+  `notifiers_from_env()` before the loop, so anything that can raise while
+  *building* a notifier — a bad `SMTP_CA_BUNDLE` path, an unparseable
+  `SMTP_PORT` — escapes through `GET /scan` instead of becoming one channel's
+  error. Resolve fallible config lazily inside `send()`, and coerce (never
+  raise on) an out-of-range enum in `__init__`.
 - **A new scan-table column can silently clip the last one.** `.page`'s
   max-width is sized to fit the table beside the history sidebar; re-measure
   `.table-wrapper` scrollWidth vs clientWidth (the CSS comment has the numbers).
@@ -223,7 +229,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk payloads stored as JSON strings
   single-resource actions; anything data-destructive beyond unattached EBS
   belongs in `NOT_SUPPORTED`. Note the matching IAM action in the READMEs.
 - **New notifier:** subclass `Notifier` in `app/notifiers/`, keep
-  `format`/`send` separate, wire into `notifiers_from_env()`.
+  `format`/`send` separate, wire into `notifiers_from_env()`. Resolve any
+  fallible config (files, contexts, parsing) inside `send()`, not `__init__`;
+  a security-relevant mode is coerced to a safe default in `__init__` so the
+  guarantee lives on the class rather than on the caller.
 - **New live-pricing dimension:** add a cached method on `LivePricer`, then a
   branch in `pricing_service._live_estimate` — static remains the fallback.
 

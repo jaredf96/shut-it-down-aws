@@ -78,7 +78,7 @@ below is honest about which category it falls into.
 - Liveness/readiness split, structured `503`s, request correlation IDs — the
   id and the server's own error wording reach the dashboard, rather than being
   replaced by a bare status line
-- 224 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
+- 238 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 
@@ -272,7 +272,11 @@ Everything is **off by default** — set only what you need. Full annotated list
 | `DEFAULT_WORKSPACE_ID` | Workspace used in local mode (default `default`; `DEFAULT_TENANT_ID` is the deprecated former name) |
 | **Notifications** | |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | Email transport |
+| `SMTP_HOST` / `SMTP_PORT` | Relay host and port (587 STARTTLS, 465 implicit TLS) |
+| `SMTP_SECURITY` | `starttls` (default) · `ssl` (SMTPS/465) · `none`. Certificates and hostnames are always verified; there is no option to skip verification |
+| `SMTP_CA_BUNDLE` | PEM trust anchors for a private-CA or self-signed relay — **replaces** the system store |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | SMTP auth — refused when `SMTP_SECURITY=none`, so a password is never sent in the clear |
+| `SMTP_USE_TLS` | Deprecated boolean form of `SMTP_SECURITY` |
 | `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` | Email sender + recipients |
 | `NOTIFY_ON_SCAN` / `NOTIFY_MIN_SEVERITY` | Auto-notify on scan; severity threshold |
 | **Cost** | |

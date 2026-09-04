@@ -312,6 +312,15 @@ INFO noise never pages anyone. A failing channel is reported as
 (`app/notifiers/`) keeps message `format` separate from `send`, so message
 construction is unit-tested without sending anything.
 
+**Email transport.** Both modes get an explicit `ssl.create_default_context()`,
+so the relay's certificate chain is validated and its hostname checked —
+`smtplib`'s bare `starttls()` does neither. `SMTP_SECURITY=ssl` speaks SMTPS on
+port 465; `SMTP_CA_BUNDLE` supplies trust anchors for a private CA (and
+replaces the system store rather than adding to it). `SMTP_SECURITY=none` is
+still there for a loopback relay but refuses to authenticate. A verification
+failure is one channel's error — logged, reported in `channels`, and never
+allowed to break the scan that triggered it.
+
 ### History deltas (`vs_previous`)
 
 `GET /scans` returns each scan with a `vs_previous` field summarizing how it

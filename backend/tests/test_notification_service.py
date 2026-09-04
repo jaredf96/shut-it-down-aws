@@ -1,4 +1,10 @@
+import smtplib
+import ssl
+
+import pytest
+
 from app.models import Alert, AlertSeverity
+from app.notifiers import EmailNotifier
 from app.services import notify
 
 
@@ -74,3 +80,48 @@ def test_all_channels_failing_reports_nothing_delivered():
 
     assert result["sent_count"] == 0
     assert [c["status"] for c in result["channels"]] == ["error", "error"]
+
+
+# --- Invariant 4: a transport failure is one channel's problem -----------
+
+
+class _FailingSMTP:
+    """A relay whose certificate no longer verifies."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def starttls(self, *, context=None):
+        raise ssl.SSLCertVerificationError("certificate verify failed: self signed certificate")
+
+    def send_message(self, message):
+        raise AssertionError("must not be reached")
+
+
+@pytest.mark.parametrize(
+    "notifier_kwargs",
+    [{}, {"security": "none", "username": "u", "password": "p"}],
+    ids=["certificate-verification", "credentials-over-plaintext"],
+)
+def test_email_transport_failure_is_reported_per_channel(monkeypatch, notifier_kwargs):
+    """Both ways verified TLS can fail an operator — a relay whose certificate
+    no longer verifies, and a config that would have sent a password in the
+    clear — surface as a channel error, never as a broken scan."""
+    monkeypatch.setattr(smtplib, "SMTP", _FailingSMTP)
+
+    notifier = EmailNotifier("relay.internal", 587, "a@x", ["b@x"], **notifier_kwargs)
+    result = notify(
+        [_alert(AlertSeverity.CRITICAL, "a")], notifiers=[notifier], min_severity="INFO"
+    )
+
+    assert result["sent_count"] == 0
+    channel = result["channels"][0]
+    assert channel["channel"] == "email"
+    assert channel["status"] == "error"
+    assert channel["detail"]

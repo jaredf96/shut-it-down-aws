@@ -749,6 +749,62 @@ to a single concern.
 
 ---
 
+## D15 — SMTP TLS is verified, and there is no variable that turns verification off
+
+**Decided:** 2026-09-04 · **Status:** decided
+
+`EmailNotifier` passes an explicit `ssl.create_default_context()` to both
+`starttls()` and `SMTP_SSL`, so the relay's certificate chain is validated and
+its hostname checked. `SMTP_CA_BUNDLE` points at PEM trust anchors for a
+private CA or a self-signed relay. There is **no** skip-verify variable, and
+adding one is what this entry refuses.
+
+`SMTP_SECURITY` (`starttls` default | `ssl` | `none`) replaces the boolean
+`SMTP_USE_TLS`, which stays as a warn-once deprecated fallback on D3's
+`DEFAULT_TENANT_ID` pattern. `none` remains available for a loopback or sidecar
+relay, but **refuses to authenticate** — credentials never cross an
+unencrypted socket.
+
+**Why a mode and not just a context.** The boolean could not express SMTPS, so
+port 465 — the other common relay configuration — opened a plain socket and
+could never complete a session. Refusing plaintext credentials without also
+offering 465 would have left those operators with no working path at all.
+
+**The guarantee lives on the class, not on the caller.** `__init__` coerces an
+unrecognised mode to `starttls`, and `send()` branches on the *complement* of
+`none` rather than on `== "starttls"`, so plaintext takes the literal word at
+both layers. That is not decoration: an earlier draft branched on
+`== "starttls"` against an unvalidated string, which meant
+`EmailNotifier(..., security="tls", username=..., password=...)` matched no TLS
+branch, missed a `== "none"` credential guard, and would have sent AUTH in the
+clear — while this entry and `docs/SECURITY.md` claimed verification was
+unconditional. A doc claiming a protection the code does not provide is exactly
+what D10 calls review-failing. Coercion rather than a raise, because `__init__`
+runs inside `notifiers_from_env()`, outside `notify()`'s per-channel try
+(invariant 4).
+
+**Why verification on by default, given "everything off by default".** That
+invariant is about *features* being off, not protections. The unverified
+connection was not a configured choice anyone made; it was `smtplib`'s default
+showing through. `SMTP_CA_BUNDLE` exists so the answer to a private CA is a
+narrower trust store rather than no trust store — without it, the only escape
+an operator has is turning TLS off entirely, which is worse than what this
+replaced.
+
+**Consequences:** `backend/app/notifiers/email.py` (context, modes, credential
+refusal, lazy context build), `backend/app/config.py` (`smtp_security`,
+`smtp_settings` keys), and `backend/app/services/notification_service.py` (a
+failing channel is now logged, not only reported) carry the code.
+`backend/tests/test_notifiers.py` and `test_notification_service.py` pin it,
+including the constructor hole and that a bad CA bundle fails before any
+socket. Docs re-read against the change: root `README.md` env table,
+`backend/.env.example`, `backend/README.md` § Notifications, `docs/SECURITY.md`
+§ Outbound email transport (new), and `CLAUDE.md` §§ Gotchas + Extension
+recipes. `docs/ARCHITECTURE.md` needs no change — this adds no component,
+layer or request-flow step.
+
+---
+
 ## Template
 
 ```markdown

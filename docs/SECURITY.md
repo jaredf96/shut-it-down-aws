@@ -317,6 +317,34 @@ validation (422) resolves no workspace to record under.
 Because users are first-class (workspace + user id + role), every mutating action is
 attributable to a specific user.
 
+## Outbound email transport
+
+The email notifier passes an explicit `ssl.create_default_context()` to both
+`starttls()` and `SMTP_SSL`, so the relay's certificate chain is validated and
+its hostname checked. Called bare — as it was — `smtplib.starttls()` builds
+`ssl._create_stdlib_context()`: `CERT_NONE`, `check_hostname` False. Nothing
+was verified, and `login()` then put the SMTP password on that connection.
+
+What is guaranteed:
+
+- **Verification is not optional.** There is no skip-verify variable, and
+  adding one is a decided no (D15). The mode is coerced to a known value inside
+  `EmailNotifier`, so the guarantee holds for any caller — not only for
+  env-driven config.
+- **`SMTP_CA_BUNDLE` is the supported path** for a private CA or a self-signed
+  relay. It **replaces** the system trust store rather than adding to it, so
+  trust becomes exactly that file. Do not set it when relaying through a public
+  provider.
+- **`SMTP_SECURITY=none` refuses to authenticate.** Plaintext remains available
+  for a loopback or sidecar relay, but a username set alongside it is a refusal
+  before the socket is opened, not a password on the wire.
+
+The honest limit: a relay whose certificate does not match the name in
+`SMTP_HOST` will no longer be reached. That is the point — but it means an
+operator who was silently relying on an unverified connection sees email stop.
+It stops loudly: a per-channel `error` in the `notifications` summary and a
+`WARNING` in the application log, never a broken scan (invariant 4).
+
 ## Production gaps
 
 Shut It Down is self-hosted and exposes no public multi-tenant API (D1), so the

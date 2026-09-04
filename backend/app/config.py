@@ -109,6 +109,40 @@ def live_pricing_enabled() -> bool:
 
 _VALID_SEVERITIES = {"INFO", "WARNING", "CRITICAL"}
 
+_SMTP_SECURITY_MODES = {"starttls", "ssl", "none"}
+_LEGACY_SMTP_TLS_ENV = "SMTP_USE_TLS"
+
+
+# Warn-once, for the reason spelled out above _warn_legacy_workspace_env.
+@functools.lru_cache(maxsize=1)
+def _warn_legacy_smtp_tls_env() -> None:
+    logger.warning(
+        "%s is deprecated; use SMTP_SECURITY=starttls|ssl|none instead.",
+        _LEGACY_SMTP_TLS_ENV,
+    )
+
+
+def smtp_security() -> str:
+    """Email transport: starttls (default) | ssl (SMTPS, port 465) | none.
+
+    `SMTP_SECURITY` is canonical and wins when both are set. `SMTP_USE_TLS` is
+    the boolean it replaced and still works (true -> starttls, false -> none),
+    so an existing deployment keeps sending — it just says so once, on D3's
+    `DEFAULT_TENANT_ID` pattern.
+
+    An unrecognised value falls back to `starttls`, never to `none`: a typo has
+    to fail closed, as a visible per-channel connection error, rather than
+    silently dropping the transport. Same coercion rule as notify_min_severity.
+    """
+    mode = os.environ.get("SMTP_SECURITY", "").strip().lower()
+    if mode:
+        return mode if mode in _SMTP_SECURITY_MODES else "starttls"
+    legacy = os.environ.get(_LEGACY_SMTP_TLS_ENV)
+    if legacy is not None:
+        _warn_legacy_smtp_tls_env()
+        return "starttls" if legacy.lower() in _TRUTHY else "none"
+    return "starttls"
+
 
 def slack_webhook_url() -> str | None:
     """Slack Incoming Webhook URL for alert delivery, or None."""
@@ -122,7 +156,12 @@ def alert_email_recipients() -> list[str]:
 
 
 def smtp_settings() -> dict | None:
-    """SMTP config for the email notifier, or None if SMTP_HOST is unset."""
+    """SMTP config for the email notifier, or None if SMTP_HOST is unset.
+
+    The keys are `EmailNotifier`'s constructor kwargs minus `recipients` —
+    `notifiers_from_env` splats this dict — so a key here and a parameter there
+    move together or construction raises.
+    """
     host = os.environ.get("SMTP_HOST")
     if not host:
         return None
@@ -132,7 +171,8 @@ def smtp_settings() -> dict | None:
         "sender": os.environ.get("ALERT_EMAIL_FROM", "alerts@cloud-lab-cleanup.local"),
         "username": os.environ.get("SMTP_USERNAME") or None,
         "password": os.environ.get("SMTP_PASSWORD") or None,
-        "use_tls": os.environ.get("SMTP_USE_TLS", "true").lower() in _TRUTHY,
+        "security": smtp_security(),
+        "ca_bundle": os.environ.get("SMTP_CA_BUNDLE") or None,
     }
 
 

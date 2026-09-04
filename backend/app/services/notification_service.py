@@ -7,9 +7,13 @@ breaks the others — each result is reported independently.
 
 from __future__ import annotations
 
+import logging
+
 from app import config
 from app.models import Alert
 from app.notifiers import EmailNotifier, Notifier, SlackNotifier
+
+logger = logging.getLogger(__name__)
 
 _SEVERITY_RANK = {"INFO": 0, "WARNING": 1, "CRITICAL": 2}
 
@@ -68,6 +72,11 @@ def notify(
                 {"channel": notifier.name, "status": "sent", "detail": f"{len(relevant)} alert(s)"}
             )
         except Exception as exc:  # one channel failing must not break the rest
+            # The `channels` entry is only read by whoever called the endpoint.
+            # With NOTIFY_ON_SCAN driving delivery from a cron, nobody does —
+            # so a channel that silently stops (an expired relay certificate,
+            # say) has no other evidence.
+            logger.warning("notifier %s failed: %s", notifier.name, exc)
             channels.append({"channel": notifier.name, "status": "error", "detail": str(exc)})
 
     delivered = any(c["status"] == "sent" for c in channels)
