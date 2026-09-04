@@ -702,43 +702,45 @@ opening warning rewritten (the third finding), root `README.md` gate 7,
 
 ---
 
-## D14 — The interview-prep file and the toolchain narration come out of the history
+## D14 — Personal material does not belong in the project history; D11 is superseded for that case
 
 **Decided:** 2026-09-04 · **Status:** executed
 
-D11 said no further rewrite. This supersedes it for one case it did not weigh:
-removing content that should not have been published, rather than tidying
-content that was fine.
+D11 settled that this history needs no further rewrite, and that holds for
+everything it weighed: squashing, rewording, author rewrites — all cosmetic.
+It does not reach personal interview-preparation material that had been
+committed to the project's history, because when D11 was written nothing in the
+history was in that category. A decision reached without that fact in front of
+it does not settle the question.
 
-`docs/INTERVIEW_TALKING_POINTS.md` — 276 lines, added in the root commit and
-deleted at the rebrand — is still in every clone. It is written to a different
-audience than the rest of the repo, and three lines in the historical
-`README.md` and `CLAUDE.md` point at it by name, so removing the file alone
-would leave the signpost standing. Eight commit messages narrate the toolchain
-that produced the work rather than the work itself.
+**The rule this sets, and its limit.** A rewrite is justified only for content
+that was never project material in the first place — notes addressed to the
+author's own career rather than to anyone reading or running this software.
+That limit is deliberate and narrow. Design notes, maintainer instructions,
+security rationale and contributor documentation all address audiences other
+than the ordinary reader, and **none of them qualify**: D11 governs those,
+unchanged. If a future case cites this entry, the test is whether the content is
+*personal*, not whether its audience is unusual.
 
-The rewrite removes the file from every commit that carried it, strips those
-three signposts, and rewords the eight messages. Nothing else changes: the tip
-tree is byte-identical before and after, which is the property that makes this
-checkable rather than a matter of trust.
+The rewrite removed that material together with the stale references to it left
+behind in historical copies of `README.md` and `CLAUDE.md` — removing the file
+alone would have left them pointing at nothing. It also reworded eight commit
+messages that narrated the tooling which produced the work rather than the work
+itself. That second half is ordinary editorial hygiene; it would not have
+justified a rewrite on its own and rode along because the history was being
+rewritten anyway.
 
-**Why this and not D11.** D11 argues against a *cosmetic* squash, and its
-stated cost is that a rewrite orphans every commit this file cites by SHA (it
-names D8's `91aa8c1`). That cost is real and is paid here — `git filter-repo`
-remaps the hashes inside commit messages on its own, and the citations in this
-file are repaired in the commit that follows the rewrite. What D11 never weighs
-is content that should not be in the repository at all, because when it was
-written nothing in the history was in that category. A decision reached without
-that fact in front of it does not settle the question.
+Nothing else changed: the tip tree is byte-identical before and after, which is
+the property that makes this checkable rather than a matter of trust.
 
-The cost only rises. The repository has been public since 2026-09-01 with no
-stars and no forks, so this is the cheapest it will ever be, and every clone
-taken from here on carries the file.
-
-**What a rewrite cannot do.** Anyone who cloned before the force-push keeps the
-old objects, and an unreferenced commit can still be served by URL until it is
-garbage-collected. This reduces exposure; it does not revoke it. That is a
-reason to act sooner, not a reason to skip it.
+**What it cost, and what it cannot do.** D11's stated objection was that a
+rewrite orphans every commit this file cites by SHA. That cost is real and was
+paid — see Consequences. Acting now rather than later was the cheaper half of
+the trade: the repository had been public for three days with no forks, and
+every clone taken after the fact carries what it carried. But anyone who cloned
+before the force-push keeps the old objects, and an unreferenced commit can
+still be served by URL until it is garbage-collected. This reduces exposure; it
+does not revoke it.
 
 **Consequences:** `main` is rewritten; every SHA changed. All 88 commits
 survive, the tip tree is byte-identical to the one before the rewrite, one
