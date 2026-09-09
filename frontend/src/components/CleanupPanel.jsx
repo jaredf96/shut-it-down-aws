@@ -54,7 +54,10 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  async function load() {
+  // The action catalog is configuration, not something an attempt can change,
+  // so it is read once. Failing to read it renders the panel as nothing at all
+  // (below) rather than as a workflow whose gates are unknown.
+  async function loadCatalog() {
     try {
       const data = await scanProvider.getCleanupActions();
       setCatalog(data);
@@ -62,15 +65,27 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
     } catch {
       setCatalog(null);
     }
+  }
+
+  // Every authenticated, well-formed attempt is audited, refusals and failures
+  // included, so the trail is reread after *every* attempt and not only after
+  // one the service accepted. A refusal is the entry an operator most wants to
+  // watch land; it used to take a page reload to appear.
+  //
+  // A failed reread keeps whatever is already on screen: those entries are
+  // still the last thing the service said, and blanking them turns one
+  // transient GET into "nothing was ever attempted".
+  async function refreshAudit() {
     try {
       setAudit((await scanProvider.getCleanupAudit()).entries);
     } catch {
-      setAudit([]);
+      // keep the entries already rendered
     }
   }
 
   useEffect(() => {
-    load();
+    loadCatalog();
+    refreshAudit();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mayPreview = isAdmin || capabilities.cleanupPreview;
@@ -118,11 +133,11 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         dry_run: previewOnly ? true : dryRun,
       });
       setResult(res);
-      load();
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
+      refreshAudit();
     }
   }
 

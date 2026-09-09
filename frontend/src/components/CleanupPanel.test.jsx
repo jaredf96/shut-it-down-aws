@@ -16,6 +16,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const executeCleanup = vi.fn();
+const getCleanupAudit = vi.fn();
 
 vi.mock("../data/scanProvider.js", () => ({
   capabilities: { cleanupPreview: true, cleanupExecute: true },
@@ -34,7 +35,7 @@ vi.mock("../data/scanProvider.js", () => ({
       ],
       not_supported: [],
     }),
-    getCleanupAudit: async () => ({ entries: [] }),
+    getCleanupAudit: (...args) => getCleanupAudit(...args),
     executeCleanup: (...args) => executeCleanup(...args),
   },
 }));
@@ -93,6 +94,8 @@ describe("CleanupPanel account targeting", () => {
   beforeEach(() => {
     executeCleanup.mockReset();
     executeCleanup.mockResolvedValue({ status: "dry_run", detail: "Would stop it." });
+    getCleanupAudit.mockReset();
+    getCleanupAudit.mockResolvedValue({ entries: [] });
   });
 
   it("sends the account of the finding, so the service assumes that role", async () => {
@@ -137,5 +140,64 @@ describe("CleanupPanel account targeting", () => {
   it("hides the account field when there is only one place to act", async () => {
     await renderPanel([HOST]);
     expect(screen.queryByLabelText(/AWS account/i)).not.toBeInTheDocument();
+  });
+});
+
+const auditEntry = (over = {}) => ({
+  id: "2026-09-09T12:00:00Z_ab12cd34",
+  status: "precondition_failed",
+  action: "stop_ec2_instance",
+  resource_id: "i-host",
+  region: "us-east-1",
+  account_id: null,
+  dry_run: true,
+  user_id: "local-admin",
+  detail: "EC2 Instance i-host not found in us-east-1.",
+  created_at: "2026-09-09T12:00:00.000Z",
+  ...over,
+});
+
+/**
+ * The audit trail after an attempt the service refused.
+ *
+ * Every authenticated, well-formed attempt is audited — refusals included, by
+ * design, since a refusal is the half of the safety model worth showing. The
+ * panel refetched the trail only where the call resolved, so exactly the
+ * entries an operator was watching for needed a page reload to appear: the
+ * request came back as an error, the row went to the store, and the list on
+ * screen still said nothing had been attempted.
+ */
+describe("CleanupPanel audit trail", () => {
+  beforeEach(() => {
+    executeCleanup.mockReset();
+    getCleanupAudit.mockReset();
+    getCleanupAudit.mockResolvedValue({ entries: [] });
+  });
+
+  it("shows a refused attempt without a reload", async () => {
+    executeCleanup.mockRejectedValue(new Error("EC2 Instance i-host not found in us-east-1."));
+    // Mount reads an empty trail; the refusal is audited before the reread.
+    getCleanupAudit.mockResolvedValueOnce({ entries: [] });
+    getCleanupAudit.mockResolvedValue({ entries: [auditEntry()] });
+
+    const user = await renderPanel([HOST]);
+    await submit(user, "i-host");
+
+    expect(await screen.findByText("precondition_failed")).toBeInTheDocument();
+    expect(screen.getByText(/not found in us-east-1/)).toBeInTheDocument();
+  });
+
+  it("keeps the trail on screen when the reread itself fails", async () => {
+    // A transient GET must not restate the history as "nothing was attempted".
+    executeCleanup.mockResolvedValue({ status: "dry_run", detail: "Would stop it." });
+    getCleanupAudit.mockResolvedValueOnce({ entries: [auditEntry()] });
+    getCleanupAudit.mockRejectedValue(new Error("Cleanup audit is unavailable."));
+
+    const user = await renderPanel([HOST]);
+    expect(await screen.findByText("precondition_failed")).toBeInTheDocument();
+    await submit(user, "i-host");
+
+    await waitFor(() => expect(getCleanupAudit).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("precondition_failed")).toBeInTheDocument();
   });
 });
