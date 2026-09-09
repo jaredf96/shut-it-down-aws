@@ -9,10 +9,12 @@ These tests pin the name's shape, its IAM validity, and that both callers with
 a principal in hand forward it.
 """
 
+import logging
 import re
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from app.aws.session import (
@@ -89,6 +91,58 @@ def test_the_assumed_role_arn_carries_the_session_name(dynamo_table):
 
     arn = session.client("sts", region_name=REGION).get_caller_identity()["Arn"]
     assert arn.endswith(f":assumed-role/ShutItDownScannerRole/shutitdown.class-101.{uid}")
+
+
+def test_a_successful_assume_is_logged_with_the_role_and_the_session_name(monkeypatch, caplog):
+    """The application-log half of the evidence: the same role ARN and session
+    name the scanned account's CloudTrail records for the `AssumeRole` event,
+    so the two can be lined up (docs/DEMO.md scene 4). The external ID is a
+    credential and must not be in this line."""
+    # `configure_logging` stops the `app` tree propagating so nothing
+    # double-logs through uvicorn's handlers, which also hides these records
+    # from caplog's root handler. Let them through for this test only.
+    monkeypatch.setattr(logging.getLogger("app"), "propagate", True)
+    uid = "u" * 32
+    external_id = "external-id-that-must-never-be-logged"
+
+    with caplog.at_level(logging.INFO, logger="app.aws.session"):
+        session_for_account(
+            {
+                "role_arn": "arn:aws:iam::222222222222:role/ShutItDownScannerRole",
+                "external_id": external_id,
+            },
+            principal={"workspace_id": "class-101", "user_id": uid},
+        )
+
+    lines = [r.getMessage() for r in caplog.records if r.name == "app.aws.session"]
+    assert len(lines) == 1
+    assert "AssumeRole succeeded" in lines[0]  # what docs/DEMO.md greps for
+    assert "arn:aws:iam::222222222222:role/ShutItDownScannerRole" in lines[0]
+    assert f"shutitdown.class-101.{uid}" in lines[0]
+    assert external_id not in caplog.text
+
+
+def test_a_refused_assume_is_not_logged_as_a_success(monkeypatch, caplog):
+    """The line is evidence the assume happened, so a refusal must not produce
+    one — the caller records the failure (`account_errors`, or the audit row)."""
+    monkeypatch.setattr(logging.getLogger("app"), "propagate", True)
+
+    class _Refusing:
+        def assume_role(self, **kwargs):
+            raise ClientError(
+                {"Error": {"Code": "AccessDenied", "Message": "not authorized"}}, "AssumeRole"
+            )
+
+    monkeypatch.setattr("app.aws.session.boto3.client", lambda *a, **k: _Refusing())
+
+    with caplog.at_level(logging.INFO, logger="app.aws.session"):
+        with pytest.raises(ClientError):
+            session_for_account(
+                {"role_arn": "arn:aws:iam::222222222222:role/ShutItDownScannerRole"},
+                principal={"workspace_id": "class-101", "user_id": "u" * 32},
+            )
+
+    assert [r for r in caplog.records if r.name == "app.aws.session"] == []
 
 
 def test_scan_forwards_the_authenticated_principal_to_the_assume_role(dynamo_table, monkeypatch):

@@ -14,7 +14,7 @@ _CONFIGURED = False
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Attach a stdout handler to the ``app`` logger tree. Idempotent."""
+    """Attach a stderr handler to the ``app`` logger tree. Idempotent."""
     global _CONFIGURED
     if _CONFIGURED:
         return

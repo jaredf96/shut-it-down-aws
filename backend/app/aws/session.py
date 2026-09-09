@@ -16,11 +16,14 @@ docs/SECURITY.md and D18 for what that does and does not buy.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 
 import boto3
 
 from app.utils import default_region
+
+logger = logging.getLogger(__name__)
 
 # IAM allows 2-64 characters from [\w+=,.@-] in a RoleSessionName.
 _MAX_SESSION_NAME = 64
@@ -74,6 +77,12 @@ def session_for_account(account: dict, *, principal: dict | None = None) -> boto
     account's CloudTrail shows who caused each call. It changes nothing about
     what is granted. Omitted (a caller with no request behind it), the session
     is named honestly unattributed rather than borrowing an identity.
+
+    Each successful assume is logged once at INFO with the role ARN and the
+    session name — the two fields the scanned account's CloudTrail records for
+    the `AssumeRole` event — so the application log and that trail can be
+    lined up (docs/DEMO.md scene 4). The line carries nothing else: not the
+    external ID, which is a credential.
     """
     sts = boto3.client("sts", region_name=default_region())
 
@@ -82,6 +91,12 @@ def session_for_account(account: dict, *, principal: dict | None = None) -> boto
         kwargs["ExternalId"] = account["external_id"]
 
     creds = sts.assume_role(**kwargs)["Credentials"]
+    # After the call, not before: the line means the assume happened.
+    logger.info(
+        "AssumeRole succeeded: role=%s session=%s",
+        kwargs["RoleArn"],
+        kwargs["RoleSessionName"],
+    )
     return boto3.Session(
         aws_access_key_id=creds["AccessKeyId"],
         aws_secret_access_key=creds["SecretAccessKey"],

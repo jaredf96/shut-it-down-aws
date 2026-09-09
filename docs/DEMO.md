@@ -102,12 +102,53 @@ the stack is left standing.
 A budget alarm is still worth having, but it is no longer the only thing between
 you and a surprise: `down` verifies (see [After recording](#after-recording)).
 
-Verify CloudTrail is on in the target account before recording — the assumed-role
-event is the most convincing single frame in the video.
+CloudTrail needs no setup in the target account. Scene 4 reads **Event
+history**, which every account keeps for 90 days of management events whether
+or not a trail exists, and an `sts:AssumeRole` made *into* the account is one
+of them. Two things follow. AWS publishes no latency for Event history — for
+trails it says an average of about five minutes, not guaranteed — so expect the
+same order of lag before the event is searchable, and record scene 4 last. And
+Event history is per-region: the `AssumeRole` event lands in **us-east-1**
+whatever `AWS_REGION` says, because the pinned botocore (1.35,
+`sts_regional_endpoints` defaulting to `legacy`) calls STS's global endpoint and
+CloudTrail records global-endpoint STS calls there; a botocore that defaults to
+regional endpoints would move it to `AWS_REGION`. Set the console to us-east-1
+before filtering. The assumed-role event is the most convincing single frame in
+the video.
 
 > **The fixtures stack is ephemeral.** Between walkthroughs, the canonical state
 > is that it does not exist. `deploy/lab-fixtures.sh status target` will tell you
 > which it is.
+
+### 3. The backend, started for the recording
+
+Scenes 3–5 need two variables the defaults leave unset, and scene 4 needs the
+log on disk. The table lives in the **platform** account, and the platform role
+can reach it only in the region its grant names: the `TableRegion` parameter of
+the [`platform-role.yaml`](../deploy/cloudformation/platform-role.yaml) stack,
+or that stack's own region when the parameter was left empty. `TABLE_REGION`
+below is that region; `cloud-lab-scans` is the template's default `TableName`,
+so use whatever the stack was given; and `ADMIN_PROFILE` is a platform-account
+profile allowed `dynamodb:CreateTable`, which the platform role is not. The
+backend picks its DynamoDB region from `AWS_REGION` too, so both commands set it.
+
+```bash
+# Once: the table
+DYNAMODB_TABLE_NAME=cloud-lab-scans AWS_REGION=TABLE_REGION AWS_PROFILE=ADMIN_PROFILE \
+  make create-table
+
+# The backend, as the platform role, with its log captured
+AWS_PROFILE=platform AWS_REGION=TABLE_REGION DYNAMODB_TABLE_NAME=cloud-lab-scans \
+  ENABLE_CLEANUP_ACTIONS=true make run 2>&1 | tee BACKEND_LOG
+```
+
+`DYNAMODB_TABLE_NAME` is what lets an account be registered at all. Without it
+the accounts panel does not render and a scan runs on the platform's own
+credentials — the one thing this walkthrough exists to show it does not do
+(see [Onboarding an account](SECURITY.md#onboarding-an-account)).
+`ENABLE_CLEANUP_ACTIONS` is what lets scene 5 reach IAM instead of stopping at
+the flag. The `2>&1` matters: the application log is on stderr, and scene 4
+greps the file.
 
 ---
 
@@ -151,36 +192,91 @@ trying on someone else's behalf.
 
 In the dashboard, add the account, then run a scan. What to point at on screen:
 
-- The **ACCOUNT** column — findings tagged by source account.
-- The **account filter** — switch between accounts.
-- The cost summary and risk ranking updating.
+- The **ACCOUNT** column — every finding tagged with the account it came from.
+  This column is the proof of point 4. It shows the display name large and the
+  account id beneath it; name the account after its id if the id is what the
+  frame needs to show.
+- The cost summary and risk ranking filling in.
+
+There is no account filter to show. It renders only when a scan spans two or
+more accounts, and this walkthrough registers one: the platform account is not
+registered, so it is not scanned, which is point 6.
 
 Say: *"One scan, fanned out across every enabled region concurrently, tagging
 each finding with the account it came from."*
 
 ### 4. Show the assume-role actually happened (~20s)
 
-Two pieces of evidence, ideally side by side:
+Record this scene last — the CloudTrail half lags the scan (see above). Two
+pieces of evidence, ideally side by side:
 
 ```bash
-# Application log: the STS session the scanner opened
-grep AssumeRole <backend log>
+# Application log: the STS sessions the scanner opened
+grep 'AssumeRole succeeded' BACKEND_LOG
 ```
 
-Then CloudTrail **in the target account**, filtered to `AssumeRole`. The event
-shows the platform account as the caller and the temporary session as the actor
-— and the session name says *which user*: `shutitdown.<workspace>.<user>`.
+One `INFO app.aws.session` line per successful assume, naming the role ARN and
+the session name — the two fields the line shares with the target's
+`AssumeRole` event. Recorded after scene 5, the grep shows two: the scan's
+assume and the cleanup attempt's, because the assume in scene 5 succeeds and it
+is the `ReleaseAddress` that is refused. The line carries the role ARN and the
+session name and nothing else — not the external ID.
+
+Then CloudTrail **Event history in the target account**, region `us-east-1`.
+The page opens filtered to Read-only = false, which hides everything this scene
+wants — `AssumeRole` and every `Describe*` are read-only events — and it takes
+one attribute filter at a time, so replace that filter rather than add to it.
+Filter on **Event name** `AssumeRole` for the assume itself: the platform
+account as the caller, the session name in the response. A refused assume
+leaves no event here at all, so an empty result means lag or failure, and the
+application log says which. Then filter on **User name**
+`shutitdown.default.local` for what that session did in this region — the scan
+touched every enabled one, and each region's calls sit in its own Event
+history. Each call arrives as
+`assumed-role/ShutItDownScannerRole/shutitdown.default.local`, and the session
+name says *which user*: `shutitdown.<workspace>.<user>`. With `AUTH_REQUIRED`
+and `DEFAULT_WORKSPACE_ID` unset the install has one principal: workspace
+`default`, user `local`. If the console does not index the session name under
+User name, filter on **AWS access key** with the `accessKeyId` from the
+`AssumeRole` event's response instead — that key belongs to this session alone.
 
 Say: *"Temporary credentials, scoped to a read-only role, in an account whose
 keys I do not have."*
 
 ### 5. Show the read-only guarantee is enforced outside the app (~20s)
 
-With cleanup enabled, attempt a mutating action against the scanner role:
+With cleanup enabled, release the fixture's unassociated Elastic IP with dry
+run off. Every in-app gate is cleared — the seven in README's *Safety around
+cleanup*, including the live precondition re-check, which the role *may* make
+(`ec2:DescribeAddresses` is in its policy) — and then IAM refuses the
+`ReleaseAddress` call itself. Two audit rows result: the `initiated` row
+written before any AWS call, and the `error` row with the refusal.
+
+The dashboard does not show the refusal text. It shows the backend's 502:
 
 ```
-502  UnauthorizedOperation: not authorized to perform ec2:ReleaseAddress
+The cleanup action failed against AWS. Check the audit entry for details. (ref …)
 ```
+
+That sentence is fixed on purpose (`_OPAQUE_CLEANUP_DETAIL` in
+`backend/app/main.py`): a botocore error message carries the assumed-role ARN
+and the account id, and text built from an exception is kept off the wire. The
+refusal — `UnauthorizedOperation` on `ReleaseAddress`, from the
+`shutitdown.default.local` session — is in three places, and any one of them is
+the frame:
+
+```bash
+# The audit entry: status `error`, with the detail the banner withholds
+curl -s localhost:8000/cleanup/audit \
+  | jq '[.entries[] | select(.status == "error")][0].detail'
+
+# The application log
+grep 'status=error' BACKEND_LOG
+```
+
+The third is the target account's CloudTrail, in the fixtures stack's region: a
+`ReleaseAddress` event with error code `Client.UnauthorizedOperation`, and the
+one place guaranteed to name the session.
 
 Say: *"Every in-app safety gate passed — admin, typed confirmation, dry-run
 disabled, live precondition re-check — and IAM still refused, because the scanner
