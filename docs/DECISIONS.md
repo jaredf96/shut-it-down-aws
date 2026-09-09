@@ -978,6 +978,40 @@ cross-account bullet.
 
 ---
 
+## D19 — The scanner policy stays one wildcard statement; `rds:DescribeDBInstances` cannot be scoped to a database
+
+**Decided:** 2026-09-09 · **Status:** executed
+
+The nine read-only actions in `deploy/cloudformation/scanner-role.yaml` stay in
+a single `Resource: "*"` statement. `0485f2e` recorded the reasoning for the two
+of the nine that *do* accept a resource-level ARN — `rds:DescribeDBInstances`
+takes a db resource, `s3:GetBucketLocation` takes a bucket: the role is created
+inside the account it scans, neither action has a cross-account path, so an ARN
+naming this account's own resources would express the intent without removing a
+permission.
+
+For RDS that understates the case, as a scoped-policy test during the
+2026-09-09 cross-account run showed. `DescribeDBInstances` authorizes at `db:*`
+granularity only. A policy scoped to a specific database name denies the call
+outright, and the denial names `db:*` as the resource it evaluated — not the
+database that was asked for. The narrowest scope that still authorizes a scan
+is therefore every database in the region, which is what `"*"` already grants
+here.
+
+**Why:** "why isn't the RDS permission scoped to a database?" is a question a
+reader asks once per review, and the policy does not answer it. Acting on the
+apparent answer costs more than the review it saves: a per-database ARN stops
+the scanner finding databases at all, and the failure reads as a broken scanner
+rather than a rejected permission. The scanner has no name to put in such an
+ARN in any case — it enumerates instances it has not seen.
+
+**Consequences:** no policy change; the template already grants `"*"`, and the
+published policy in `docs/SECURITY.md` § Least-privilege IAM is unchanged and
+stays correct. The comment in `scanner-role.yaml` gains the measured result, so
+the template and this file do not drift apart on it.
+
+---
+
 ## Template
 
 ```markdown

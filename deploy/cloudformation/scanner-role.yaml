@@ -133,6 +133,11 @@ Resources:
                 # permission. The scanner also has nothing narrower to name: it
                 # enumerates DB instances it has not seen and queries whichever
                 # buckets ListAllMyBuckets returned.
+                #
+                # For RDS, scoping would do worse than nothing: measured against
+                # a live account, DescribeDBInstances authorizes at db:*
+                # granularity only, so a policy naming one database denies the
+                # call and reports db:* as the resource it evaluated. See D19.
                 Resource: "*"
       Tags:
         - Key: Project
