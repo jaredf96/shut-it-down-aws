@@ -111,7 +111,6 @@
 
   /* Neutrals — light */
   --bg: #f5f6f8;
-  --bg-grid: rgba(15, 23, 42, 0.028);
   --surface: #ffffff;
   --surface-2: #f6f8fa;
   --surface-3: #eef1f5;
@@ -147,7 +146,6 @@
     --info: #6ba5ff;
 
     --bg: #0b0e14;
-    --bg-grid: rgba(255, 255, 255, 0.022);
     --surface: #141922;
     --surface-2: #1a212c;
     --surface-3: #222b38;
@@ -178,7 +176,6 @@
   --info: #6ba5ff;
 
   --bg: #0b0e14;
-  --bg-grid: rgba(255, 255, 255, 0.022);
   --surface: #141922;
   --surface-2: #1a212c;
   --surface-3: #222b38;
@@ -208,10 +205,6 @@ body {
   margin: 0;
   color: var(--text);
   background: var(--bg);
-  /* Subtle observability "grid" wash behind the console. */
-  background-image: linear-gradient(var(--bg-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
-  background-size: 32px 32px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
