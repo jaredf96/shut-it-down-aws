@@ -26,7 +26,7 @@ function DeltaBadges({ delta }) {
 
 export default function ScanHistory({ scans, activeId, onSelect, onLive, viewingLive }) {
   return (
-    <aside className="history">
+    <aside className="history" data-scene="history-panel">
       <div className="history__header">
         <h2>Scan history</h2>
         <button
@@ -47,6 +47,7 @@ export default function ScanHistory({ scans, activeId, onSelect, onLive, viewing
               <li key={s.scan_id}>
                 <button
                   className={`history__item ${s.scan_id === activeId ? "is-active" : ""}`}
+                  data-scene="history-item"
                   onClick={() => onSelect(s.scan_id)}
                 >
                   <span className="history__time">{formatTime(s.created_at)}</span>

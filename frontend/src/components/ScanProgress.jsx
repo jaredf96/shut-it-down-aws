@@ -67,7 +67,7 @@ export default function ScanProgress({ done = false, onDone }) {
   }, [done, onDone]);
 
   return (
-    <div className="scan-progress" role="status" aria-live="polite">
+    <div className="scan-progress" data-scene="scan-progress" role="status" aria-live="polite">
       <div className="scan-progress__row">
         <span className="scan-progress__stage">
           {!done && <span className="scan-progress__pulse" aria-hidden="true" />}

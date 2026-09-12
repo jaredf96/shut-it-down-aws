@@ -231,6 +231,13 @@ repository. Persistence is optional: no
   `api/client.js`** — they go through the provider (`frontend/src/data/`).
   Frontend tests (vitest + RTL) and `typecheck` (tsc, scoped to `src/data`)
   both run in CI.
+- **`data-scene` attributes are an automation contract, not decoration.**
+  Components carry `data-scene="…"` hooks, plus `data-scene-state` / `-mode` /
+  `-status` where a selector has to read state rather than match a styling
+  class. Automation waits on those and never on a BEM class or on copy, so a
+  restyle or a reword cannot break it. `src/recordingContract.test.jsx` pins
+  every hook and names what depends on it; add a hook there in the same commit
+  that adds it to a component, or the contract is one nobody checks.
 - Keep docs in sync: endpoint tables in `backend/README.md`, feature list and
   env-var table in root `README.md`, plus `docs/ARCHITECTURE.md` /
   `docs/SECURITY.md` when structure or security behavior changes.

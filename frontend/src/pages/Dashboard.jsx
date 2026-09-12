@@ -258,14 +258,20 @@ export default function Dashboard() {
         </div>
         <div className="page__header-actions">
           <ThemeToggle />
-          <button className="scan-button" onClick={() => runScan()} disabled={loading}>
+          <button
+            className="scan-button"
+            data-scene="scan-button"
+            data-scene-state={loading ? "scanning" : "idle"}
+            onClick={() => runScan()}
+            disabled={loading}
+          >
             {loading ? "Scanning…" : "Run scan"}
           </button>
         </div>
       </header>
 
       {isDemoMode ? (
-        <div className="notice notice--demo">
+        <div className="notice notice--demo" data-scene="demo-notice">
           🧪 <strong>Demo mode</strong> — every figure below is representative sample data.
           This build makes no AWS calls and holds no credentials. The scanners, cross-account
           STS access, and cleanup safeguards are real; see the source and the sandbox
@@ -290,7 +296,11 @@ export default function Dashboard() {
         />
       )}
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error" data-scene="scan-error">
+          {error}
+        </div>
+      )}
 
       {/* Scroll target for a completed scan — the top of the results region. */}
       <div ref={resultsRef} />
@@ -302,7 +312,7 @@ export default function Dashboard() {
       {viewingLive && <AlertsPanel alerts={alerts} />}
 
       {!viewingLive && viewingMeta && (
-        <div className="banner">
+        <div className="banner" data-scene="saved-scan-banner">
           📜 Viewing a saved scan from{" "}
           <strong>{new Date(viewingMeta.created_at).toLocaleString()}</strong>. Click
           <button className="banner__link" onClick={() => runScan()}>
@@ -348,7 +358,7 @@ export default function Dashboard() {
                   figure is a floor at on-demand list prices, and a reader who
                   takes it for a forecast will under-budget. */}
               {summary && (
-                <p className="summary__caveat">
+                <p className="summary__caveat" data-scene="summary-caveat">
                   <strong>Minimum monthly exposure at on-demand list prices</strong> — hourly
                   rates, EBS storage and RDS storage for the resources found. NAT data
                   processing and S3 storage are not priced, so list-price spend is higher,

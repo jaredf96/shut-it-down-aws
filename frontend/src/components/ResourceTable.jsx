@@ -48,13 +48,13 @@ export default function ResourceTable({ resources, asOf }) {
   const scannedAt = asOf ? new Date(asOf) : new Date();
 
   return (
-    <div className="table-wrapper">
+    <div className="table-wrapper" data-scene="findings">
       <table className="resource-table">
         <thead>
           <tr>
             <th>Type</th>
             <th>Name / ID</th>
-            {showAccount && <th>Account</th>}
+            {showAccount && <th data-scene="findings-account-header">Account</th>}
             <th>Region</th>
             <th>Status</th>
             <th>Age</th>

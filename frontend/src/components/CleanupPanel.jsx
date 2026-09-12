@@ -142,11 +142,13 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
   }
 
   return (
-    <section className="cleanup">
+    <section className="cleanup" data-scene="cleanup-panel">
       <div className="cleanup__header">
         <h2>🧹 Guided cleanup</h2>
         <span
           className={`cleanup__flag ${catalog.enabled && !previewOnly ? "is-on" : "is-off"}`}
+          data-scene="cleanup-flag"
+          data-scene-state={catalog.enabled && !previewOnly ? "on" : "off"}
         >
           {previewOnly ? "preview only" : catalog.enabled ? "enabled" : "disabled in this environment"}
         </span>
@@ -169,10 +171,14 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         )
       )}
 
-      <form className="cleanup__form" onSubmit={run}>
+      <form className="cleanup__form" data-scene="cleanup-form" onSubmit={run}>
         <label>
           Action
-          <select value={action} onChange={(e) => setAction(e.target.value)}>
+          <select
+            data-scene="cleanup-action"
+            value={action}
+            onChange={(e) => setAction(e.target.value)}
+          >
             {catalog.actions.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.verb} {a.resource_type}
@@ -191,7 +197,11 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         {eligible.length > 0 && (
           <label>
             Eligible findings from the last scan
-            <select value="" onChange={(e) => e.target.value && pickResource(e.target.value)}>
+            <select
+              data-scene="cleanup-finding"
+              value=""
+              onChange={(e) => e.target.value && pickResource(e.target.value)}
+            >
               <option value="">Choose a finding…</option>
               {eligible.map((r) => (
                 <option key={r.resource_id} value={r.resource_id}>
@@ -206,7 +216,11 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         {accounts.length > 1 && (
           <label>
             AWS account
-            <select value={targetAccount} onChange={(e) => setAccountId(e.target.value)}>
+            <select
+              data-scene="cleanup-account"
+              value={targetAccount}
+              onChange={(e) => setAccountId(e.target.value)}
+            >
               {accounts.map((a) => (
                 <option key={a.id || "default"} value={a.id}>
                   {a.label}
@@ -220,6 +234,7 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
           <label>
             Resource ID
             <input
+              data-scene="cleanup-resource-id"
               value={resourceId}
               onChange={(e) => setResourceId(e.target.value)}
               placeholder="e.g. i-0abc… / eipalloc-… / vol-…"
@@ -227,13 +242,18 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
           </label>
           <label>
             Region
-            <input value={region} onChange={(e) => setRegion(e.target.value)} />
+            <input
+              data-scene="cleanup-region"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+            />
           </label>
         </div>
 
         <label>
           Type the resource ID again to confirm
           <input
+            data-scene="cleanup-confirm"
             value={confirmId}
             onChange={(e) => setConfirmId(e.target.value)}
             placeholder="must match exactly"
@@ -243,6 +263,7 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         <label className="cleanup__dry">
           <input
             type="checkbox"
+            data-scene="cleanup-dry-run"
             checked={dryRun || previewOnly}
             disabled={previewOnly}
             onChange={(e) => setDryRun(e.target.checked)}
@@ -254,6 +275,8 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         <button
           type="submit"
           className={dryRun || previewOnly ? "cleanup__btn" : "cleanup__btn cleanup__btn--live"}
+          data-scene="cleanup-submit"
+          data-scene-mode={dryRun || previewOnly ? "dry" : "live"}
           disabled={busy || !confirmOk || (!catalog.enabled && !previewOnly)}
         >
           {busy ? "Working…" : dryRun || previewOnly ? "Preview cleanup" : "Execute cleanup"}
@@ -263,20 +286,30 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
         )}
       </form>
 
-      {error && <div className="cleanup__result is-error">{error}</div>}
+      {error && (
+        <div className="cleanup__result is-error" data-scene="cleanup-result">
+          {error}
+        </div>
+      )}
       {result && (
-        <div className={`cleanup__result is-${result.status}`}>
+        <div className={`cleanup__result is-${result.status}`} data-scene="cleanup-result">
           <strong>{result.status}</strong> — {result.detail}
         </div>
       )}
 
       {audit.length > 0 && (
-        <div className="cleanup__audit">
+        <div className="cleanup__audit" data-scene="cleanup-audit">
           <h3>Recent attempts</h3>
           <ul>
             {audit.map((e) => (
               <li key={e.id}>
-                <span className={`cleanup__status cleanup__status--${e.status}`}>{e.status}</span>
+                <span
+                  className={`cleanup__status cleanup__status--${e.status}`}
+                  data-scene="cleanup-audit-status"
+                  data-scene-status={e.status}
+                >
+                  {e.status}
+                </span>
                 <span className="cleanup__audit-action">
                   {e.action} {e.resource_id}
                 </span>
