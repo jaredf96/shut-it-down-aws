@@ -238,14 +238,26 @@ export default function Dashboard() {
   const viewingLive = activeScanId === null;
   const isAdmin = me?.role === "admin";
 
-  // Per-account filtering for the resource table.
-  const accountLabels = [
-    ...new Set(resources.map((r) => r.account_label).filter(Boolean)),
-  ];
+  // Per-account filtering for the resource table. The select is offered only
+  // across two or more accounts: one account's view would be the whole table.
+  const labels = [...new Set(resources.map((r) => r.account_label).filter(Boolean))];
+  const accountLabels = labels.length > 1 ? labels : [];
+
+  // A rescan or a saved scan can replace the findings under the choice, so a
+  // choice the select no longer offers is cleared, not merely overridden. Left
+  // stored, it would hide every finding once its account was gone, under summary
+  // tiles still counting them, beside a select showing "All accounts" (picking
+  // that cannot clear it: an option already selected fires no change) or no
+  // select at all; and the next scan to offer it again would narrow the table to
+  // it, unasked. Cleared during render, as ResourceTable clears its risk filter,
+  // so no committed render holds one choice while showing another.
+  const staleAccount = accountFilter !== "all" && !accountLabels.includes(accountFilter);
+  if (staleAccount) setAccountFilter("all");
+  const accountView = staleAccount ? "all" : accountFilter;
   const filteredResources =
-    accountFilter === "all"
+    accountView === "all"
       ? resources
-      : resources.filter((r) => r.account_label === accountFilter);
+      : resources.filter((r) => r.account_label === accountView);
 
   return (
     <div className="page">
@@ -367,12 +379,12 @@ export default function Dashboard() {
                 </p>
               )}
 
-              {hasScanned && accountLabels.length > 1 && (
+              {hasScanned && accountLabels.length > 0 && (
                 <div className="account-filter">
                   <label>
                     Account view:{" "}
                     <select
-                      value={accountFilter}
+                      value={accountView}
                       onChange={(e) => setAccountFilter(e.target.value)}
                     >
                       <option value="all">All accounts ({resources.length})</option>
