@@ -5,13 +5,32 @@
    `backend/tests/test_screenshot_claims.py` and by the capture recipe in
    CLAUDE.md § Gotchas. Adding it was measured, not assumed: see D20.
 
-   Consequence for utilities: without Preflight there is no global
-   `border-style: solid`, so a bare `border`/`border-x` utility sets a width
-   against `border-style: none` and renders nothing. Write `border border-solid`
-   (or use a token class) when you want a visible edge. */
+   What the utilities still need from it is supplied directly below, and only
+   that. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+
+/* The one piece of Preflight the utilities genuinely need, and nothing else.
+
+   Tailwind's border utilities set a WIDTH and assume a global
+   `border-style: solid` over a zero default. Without that, `border-t` sets the
+   top width while `border-solid` turns the other three sides solid at the
+   initial `medium` — a 1px underline renders as a 3px box. Measured: it did
+   exactly that to the findings inspector.
+
+   Layered, so every unlayered rule in this file still wins, and scoped away
+   from form controls: zeroing their width overrides the user-agent border on
+   any control this file does not already style. */
+@layer base {
+  *:not(input):not(select):not(textarea):not(button),
+  ::before,
+  ::after {
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--border);
+  }
+}
 
 /* The bridge: one token system, not two.
    `inline` substitutes the reference into the utility itself, so `bg-surface`
@@ -750,10 +769,11 @@ h1::before {
 
 .resource-table {
   width: 100%;
-  /* Nine columns (the ACCOUNT column appears in multi-account scans) crush the
-     two prose columns to unreadable slivers if the table is allowed to shrink
-     to its container. Hold a floor and let .table-wrapper scroll instead. */
-  min-width: 1080px;
+  /* Eight short columns (ACCOUNT appears in multi-account scans). The floor is
+     what the id and ARN strings need to stay on one line — the two prose
+     columns that used to set it moved into the inspector, which is why this is
+     820px and not 1080px. Below the floor, .table-wrapper scrolls. */
+  min-width: 820px;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -761,17 +781,44 @@ h1::before {
 .resource-table th,
 .resource-table td {
   text-align: left;
-  padding: 12px 14px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .resource-table tbody tr {
   transition: background 0.1s ease;
 }
 
+.resource-table tbody tr {
+  cursor: pointer;
+}
+
 .resource-table tbody tr:hover {
   background: var(--surface-2);
+}
+
+/* Selected row. The accent bar is on a pseudo-element so it cannot widen the
+   first cell and shove every column right when the selection moves. */
+.resource-table tbody tr.is-selected {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+.resource-table tbody tr.is-selected td:first-child {
+  position: relative;
+}
+
+.resource-table tbody tr.is-selected td:first-child::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+}
+
+.resource-table tbody tr:focus-visible {
+  outline: none;
+  box-shadow: inset var(--ring);
 }
 
 .resource-table tbody tr:last-child td {
@@ -797,12 +844,6 @@ h1::before {
   font-size: 0.75rem;
   color: var(--text-subtle);
   font-family: var(--font-mono);
-}
-
-.cell-text {
-  min-width: 190px;
-  max-width: 280px;
-  color: var(--text-muted);
 }
 
 .cell-age {

@@ -203,6 +203,12 @@ describe("scene 3 — register an account and scan", () => {
     render(<ResourceTable resources={RESOURCES} asOf="2026-08-17T10:05:11Z" />);
     expectHook("findings", "scenes 3, 5 and 6");
     expectHook("findings-account-header", "scene 3 — the ACCOUNT column is the proof");
+    expectHook("findings-inspector", "scene 3 — the explanation the narration reads");
+    expect(hook("findings-row").length, "one hook per finding").toBe(RESOURCES.length);
+
+    // Which row is selected drives what the inspector says, so the scene has to
+    // be able to assert it without matching a styling class.
+    expect(hook("findings-row")[0].dataset.sceneSelected).toBe("true");
   });
 
   it("exposes the in-flight scan indicator", () => {

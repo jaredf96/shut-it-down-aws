@@ -1051,10 +1051,21 @@ values and never reads `--shadow-lg` despite the shared name — `shadow-card` a
 file's 10px `--radius` — `rounded-base` is the bridged one. `rounded-sm`,
 `rounded-lg`, `font-sans` and `font-mono` need no bridge: those names collide
 with ours, unlayered `:root` beats `@layer theme`, and those utilities emit a
-`var()`. Finally, with no global `border-style: solid`, a bare `border` utility
-sets a width against `border-style: none` and renders nothing; write
-`border border-solid`. `frontend/vite.config.js` gains the plugin; the demo
-bundle grew 8.23 kB → 9.44 kB gzipped and still passes `make demo-bundle-check`.
+`var()`. `frontend/vite.config.js` gains the plugin; the demo bundle grew
+8.23 kB → 9.44 kB gzipped and still passes `make demo-bundle-check`.
+
+**One rule of Preflight's is kept, because the utilities are unusable without
+it.** Tailwind's border utilities set a *width* and assume a global
+`border-style: solid` over a zero default. Omitting that does not merely make
+`border` render nothing — it makes `border-t` render a **box**, because
+`border-solid` sets the style on all four sides and the other three then take
+the initial `medium`. That shipped into the findings inspector as a 3px outline
+before the capture caught it. `@layer base` therefore restores
+`border-width: 0; border-style: solid` and nothing else, scoped away from
+`input`/`select`/`textarea`/`button`: zeroing their width would override the
+user-agent border on any control `styles.css` does not already style. Measured
+across 421 elements, the rule changes three border widths — the ones that were
+wrong — and moves no box outside the inspector.
 
 ---
 

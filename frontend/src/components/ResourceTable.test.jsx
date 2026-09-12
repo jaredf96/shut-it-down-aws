@@ -6,6 +6,7 @@
  * fixture ages do not creep upward past the committed screenshots.
  */
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import ResourceTable from "./ResourceTable.jsx";
@@ -94,7 +95,9 @@ describe("ResourceTable cost column", () => {
   it("says in the tooltip that the real cost is higher", () => {
     render(<ResourceTable resources={[resource()]} asOf={SCANNED_AT} />);
 
-    const cell = screen.getByText("$7.59");
+    // Scoped to the row: the selected finding's cost is also in the inspector,
+    // so an unscoped query now matches twice.
+    const cell = within(screen.getAllByRole("row")[1]).getByText("$7.59");
     expect(cell).toHaveAttribute("title", expect.stringMatching(/^At least \$7\.59\/month/));
     expect(cell).toHaveAttribute("title", expect.stringMatching(/real cost is higher/i));
   });
@@ -107,8 +110,106 @@ describe("ResourceTable cost column", () => {
       />
     );
 
-    const cell = screen.getByTitle(/not priced/i);
+    const cell = within(screen.getAllByRole("row")[1]).getByTitle(/not priced/i);
     expect(cell).toHaveTextContent("—");
     expect(cell).not.toHaveTextContent("$0");
+  });
+});
+
+/**
+ * Master/detail. The two prose fields were columns until they made every row
+ * ~121px tall and the table 1874px — taller than any screen. They belong to the
+ * selected row now, beside the table rather than inside it.
+ */
+describe("ResourceTable master/detail", () => {
+  const eip = resource({
+    resource_type: "Elastic IP",
+    resource_id: "eipalloc-1",
+    name: "left-over-lab-ip",
+    risk_level: "HIGH",
+    monthly_cost_risk: "AWS charges hourly for every public IPv4 address.",
+    suggested_action: "Release this Elastic IP.",
+    estimated_monthly_cost: 3.65,
+  });
+  const inspector = () => screen.getByRole("complementary", { name: /selected finding/i });
+
+  it("keeps the prose out of the table — the whole reason this is master/detail", () => {
+    render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent.trim());
+    expect(headers).not.toContain("Why it may cost money");
+    expect(headers).not.toContain("Suggested action");
+    // Present once, in the inspector — not once per row.
+    expect(screen.getAllByText("AWS charges hourly for every public IPv4 address.")).toHaveLength(1);
+  });
+
+  it("selects the first finding, so the panel is never empty on load", () => {
+    render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+
+    expect(within(inspector()).getByText("left-over-lab-ip")).toBeInTheDocument();
+    expect(within(inspector()).getByText("Release this Elastic IP.")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")[1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("moves the inspector to the row you click", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+
+    await user.click(screen.getAllByRole("row")[2]);
+
+    expect(within(inspector()).getByText("stop it")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")[2]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("row")[1]).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("moves the selection with the arrow keys, and is one tab stop", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+
+    // Roving tabindex: 15 findings must not become 15 tab stops.
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.filter((r) => r.getAttribute("tabindex") === "0")).toHaveLength(1);
+
+    rows[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(rows[1]).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{ArrowUp}");
+    expect(rows[0]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("does not run off the ends", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+    const rows = screen.getAllByRole("row").slice(1);
+
+    rows[0].focus();
+    await user.keyboard("{ArrowUp}");
+    expect(rows[0]).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{End}{ArrowDown}");
+    expect(rows[rows.length - 1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("re-homes the selection when a filter removes the selected row", () => {
+    const { rerender } = render(<ResourceTable resources={[eip, resource()]} asOf={SCANNED_AT} />);
+    expect(within(inspector()).getByText("left-over-lab-ip")).toBeInTheDocument();
+
+    // Dashboard's account filter can drop the selected finding at any time. A
+    // stored selection would leave the panel describing a row that is gone.
+    rerender(<ResourceTable resources={[resource()]} asOf={SCANNED_AT} />);
+
+    expect(within(inspector()).getByText("tutorial-web-server")).toBeInTheDocument();
+    expect(screen.queryByText("left-over-lab-ip")).not.toBeInTheDocument();
+  });
+
+  it("shows the cost-relevant spec, which nothing rendered before", () => {
+    render(
+      <ResourceTable
+        resources={[resource({ details: { instance_type: "t3.micro" } })]}
+        asOf={SCANNED_AT}
+      />
+    );
+
+    expect(within(inspector()).getByText("Instance type")).toBeInTheDocument();
+    expect(within(inspector()).getByText("t3.micro")).toBeInTheDocument();
   });
 });
