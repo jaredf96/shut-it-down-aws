@@ -209,6 +209,35 @@ describe("scene 3 — register an account and scan", () => {
     expect(hook("findings-row")[0].dataset.sceneSelected).toBe("true");
   });
 
+  it("exposes the sort and risk-filter controls, with their state as attributes", async () => {
+    // Pinned before any scene locates them, like the cleanup account selector
+    // below. A script that sorts or filters on camera has to know which way a
+    // column is sorted and which level is showing without matching an arrow
+    // glyph or a styling class.
+    const user = userEvent.setup();
+    render(<ResourceTable resources={RESOURCES} asOf="2026-08-17T10:05:11Z" />);
+
+    for (const column of ["type", "name", "account", "region", "status", "age", "risk", "cost"]) {
+      expectHook(`findings-sort-${column}`, "sorting on camera");
+    }
+    expect(hook("findings-sort-risk")[0].dataset.sceneState, "the default sort").toBe("descending");
+    expect(hook("findings-sort-cost")[0].dataset.sceneState).toBe("none");
+
+    await user.click(hook("findings-sort-cost")[0]);
+    expect(hook("findings-sort-cost")[0].dataset.sceneState).toBe("descending");
+    expect(hook("findings-sort-risk")[0].dataset.sceneState).toBe("none");
+
+    expectHook("findings-filter", "filtering on camera");
+    for (const level of ["all", "high", "review", "medium", "low"]) {
+      expectHook(`findings-filter-${level}`, "filtering on camera");
+    }
+    expect(hook("findings-filter-all")[0].dataset.sceneState).toBe("on");
+
+    await user.click(hook("findings-filter-high")[0]);
+    expect(hook("findings-filter-high")[0].dataset.sceneState).toBe("on");
+    expect(hook("findings-filter-all")[0].dataset.sceneState).toBe("off");
+  });
+
   it("exposes the in-flight scan indicator", () => {
     render(<ScanProgress done={false} onDone={vi.fn()} />);
     expectHook("scan-progress", "scene 3 waits for it to detach");

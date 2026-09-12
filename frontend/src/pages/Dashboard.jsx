@@ -7,13 +7,12 @@ import DiffView from "../components/DiffView.jsx";
 import Icon from "../components/Icon.jsx";
 import IncompleteScan from "../components/IncompleteScan.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
+import { RISK_ORDER } from "../components/RiskBadge.jsx";
 import ScanHistory from "../components/ScanHistory.jsx";
 import ScanProgress from "../components/ScanProgress.jsx";
 import ThemeToggle from "../components/ThemeToggle.jsx";
 import UsersPanel from "../components/UsersPanel.jsx";
 import { capabilities, isDemoMode, scanProvider } from "../data/scanProvider.js";
-
-const RISK_ORDER = { HIGH: 0, REVIEW: 1, MEDIUM: 2, LOW: 3 };
 
 function sortByRisk(resources) {
   return [...resources].sort((a, b) => RISK_ORDER[a.risk_level] - RISK_ORDER[b.risk_level]);

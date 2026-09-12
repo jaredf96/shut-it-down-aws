@@ -213,3 +213,234 @@ describe("ResourceTable master/detail", () => {
     expect(within(inspector()).getByText("t3.micro")).toBeInTheDocument();
   });
 });
+
+/**
+ * Sort and risk filter. Both are a view over the findings the dashboard hands
+ * in, and those arrive already in risk order — so the default has to render
+ * them unchanged, and any other order has to keep ties the way they came.
+ */
+describe("ResourceTable sort and risk filter", () => {
+  const eip = resource({
+    resource_type: "Elastic IP",
+    resource_id: "eipalloc-1",
+    name: "left-over-lab-ip",
+    status: "unassociated",
+    risk_level: "HIGH",
+    created_at: null,
+    estimated_monthly_cost: 3.65,
+  });
+  const nat = resource({
+    resource_type: "NAT Gateway",
+    resource_id: "nat-1",
+    name: "lab-vpc-nat",
+    status: "available",
+    risk_level: "HIGH",
+    created_at: "2026-07-09T14:05:11.884Z", // 39 days
+    estimated_monthly_cost: 32.85,
+  });
+  const bucket = resource({
+    resource_type: "S3 Bucket",
+    resource_id: "cloud-lab-artifacts",
+    name: "cloud-lab-artifacts",
+    status: "active",
+    risk_level: "REVIEW",
+    created_at: "2026-01-17T14:05:11.884Z", // 212 days
+    estimated_monthly_cost: null,
+    cost_source: "unknown",
+  });
+  const web = resource(); // MEDIUM, 87 days, $7.59
+  const node = resource({
+    resource_id: "i-0node",
+    name: "workshop-node-01",
+    status: "stopped",
+    risk_level: "LOW",
+    created_at: "2026-06-17T14:05:11.884Z", // 61 days
+    estimated_monthly_cost: 0,
+  });
+  // In risk order, as Dashboard passes them.
+  const FINDINGS = [eip, nat, bucket, web, node];
+
+  const inspector = () => screen.getByRole("complementary", { name: /selected finding/i });
+  const header = (name) => screen.getByRole("columnheader", { name });
+  const sortBy = (user, name) => user.click(within(header(name)).getByRole("button"));
+  const radio = (name) => screen.getByRole("radio", { name });
+  const expectShown = (...names) =>
+    expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(
+      names.map((n) => expect.stringContaining(n))
+    );
+
+  it("renders the risk order it was given, marked as the sort in force", () => {
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    expectShown("left-over-lab-ip", "lab-vpc-nat", "cloud-lab-artifacts", "tutorial-web-server", "workshop-node-01");
+    expect(header("Risk")).toHaveAttribute("aria-sort", "descending");
+    expect(radio("All 5")).toBeChecked();
+  });
+
+  it("sorts by cost, dearest first, and reverses on a second click", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await sortBy(user, "Min. $/mo");
+    expect(header("Min. $/mo")).toHaveAttribute("aria-sort", "descending");
+    expect(header("Risk")).not.toHaveAttribute("aria-sort");
+    expectShown("lab-vpc-nat", "tutorial-web-server", "left-over-lab-ip", "workshop-node-01", "cloud-lab-artifacts");
+
+    await sortBy(user, "Min. $/mo");
+    expect(header("Min. $/mo")).toHaveAttribute("aria-sort", "ascending");
+    // $0.00 is a price and sorts as one. Unpriced is not free, so it stays last.
+    expectShown("workshop-node-01", "left-over-lab-ip", "tutorial-web-server", "lab-vpc-nat", "cloud-lab-artifacts");
+  });
+
+  it("sorts by age, oldest first, with no creation time last either way", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await sortBy(user, "Age");
+    expectShown("cloud-lab-artifacts", "tutorial-web-server", "workshop-node-01", "lab-vpc-nat", "left-over-lab-ip");
+
+    await sortBy(user, "Age");
+    expectShown("lab-vpc-nat", "workshop-node-01", "tutorial-web-server", "cloud-lab-artifacts", "left-over-lab-ip");
+  });
+
+  it("keeps ties in the order they arrived, in both directions", async () => {
+    const user = userEvent.setup();
+    const bastion = resource({
+      resource_type: "Elastic IP",
+      resource_id: "eipalloc-2",
+      name: "bastion-address",
+      risk_level: "LOW",
+      created_at: null,
+      estimated_monthly_cost: 3.65,
+    });
+    render(<ResourceTable resources={[eip, web, bastion]} asOf={SCANNED_AT} />);
+
+    await sortBy(user, "Min. $/mo");
+    expectShown("tutorial-web-server", "left-over-lab-ip", "bastion-address");
+    await sortBy(user, "Min. $/mo");
+    expectShown("left-over-lab-ip", "bastion-address", "tutorial-web-server");
+  });
+
+  it("sorts a text column alphabetically", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await sortBy(user, "Type");
+    expect(header("Type")).toHaveAttribute("aria-sort", "ascending");
+    expectShown("tutorial-web-server", "workshop-node-01", "left-over-lab-ip", "lab-vpc-nat", "cloud-lab-artifacts");
+  });
+
+  it("keeps the sort out of the header text", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    await sortBy(user, "Age");
+
+    // The direction belongs to aria-sort. The labels are what the tests above
+    // and every screen reader read, and an arrow character in them breaks both.
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent.trim());
+    expect(headers).toEqual(["Type", "Name / ID", "Region", "Status", "Age", "Risk", "Min. $/mo"]);
+  });
+
+  it("filters to one risk level, and says how many each level holds", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await user.click(radio("High 2"));
+
+    expectShown("left-over-lab-ip", "lab-vpc-nat");
+    expect(radio("High 2")).toBeChecked();
+    expect(radio("All 5")).not.toBeChecked();
+  });
+
+  it("disables a level with nothing in it", () => {
+    render(<ResourceTable resources={[eip, web]} asOf={SCANNED_AT} />);
+
+    expect(radio("Review 0")).toBeDisabled();
+    expect(radio("Low 0")).toBeDisabled();
+    expect(radio("High 1")).toBeEnabled();
+  });
+
+  it("clears a level that empties, so it can neither hide every row nor come back", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    await user.click(radio("High 2"));
+
+    // Dashboard's account view can take every HIGH finding out from under the
+    // filter. Hiding every row would say "No resources found" over three.
+    rerender(<ResourceTable resources={[bucket, web, node]} asOf={SCANNED_AT} />);
+    expect(radio("All 3")).toBeChecked();
+    expectShown("cloud-lab-artifacts", "tutorial-web-server", "workshop-node-01");
+    expect(screen.queryByText(/no resources found/i)).not.toBeInTheDocument();
+
+    // The view it fell back to is the one it keeps: HIGH findings coming back
+    // must not quietly re-apply a filter the screen had stopped showing.
+    rerender(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    expect(radio("All 5")).toBeChecked();
+    expect(screen.getAllByRole("row")).toHaveLength(FINDINGS.length + 1);
+  });
+
+  it("clears a level when a scan comes back empty", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    await user.click(radio("High 2"));
+
+    rerender(<ResourceTable resources={[]} asOf={SCANNED_AT} />);
+    rerender(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    expect(radio("All 5")).toBeChecked();
+    expect(screen.getAllByRole("row")).toHaveLength(FINDINGS.length + 1);
+  });
+
+  it("drops a sort on the Account column once that column is gone", async () => {
+    const user = userEvent.setup();
+    const tagged = FINDINGS.map((r, i) => ({
+      ...r,
+      account_id: i % 2 ? "111122223333" : "444455556666",
+      account_label: i % 2 ? "sandbox-lab" : "training-account",
+    }));
+    const { rerender } = render(<ResourceTable resources={tagged} asOf={SCANNED_AT} />);
+    await sortBy(user, "Account");
+    expect(header("Account")).toHaveAttribute("aria-sort", "ascending");
+
+    // Findings that carry no account have no Account column to be sorted by.
+    rerender(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    expect(header("Risk")).toHaveAttribute("aria-sort", "descending");
+
+    rerender(<ResourceTable resources={tagged} asOf={SCANNED_AT} />);
+    expect(header("Account")).not.toHaveAttribute("aria-sort");
+    expect(header("Risk")).toHaveAttribute("aria-sort", "descending");
+  });
+
+  it("re-homes the selection when the risk filter hides the selected row", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await user.click(screen.getAllByRole("row")[4]); // tutorial-web-server, MEDIUM
+    await user.click(radio("High 2"));
+
+    expect(within(inspector()).getByText("left-over-lab-ip")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")[1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the selected finding selected when the sort moves it", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+
+    await user.click(screen.getAllByRole("row")[2]); // lab-vpc-nat
+    await sortBy(user, "Age"); // … which is fourth, oldest first
+
+    expect(screen.getAllByRole("row")[4]).toHaveAttribute("aria-selected", "true");
+    expect(within(inspector()).getByText("lab-vpc-nat")).toBeInTheDocument();
+  });
+
+  it("moves with the arrow keys in the order shown, not the order given", async () => {
+    const user = userEvent.setup();
+    render(<ResourceTable resources={FINDINGS} asOf={SCANNED_AT} />);
+    await sortBy(user, "Min. $/mo"); // lab-vpc-nat, tutorial-web-server, …
+
+    screen.getAllByRole("row")[1].focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(within(inspector()).getByText("tutorial-web-server")).toBeInTheDocument();
+  });
+});

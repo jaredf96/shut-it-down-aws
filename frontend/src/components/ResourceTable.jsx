@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import Icon from "./Icon.jsx";
-import RiskBadge from "./RiskBadge.jsx";
+import RiskBadge, { RISK_ORDER } from "./RiskBadge.jsx";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -60,6 +60,62 @@ function detailRows(details) {
   ]);
 }
 
+// Riskiest first — the order the filter offers its levels in.
+const RISK_LEVELS = Object.keys(RISK_ORDER).sort((a, b) => RISK_ORDER[a] - RISK_ORDER[b]);
+
+// Written out whole because Tailwind emits only the class names it can find in
+// the source: a composed `bg-${tone}` would never reach the stylesheet.
+const RISK_DOT = { HIGH: "bg-critical", REVIEW: "bg-info", MEDIUM: "bg-warning", LOW: "bg-success" };
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/**
+ * What each column sorts by, and which way a first click sorts it. A larger
+ * value is further along — riskier, older, dearer — so "descending" means what
+ * it says. `null` is a value the scan could not give, and it sorts last in both
+ * directions: an unpriced finding is not a free one, and a resource whose API
+ * reports no creation time is not a new one.
+ */
+const SORTS = {
+  type: { first: "ascending", value: (r) => r.resource_type || null },
+  name: { first: "ascending", value: (r) => r.name || r.resource_id || null },
+  account: { first: "ascending", value: (r) => r.account_label || r.account_id || null },
+  region: { first: "ascending", value: (r) => r.region || null },
+  status: { first: "ascending", value: (r) => r.status || null },
+  age: {
+    first: "descending",
+    value: (r) => {
+      const created = Date.parse(r.created_at);
+      return Number.isNaN(created) ? null : -created; // created earlier is older
+    },
+  },
+  risk: {
+    first: "descending",
+    value: (r) => {
+      const rank = RISK_ORDER[r.risk_level];
+      return typeof rank === "number" ? -rank : null; // rank 0 is the riskiest
+    },
+  },
+  cost: { first: "descending", value: (r) => r.estimated_monthly_cost ?? null },
+};
+
+// Dashboard hands the findings over already in this order, so the default sort
+// renders them exactly as they arrived.
+const DEFAULT_SORT = { key: "risk", dir: "descending" };
+
+// The direction flips the comparison, not the result, and Array#sort is stable:
+// ties keep the risk order they arrived in, whichever way a column is sorted.
+function compareBy({ key, dir }) {
+  const { value } = SORTS[key];
+  const sign = dir === "ascending" ? 1 : -1;
+  return (a, b) => {
+    const x = value(a);
+    const y = value(b);
+    if (x === null || y === null) return (x === null) - (y === null);
+    return sign * (typeof x === "string" ? collator.compare(x, y) : x - y);
+  };
+}
+
 /**
  * Findings as master/detail: every finding is one short row, and the two long
  * prose fields belong to whichever row is selected.
@@ -75,12 +131,33 @@ function detailRows(details) {
  */
 export default function ResourceTable({ resources, asOf }) {
   const [selectedKey, setSelectedKey] = useState(null);
+  const [sortChoice, setSortChoice] = useState(DEFAULT_SORT);
+  const [riskChoice, setRiskChoice] = useState("all");
   const rowRefs = useRef(new Map());
+  const filterId = useId();
 
   const list = resources || [];
-  // Derived, never stored: a filter can remove the selected row at any time, and
-  // a stored selection would then describe a finding that is no longer on screen.
-  const selected = list.find((r) => keyOf(r) === selectedKey) || list[0];
+  const showAccount = list.some((r) => r.account_label || r.account_id);
+  const counts = Object.fromEntries(
+    RISK_LEVELS.map((level) => [level, list.filter((r) => r.risk_level === level).length])
+  );
+
+  // The dashboard can swap the findings out from under either choice: another
+  // account view, a saved scan, an empty one. A level that now matches nothing
+  // would hide every row under a message saying there are none, and a sort on a
+  // column no longer shown would order the rows by nothing on screen. So a choice
+  // that stops applying is cleared, not merely overridden. Left stored, the filter
+  // would show All while holding High, and the next scan with a HIGH finding
+  // would quietly hide everything else again — and clicking All could not clear
+  // it, because a radio that is already checked fires no change. Cleared during
+  // render rather than in an effect, so no committed render holds one choice
+  // while showing another.
+  const staleRisk = riskChoice !== "all" && !counts[riskChoice];
+  const staleSort = sortChoice.key === "account" && !showAccount;
+  if (staleRisk) setRiskChoice("all");
+  if (staleSort) setSortChoice(DEFAULT_SORT);
+  const risk = staleRisk ? "all" : riskChoice;
+  const sort = staleSort ? DEFAULT_SORT : sortChoice;
 
   if (list.length === 0) {
     return (
@@ -90,12 +167,36 @@ export default function ResourceTable({ resources, asOf }) {
     );
   }
 
-  const showAccount = list.some((r) => r.account_label || r.account_id);
   const scannedAt = asOf ? new Date(asOf) : new Date();
-  const selectedK = selected ? keyOf(selected) : null;
+
+  // Derived once. Rendering, the selection fallback and the arrow keys all read
+  // this array, so the order on screen is the order you move through.
+  const rows = list.filter((r) => risk === "all" || r.risk_level === risk).sort(compareBy(sort));
+
+  // Derived, never stored: a filter can remove the selected row at any time, and
+  // a stored selection would then describe a finding that is no longer on screen.
+  const selected = rows.find((r) => keyOf(r) === selectedKey) || rows[0];
+  const selectedK = keyOf(selected);
+
+  const choices = [
+    { level: "all", label: "All", count: list.length },
+    ...RISK_LEVELS.map((level) => ({
+      level,
+      label: level[0] + level.slice(1).toLowerCase(),
+      count: counts[level],
+    })),
+  ];
+
+  function sortBy(key) {
+    setSortChoice(
+      sort.key === key
+        ? { key, dir: sort.dir === "ascending" ? "descending" : "ascending" }
+        : { key, dir: SORTS[key].first }
+    );
+  }
 
   function select(index) {
-    const k = keyOf(list[index]);
+    const k = keyOf(rows[index]);
     setSelectedKey(k);
     rowRefs.current.get(k)?.focus();
   }
@@ -104,10 +205,10 @@ export default function ResourceTable({ resources, asOf }) {
   // so 15 findings do not become 15 stops between the scan and the next control.
   function onRowKeyDown(e, index) {
     const moves = {
-      ArrowDown: Math.min(index + 1, list.length - 1),
+      ArrowDown: Math.min(index + 1, rows.length - 1),
       ArrowUp: Math.max(index - 1, 0),
       Home: 0,
-      End: list.length - 1,
+      End: rows.length - 1,
     };
     if (e.key in moves) {
       e.preventDefault();
@@ -120,27 +221,91 @@ export default function ResourceTable({ resources, asOf }) {
 
   return (
     <div
-      className="findings grid gap-4 items-start lg:grid-cols-[minmax(0,1fr)_340px]"
+      className="findings grid gap-x-4 gap-y-3 items-start lg:grid-cols-[minmax(0,1fr)_340px]"
       data-scene="findings"
     >
+      {/* Native radios: one tab stop, arrow keys between levels, and a level
+          with nothing in it is skipped rather than offering an empty table. */}
+      <div
+        className="flex flex-wrap items-center gap-1.5 lg:col-span-2"
+        role="radiogroup"
+        aria-labelledby={`${filterId}-label`}
+        data-scene="findings-filter"
+      >
+        <span
+          id={`${filterId}-label`}
+          className="mr-1.5 text-xs font-bold uppercase tracking-wider text-text-subtle"
+        >
+          Risk
+        </span>
+        {choices.map(({ level, label, count }) => (
+          <label
+            key={level}
+            className="relative inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text has-checked:border-accent has-checked:bg-accent/15 has-checked:text-text has-focus-visible:[box-shadow:var(--ring)] has-disabled:cursor-not-allowed has-disabled:opacity-45"
+            data-scene={`findings-filter-${level.toLowerCase()}`}
+            data-scene-state={level === risk ? "on" : "off"}
+          >
+            <input
+              type="radio"
+              className="sr-only"
+              name={`${filterId}-risk`}
+              value={level}
+              checked={level === risk}
+              disabled={count === 0}
+              onChange={() => setRiskChoice(level)}
+            />
+            {level !== "all" && (
+              <span className={`size-2 rounded-full ${RISK_DOT[level]}`} aria-hidden="true" />
+            )}
+            {label} <span className="font-mono tabular-nums text-text-subtle">{count}</span>
+          </label>
+        ))}
+      </div>
+
       <div className="table-wrapper">
         <table className="resource-table" role="grid" aria-label="Findings from the last scan">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Name / ID</th>
-              {showAccount && <th data-scene="findings-account-header">Account</th>}
-              <th>Region</th>
-              <th>Status</th>
-              <th>Age</th>
-              <th>Risk</th>
-              <th title="Minimum monthly exposure — usage-based charges not included.">
+              <SortHeader column="type" sort={sort} onSort={sortBy}>
+                Type
+              </SortHeader>
+              <SortHeader column="name" sort={sort} onSort={sortBy}>
+                Name / ID
+              </SortHeader>
+              {showAccount && (
+                <SortHeader
+                  column="account"
+                  sort={sort}
+                  onSort={sortBy}
+                  data-scene="findings-account-header"
+                >
+                  Account
+                </SortHeader>
+              )}
+              <SortHeader column="region" sort={sort} onSort={sortBy}>
+                Region
+              </SortHeader>
+              <SortHeader column="status" sort={sort} onSort={sortBy}>
+                Status
+              </SortHeader>
+              <SortHeader column="age" sort={sort} onSort={sortBy}>
+                Age
+              </SortHeader>
+              <SortHeader column="risk" sort={sort} onSort={sortBy}>
+                Risk
+              </SortHeader>
+              <SortHeader
+                column="cost"
+                sort={sort}
+                onSort={sortBy}
+                title="Minimum monthly exposure — usage-based charges not included."
+              >
                 Min. $/mo
-              </th>
+              </SortHeader>
             </tr>
           </thead>
           <tbody>
-            {list.map((r, i) => {
+            {rows.map((r, i) => {
               const k = keyOf(r);
               const isSelected = k === selectedK;
               return (
@@ -249,6 +414,49 @@ export default function ResourceTable({ resources, asOf }) {
         <p className="m-0 text-sm leading-normal text-text-muted">{selected.suggested_action}</p>
       </aside>
     </div>
+  );
+}
+
+/**
+ * A header the table can be sorted by. The state lives in `aria-sort` on the
+ * cell, never in the label, so the header still reads "Age" to a test and to a
+ * screen reader alike.
+ *
+ * The button is reset down to the header's own type, so the label lays out
+ * exactly as the bare text did, and the arrow is positioned into the cell's
+ * right padding rather than set beside the label. In the flow it would add its
+ * width to every column's minimum, and at 1920px the table already wraps
+ * `us-east-1` — the columns it widened would push more cells onto a second line.
+ *
+ * Gap plus arrow (2px + 11px) must stay inside that 14px padding. A label that
+ * wraps fills its whole column, so anything wider pushes the last column's arrow
+ * past the table's edge — invisible, but it scrolls `.table-wrapper` sideways.
+ * At 4px + 12px it measured 1008 against 1006.
+ */
+function SortHeader({ column, sort, onSort, children, ...rest }) {
+  const active = sort.key === column;
+  const icon = !active ? "arrowUpDown" : sort.dir === "ascending" ? "arrowUp" : "arrowDown";
+  return (
+    <th aria-sort={active ? sort.dir : undefined} {...rest}>
+      <button
+        type="button"
+        className={`group relative m-0 inline-block cursor-pointer border-0 bg-transparent p-0 text-left [font:inherit] [letter-spacing:inherit] [text-transform:inherit] ${
+          active ? "text-text" : "[color:inherit] hover:text-text"
+        }`}
+        data-scene={`findings-sort-${column}`}
+        data-scene-state={active ? sort.dir : "none"}
+        onClick={() => onSort(column)}
+      >
+        {children}
+        <Icon
+          name={icon}
+          size={11}
+          className={`absolute top-1/2 left-full ml-0.5 -translate-y-1/2 ${
+            active ? "text-accent" : "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60"
+          }`}
+        />
+      </button>
+    </th>
   );
 }
 

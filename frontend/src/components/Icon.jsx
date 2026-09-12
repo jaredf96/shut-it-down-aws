@@ -9,8 +9,8 @@
  * identically everywhere.
  *
  * Inlined rather than pulled from an icon package: the public demo is a static
- * bundle with a CI check over what it contains, and nine paths do not justify a
- * dependency.
+ * bundle with a CI check over what it contains, and a dozen paths do not
+ * justify a dependency.
  *
  * `currentColor` throughout, so an icon takes the colour of whatever it sits in
  * and follows the light/dark swap with no per-theme rules.
@@ -75,6 +75,28 @@ const PATHS = {
     </>
   ),
   moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+  // Sortable table headers: the pair while a column is not the sort, a single
+  // arrow for its direction once it is.
+  arrowUpDown: (
+    <>
+      <path d="m21 16-4 4-4-4" />
+      <path d="M17 20V4" />
+      <path d="m3 8 4-4 4 4" />
+      <path d="M7 4v16" />
+    </>
+  ),
+  arrowUp: (
+    <>
+      <path d="m5 12 7-7 7 7" />
+      <path d="M12 19V5" />
+    </>
+  ),
+  arrowDown: (
+    <>
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </>
+  ),
 };
 
 export default function Icon({ name, size = 16, className = "", title }) {
