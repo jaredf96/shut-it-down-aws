@@ -1,3 +1,64 @@
+/* Tailwind v4 — theme and utilities only. Preflight is deliberately NOT
+   imported: this file already carries the reset the app needs (`box-sizing`,
+   `body` margin, themed scrollbars), and Preflight's own reset moves table,
+   form-control and heading geometry — which is screenshot geometry, pinned by
+   `backend/tests/test_screenshot_claims.py` and by the capture recipe in
+   CLAUDE.md § Gotchas. Adding it was measured, not assumed: see D20.
+
+   Consequence for utilities: without Preflight there is no global
+   `border-style: solid`, so a bare `border`/`border-x` utility sets a width
+   against `border-style: none` and renders nothing. Write `border border-solid`
+   (or use a token class) when you want a visible edge. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* The bridge: one token system, not two.
+   `inline` substitutes the reference into the utility itself, so `bg-surface`
+   emits `background-color: var(--surface)` and follows the light/dark swap
+   below for free — rather than snapshotting a colour into a second palette
+   that would drift the first time a token changes.
+
+   `--font-sans`, `--font-mono`, `--radius-sm` and `--radius-lg` need no mapping.
+   This file already owns those names on an unlayered `:root`, unlayered
+   declarations beat `@layer theme`, and those utilities emit a `var()` — so
+   `font-mono` and `rounded-sm` already resolve to this project's values. Do not
+   restate them here: `--radius-sm: var(--radius-sm)` is a cycle, not a bridge.
+
+   Shadows are the exception, and it is a measured one. Tailwind resolves its
+   shadow scale at BUILD time, so `shadow-lg` inlines Tailwind's own
+   `0 10px 15px -3px …` and never reads this file's `--shadow-lg` — sharing the
+   name buys nothing. `shadow-card` / `shadow-pop` below are the bridged ones.
+   Use those; Tailwind's bare `shadow-*` scale is not this project's.
+
+   Bare `rounded` has the same trap: it is Tailwind's 4px, not this file's
+   `--radius` (10px). `rounded-base` is the bridged one. `rounded-sm` and
+   `rounded-lg` need no bridge because the names already collide in our favour. */
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-critical: var(--critical);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  --radius-base: var(--radius);
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+}
+
 /* =========================================================================
    Shut It Down — design system
    "Bold observability" aesthetic (Datadog/Grafana-adjacent), themeable.

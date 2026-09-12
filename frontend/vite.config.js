@@ -1,5 +1,6 @@
 import { fileURLToPath, URL } from "node:url";
 
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -9,7 +10,7 @@ const demoDataDir = fileURLToPath(new URL("../demo-data", import.meta.url));
 
 // Dev server runs on 5173 (the default the backend CORS config allows).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@demo-data": demoDataDir,

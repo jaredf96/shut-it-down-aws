@@ -1012,6 +1012,52 @@ the template and this file do not drift apart on it.
 
 ---
 
+## D20 — Tailwind is adopted for new UI work, and Preflight is deliberately excluded
+
+**Decided:** 2026-09-12 · **Status:** executed
+
+`frontend/src/styles.css` imports `tailwindcss/theme.css` and
+`tailwindcss/utilities.css` and **not** `tailwindcss/preflight.css`. Tailwind's
+scales do not become a second palette: an `@theme inline` block maps its colour
+namespace onto the custom properties this file already defines, so `bg-surface`
+emits `background-color: var(--surface)` and follows the light/dark swap rather
+than snapshotting a value that would drift the first time a token moved. The
+1,783 lines of existing BEM are not translated; they keep styling what they
+already style.
+
+**Why:** Preflight is a global reset, and this project's screenshots are a
+published artifact with a documented capture recipe (`CLAUDE.md` § Gotchas)
+whose claims are pinned by `backend/tests/test_screenshot_claims.py`. Whether
+"a reset is basically a no-op here" was measured rather than assumed, by
+capturing the built demo at the recipe's own 1860px / DPR 2 and diffing both the
+pixels and the computed geometry of every element:
+
+| | without Preflight | with Preflight |
+| --- | --- | --- |
+| page height | 3667px (unchanged) | 4130px (**+463px**) |
+| elements whose box moved | 0 of 423 | **406 of 423** |
+| rendered output | byte-identical PNG | all three committed images invalidated |
+
+It changed `line-height` on 389 elements and `border-style` on 371, and stripped
+the user-agent padding off 16 form controls. None of that is a judgement call
+about taste; it is the capture recipe breaking. The reset Tailwind would have
+supplied is one this file already carries — `box-sizing`, `body` margin, themed
+scrollbars — so importing it buys a conflict and no coverage.
+
+**Consequences:** two traps follow from the omission and are commented at the
+import. Tailwind resolves shadows at build time, so `shadow-lg` inlines its own
+values and never reads `--shadow-lg` despite the shared name — `shadow-card` and
+`shadow-pop` are the bridged ones. Bare `rounded` is Tailwind's 4px, not this
+file's 10px `--radius` — `rounded-base` is the bridged one. `rounded-sm`,
+`rounded-lg`, `font-sans` and `font-mono` need no bridge: those names collide
+with ours, unlayered `:root` beats `@layer theme`, and those utilities emit a
+`var()`. Finally, with no global `border-style: solid`, a bare `border` utility
+sets a width against `border-style: none` and renders nothing; write
+`border border-solid`. `frontend/vite.config.js` gains the plugin; the demo
+bundle grew 8.23 kB → 9.44 kB gzipped and still passes `make demo-bundle-check`.
+
+---
+
 ## Template
 
 ```markdown
