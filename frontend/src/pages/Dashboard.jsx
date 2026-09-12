@@ -4,6 +4,7 @@ import AlertsPanel from "../components/AlertsPanel.jsx";
 import CleanupPanel from "../components/CleanupPanel.jsx";
 import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
+import Icon from "../components/Icon.jsx";
 import IncompleteScan from "../components/IncompleteScan.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
 import ScanHistory from "../components/ScanHistory.jsx";
@@ -272,14 +273,14 @@ export default function Dashboard() {
 
       {isDemoMode ? (
         <div className="notice notice--demo" data-scene="demo-notice">
-          🧪 <strong>Demo mode</strong> — every figure below is representative sample data.
+          <Icon name="flask" /> <strong>Demo mode</strong> — every figure below is representative sample data.
           This build makes no AWS calls and holds no credentials. The scanners, cross-account
           STS access, and cleanup safeguards are real; see the source and the sandbox
           walkthrough.
         </div>
       ) : (
         <div className="notice">
-          🔒 Scanning is strictly read-only — it only issues Describe/List/Get calls and
+          <Icon name="lock" /> Scanning is strictly read-only — it only issues Describe/List/Get calls and
           never modifies your account. Guided cleanup is a separate, opt-in feature that is
           disabled by default and requires explicit per-resource confirmation.
         </div>
@@ -313,7 +314,7 @@ export default function Dashboard() {
 
       {!viewingLive && viewingMeta && (
         <div className="banner" data-scene="saved-scan-banner">
-          📜 Viewing a saved scan from{" "}
+          <Icon name="history" /> Viewing a saved scan from{" "}
           <strong>{new Date(viewingMeta.created_at).toLocaleString()}</strong>. Click
           <button className="banner__link" onClick={() => runScan()}>
             Run scan

@@ -345,7 +345,6 @@ h1::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
   line-height: 1;
   background: var(--surface-2);
   color: var(--text);
@@ -358,6 +357,36 @@ h1::before {
 .theme-toggle:hover {
   border-color: var(--accent);
   background: var(--surface-3);
+}
+
+/* --- Icons --------------------------------------------------------------- */
+
+/* Stroked 24-unit paths at `currentColor`, so an icon takes the colour of
+   whatever it sits in and needs no per-theme rule. These replaced emoji, which
+   are drawn by the viewer's OS font — the committed captures in docs/img/ and
+   the walkthrough video would otherwise ship one platform's artwork. */
+.icon {
+  display: inline-block;
+  vertical-align: -0.14em;
+  flex-shrink: 0;
+}
+
+/* The theme toggle is the one icon-only control, so the icon is the whole
+   affordance rather than decoration beside a label. */
+.theme-toggle .icon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.25, 0.64, 1);
+}
+
+.theme-toggle:hover .icon {
+  transform: rotate(-20deg) scale(1.1);
+}
+
+/* Press feedback on every button, including the ones carrying no class of their
+   own — the account and user forms both submit through one. `transform` rather
+   than a margin or padding nudge, so a pressed button never reflows the row it
+   sits in. */
+button:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 /* --- Notice / error banners --------------------------------------------- */
@@ -499,6 +528,20 @@ h1::before {
   .scan-progress__pulse,
   .scan-progress__fill::after {
     animation: none;
+  }
+
+  /* Nothing else should move either. `Dashboard.jsx` already checks this
+     preference before smooth-scrolling to results; this covers everything the
+     stylesheet animates, including the icon and press feedback above.
+     Near-zero rather than `none` so transitionend still fires and nothing that
+     waits on it stalls. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

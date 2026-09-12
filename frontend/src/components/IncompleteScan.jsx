@@ -1,3 +1,5 @@
+import Icon from "./Icon.jsx";
+
 // What the scan could not see.
 //
 // A disabled, throttled, or unpermitted region returns nothing — exactly what an
@@ -37,7 +39,9 @@ export default function IncompleteScan({ regions, scanners }) {
 
   return (
     <section className="incomplete-scan" role="status">
-      <h2 className="incomplete-scan__title">⚠️ {headline} could not be fully read</h2>
+      <h2 className="incomplete-scan__title">
+        <Icon name="warning" /> {headline} could not be fully read
+      </h2>
       <p className="incomplete-scan__lede">
         Anything {total === 1 ? "it holds" : "they hold"} is missing from these results —
         this scan is incomplete, not clean.

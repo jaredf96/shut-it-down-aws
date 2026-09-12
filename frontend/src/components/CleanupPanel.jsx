@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import { capabilities, scanProvider } from "../data/scanProvider.js";
 
 // Which finding is eligible for which action — the same preconditions the
@@ -144,7 +145,9 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
   return (
     <section className="cleanup" data-scene="cleanup-panel">
       <div className="cleanup__header">
-        <h2>🧹 Guided cleanup</h2>
+        <h2>
+          <Icon name="brush" /> Guided cleanup
+        </h2>
         <span
           className={`cleanup__flag ${catalog.enabled && !previewOnly ? "is-on" : "is-off"}`}
           data-scene="cleanup-flag"
@@ -189,7 +192,8 @@ export default function CleanupPanel({ isAdmin, resources = [] }) {
 
         {selected && (
           <p className={`cleanup__desc ${selected.destructive ? "is-destructive" : ""}`}>
-            {selected.destructive ? "⚠️ Irreversible. " : "↩️ Reversible. "}
+            <Icon name={selected.destructive ? "warning" : "undo"} />{" "}
+            {selected.destructive ? "Irreversible. " : "Reversible. "}
             {selected.description}
           </p>
         )}

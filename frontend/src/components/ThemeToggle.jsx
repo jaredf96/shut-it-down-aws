@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import Icon from "./Icon.jsx";
+
 // Light/dark toggle. Defaults to the OS preference (data-theme unset) until the
 // user makes an explicit choice, which is then persisted and wins over the OS.
 function currentTheme() {
@@ -40,7 +42,7 @@ export default function ThemeToggle() {
       aria-label={`Switch to ${next} theme`}
       title={`Switch to ${next} theme`}
     >
-      {theme === "dark" ? "☀️" : "🌙"}
+      <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
     </button>
   );
 }

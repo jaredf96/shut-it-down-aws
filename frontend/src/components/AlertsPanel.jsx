@@ -1,3 +1,4 @@
+import Icon from "./Icon.jsx";
 import RiskBadge from "./RiskBadge.jsx";
 
 const SEVERITY_META = {
@@ -21,7 +22,9 @@ export default function AlertsPanel({ alerts }) {
   return (
     <section className="alerts">
       <div className="alerts__header">
-        <h2>⚠️ Alerts ({alerts.length})</h2>
+        <h2>
+          <Icon name="warning" /> Alerts ({alerts.length})
+        </h2>
         <div className="alerts__counts">
           {ORDER.filter((s) => counts[s]).map((s) => (
             <span key={s} className={`alerts__count alerts__count--${s.toLowerCase()}`}>

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import Icon from "./Icon.jsx";
 import RiskBadge from "./RiskBadge.jsx";
 
 const MS_PER_DAY = 86_400_000;
@@ -82,7 +83,11 @@ export default function ResourceTable({ resources, asOf }) {
   const selected = list.find((r) => keyOf(r) === selectedKey) || list[0];
 
   if (list.length === 0) {
-    return <p className="empty">No resources found. 🎉 Nothing obvious is costing you money.</p>;
+    return (
+      <p className="empty">
+        <Icon name="check" size={18} /> No resources found. Nothing obvious is costing you money.
+      </p>
+    );
   }
 
   const showAccount = list.some((r) => r.account_label || r.account_id);

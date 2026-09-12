@@ -159,8 +159,6 @@ beforeEach(() => {
     summary: SCAN_RESULT.summary,
     created_at: "2026-08-14T04:12:44Z",
   });
-  // jsdom implements neither, and Dashboard calls both on a finished scan.
-  window.matchMedia = window.matchMedia || ((q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }));
   Element.prototype.scrollIntoView = vi.fn();
 });
 
