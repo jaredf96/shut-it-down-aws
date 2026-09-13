@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from tests.conftest import REPO_ROOT
 
@@ -132,6 +134,15 @@ def test_screenshot_figures_match_the_demo_fixtures():
     assert scan["summary"]["total_resources"] == 15
     assert scan["summary"]["by_risk_level"] == {"HIGH": 3, "REVIEW": 2, "MEDIUM": 4, "LOW": 6}
     assert scan["summary"]["estimated_monthly_cost"] == 123.30
+
+    # dashboard.png's Min. $/mo tile: "+$31.50 vs Aug 14 scan". The tile compares
+    # only two complete scans (D21), and names the earlier one by its date in the
+    # capture recipe's America/New_York timezone.
+    assert scan["complete"] is True and previous["complete"] is True
+    assert previous["summary"]["estimated_monthly_cost"] == 91.80
+    earlier = datetime.fromisoformat(previous["created_at"].replace("Z", "+00:00"))
+    earlier = earlier.astimezone(ZoneInfo("America/New_York"))
+    assert f"{earlier:%b} {earlier.day}" == "Aug 14"
 
     # The 4-tuple identity the alert/diff engine uses (CLAUDE.md § Gotchas).
     def identity(resource):

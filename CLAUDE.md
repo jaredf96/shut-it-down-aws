@@ -215,9 +215,13 @@ repository. Persistence is optional: no
   first paint rather than inheriting the OS appearance, hide scrollbars, and
   blur the active element so no focus ring lands in frame. The demo **starts
   its scan on load** — wait for `.summary__caveat` to exist and for no button
-  to read "Scanning…", not for a click. The other two images are element crops
-  at two *different* widths, so there is no single viewport that reproduces all
-  three: recapture only the image whose inputs moved.
+  to read "Scanning…", not for a click — and for the scan history too, or the
+  Min. $/mo tile is captured without its change since the last scan. The other
+  two images are crops of a single panel with 14px of page around it, each at its
+  own viewport: `history-diff.png` is the diff panel after Compare at 1860px, and
+  `cleanup-preview.png` the cleanup panel at 1400px after a dry-run preview of
+  `release_elastic_ip` on `eipalloc-8a571f951985fe53a`. No single viewport
+  reproduces all three, so recapture only the image whose inputs moved.
   `backend/tests/test_screenshot_claims.py` lists what each one depends on.
 - **A new scan-table column can silently clip the last one.** `.page`'s
   max-width is sized to fit the table beside the history sidebar; re-measure

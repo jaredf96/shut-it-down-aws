@@ -6,8 +6,8 @@ of them.
 
 | File | What it shows | Referenced from | Claims checked by |
 | --- | --- | --- | --- |
-| `dashboard.png` | A scan result: cost total, risk badges, alerts panel | root `README.md` — hero image and Screenshots | `test_screenshot_claims.py` (cost caveat, summary figures) |
-| `history-diff.png` | The scan-history sidebar and the diff between two scans | root `README.md` — Screenshots | `test_screenshot_claims.py` (diff counts, resource IDs) |
+| `dashboard.png` | A scan result: alerts, the cost total and its change since the last scan, the findings with their risk filter and detail panel, scan history | root `README.md` — hero image and Screenshots | `test_screenshot_claims.py` (cost caveat, summary figures, the change since the last scan) |
+| `history-diff.png` | The diff between two saved scans | root `README.md` — Screenshots | `test_screenshot_claims.py` (diff counts, resource IDs) |
 | `cleanup-preview.png` | The guided cleanup panel mid dry-run | root `README.md` — Screenshots | `test_screenshot_claims.py` (panel prose, action catalog, EIP id) |
 
 Those tests flag the source and fixture changes that make an image *suspect*;
