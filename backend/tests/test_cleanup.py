@@ -494,7 +494,7 @@ def test_aws_failure_detail_is_opaque_to_the_client_but_kept_in_the_audit_row(
             "Error": {
                 "Code": "UnauthorizedOperation",
                 "Message": (
-                    "User: arn:aws:sts::476646938033:assumed-role/lab-scanner/x is not "
+                    "User: arn:aws:sts::111111111111:assumed-role/lab-scanner/x is not "
                     "authorized to perform: ec2:StopInstances"
                 ),
             }
@@ -525,7 +525,7 @@ def test_aws_failure_detail_is_opaque_to_the_client_but_kept_in_the_audit_row(
 
     entries = client.get("/cleanup/audit").json()["entries"]
     row = next(e for e in entries if e["status"] == "error")
-    assert "arn:aws:sts::476646938033" in row["detail"]
+    assert "arn:aws:sts::111111111111" in row["detail"]
 
 
 def test_describe_failure_keeps_the_aws_code_and_drops_the_message():
@@ -535,7 +535,7 @@ def test_describe_failure_keeps_the_aws_code_and_drops_the_message():
         {
             "Error": {
                 "Code": "UnauthorizedOperation",
-                "Message": "User: arn:aws:sts::476646938033:assumed-role/x is not authorized",
+                "Message": "User: arn:aws:sts::111111111111:assumed-role/x is not authorized",
             }
         },
         "DescribeInstances",
