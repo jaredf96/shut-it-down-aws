@@ -224,8 +224,9 @@ repository. Persistence is optional: no
   reproduces all three, so recapture only the image whose inputs moved.
   `backend/tests/test_screenshot_claims.py` lists what each one depends on.
 - **A new scan-table column can silently clip the last one.** `.page`'s
-  max-width is sized to fit the table beside the history sidebar; re-measure
-  `.table-wrapper` scrollWidth vs clientWidth (the CSS comment has the numbers).
+  max-width is sized to fit the findings table and its inspector beside the
+  history sidebar; re-measure `.table-wrapper` scrollWidth vs clientWidth (the
+  CSS comment has the numbers).
 
 ## Conventions
 
@@ -233,8 +234,11 @@ repository. Persistence is optional: no
   Always run `make format` then `make lint` before finishing.
 - Tests colocate per feature (`tests/test_<feature>.py`), use moto via autouse
   fixtures in `conftest.py`, and must pass fully offline.
-- Frontend: plain React, one panel component per feature, styles in
-  `frontend/src/styles.css` (BEM-ish). **Components never import
+- Frontend: plain React, one panel component per feature. New UI is styled
+  with Tailwind utilities bridged to the tokens in `frontend/src/styles.css`,
+  whose BEM-ish rules keep styling what they already style (D20): no Preflight,
+  and `shadow-card`/`shadow-pop`/`rounded-base` rather than Tailwind's own
+  `shadow-*` and bare `rounded`. **Components never import
   `api/client.js`** — they go through the provider (`frontend/src/data/`).
   Frontend tests (vitest + RTL) and `typecheck` (tsc, scoped to `src/data`)
   both run in CI.

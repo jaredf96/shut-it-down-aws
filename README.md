@@ -64,7 +64,8 @@ below is honest about which category it falls into.
 - Regions the scan could not read — and services it could not reach at all —
   are reported, never rendered as empty ones
 - Alert rule engine (new billable resource, risk increase, standing high risk)
-- Scan history and diffing, persisted to DynamoDB
+- Scan history and diffing, persisted to DynamoDB; each saved scan records what
+  it could not read
 - Slack and email notifications
 - Guarded cleanup: opt-in, admin-only, typed confirmation, dry-run default,
   live precondition re-check, full audit trail
@@ -79,7 +80,7 @@ below is honest about which category it falls into.
 - Liveness/readiness split, structured `503`s, request correlation IDs — the
   id and the server's own error wording reach the dashboard, rather than being
   replaced by a bare status line
-- 279 offline backend tests + 83 frontend tests, CI, Docker, Lambda adapter
+- 288 offline backend tests + 151 frontend tests, CI, Docker, Lambda adapter
   <!-- The only exact test counts in the docs. Everywhere else describes the
        suites generically, because duplicated totals go stale one at a time. -->
 
@@ -88,9 +89,9 @@ below is honest about which category it falls into.
 <details>
 <summary><b>Demonstrated publicly</b> — what the fixture demo shows</summary>
 
-Scan workflow · risk-ranked resource table with resource age · minimum-cost
-summary · account filtering · scan history · changes between scans · alert
-presentation.
+Scan workflow · risk-ranked findings with resource age, sorting, a risk filter
+and a detail panel · minimum-cost summary with its change since the last scan ·
+account filtering · scan history · changes between scans · alert presentation.
 
 Team management and cleanup execution are **not** exposed in the demo.
 
@@ -366,7 +367,7 @@ confidence scores, measured false-positive rates).
 ## 🧰 Tech stack
 
 **Backend** FastAPI · boto3 · pydantic · DynamoDB · pytest + moto · ruff
-**Frontend** React · Vite · plain CSS design tokens (light/dark)
+**Frontend** React · Vite · Tailwind v4 over CSS design tokens (light/dark) · vitest + Testing Library
 **Infra** Docker · GitHub Actions · Terraform (skeleton) · Mangum (Lambda)
 
 ---

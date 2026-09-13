@@ -247,12 +247,13 @@ code,
 /* --- Page shell ---------------------------------------------------------- */
 
 .page {
-  /* Wide enough that a multi-account scan table (10 columns, two of them prose)
-     fits beside the history sidebar without horizontal scrolling. Narrower
-     viewports still work — .table-wrapper scrolls.
-     The table's min-content width is 1342px next to the 288px sidebar; 1720
-     clears that with ~20px to spare. Adding a column costs roughly 40px here,
-     so re-measure rather than assuming this still fits. */
+  /* Wide enough that the multi-account findings table (8 columns, beside its
+     340px inspector) fits next to the 288px history sidebar without horizontal
+     scrolling. Narrower viewports still work — .table-wrapper scrolls.
+     With the demo's fixtures the table's min-content width is ~956px, which
+     its wrapper reaches at a 1670px viewport; at 1720 the wrapper is 1006px,
+     ~50px to spare. A new column spends that margin, so re-measure rather
+     than assuming this still fits. */
   max-width: 1720px;
   margin: 0 auto;
   padding: 28px 24px 72px;
@@ -805,10 +806,12 @@ button:not(:disabled):active {
 
 .resource-table {
   width: 100%;
-  /* Eight short columns (ACCOUNT appears in multi-account scans). The floor is
-     what the id and ARN strings need to stay on one line — the two prose
-     columns that used to set it moved into the inspector, which is why this is
-     820px and not 1080px. Below the floor, .table-wrapper scrolls. */
+  /* Eight short columns (ACCOUNT appears in multi-account scans). A backstop,
+     not the working floor: below 820px of wrapper the table stops shrinking
+     and .table-wrapper scrolls however short its content, but the demo's own
+     ids and names stop it sooner, at ~956px. The two prose columns that used
+     to set this moved into the inspector, which is why it is 820px and not
+     1080px. */
   min-width: 820px;
   border-collapse: collapse;
   font-size: 0.88rem;
