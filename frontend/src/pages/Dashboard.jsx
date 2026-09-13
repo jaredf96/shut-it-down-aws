@@ -44,7 +44,8 @@ export default function Dashboard() {
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState(null);
 
-  // Per-account filter for the resource table ("all" or an account_label).
+  // Per-account filter for the resource table: "all", or an account_id, which is
+  // twelve digits and so never "all".
   const [accountFilter, setAccountFilter] = useState("all");
 
   // Multi-account. `accounts = null` means persistence is disabled.
@@ -248,10 +249,25 @@ export default function Dashboard() {
   const viewingLive = activeScanId === null;
   const isAdmin = me?.role === "admin";
 
-  // Per-account filtering for the resource table. The select is offered only
-  // across two or more accounts: one account's view would be the whole table.
-  const labels = [...new Set(resources.map((r) => r.account_label).filter(Boolean))];
-  const accountLabels = labels.length > 1 ? labels : [];
+  // Per-account filtering for the resource table, by account id. A label is only
+  // the name an account was registered under, or its id when it has none, so
+  // nothing keeps it to one account: keyed by label, two accounts sharing a name
+  // merged into one option, a choice passed to whichever account next took its
+  // name, and an account named "all" could not be chosen. The select is offered
+  // only across two or more accounts: one account's view would be the whole table.
+  const accountLabels = new Map();
+  for (const r of resources) {
+    if (r.account_id) accountLabels.set(r.account_id, r.account_label || r.account_id);
+  }
+  const labels = [...accountLabels.values()];
+  const accountOptions =
+    accountLabels.size > 1
+      ? [...accountLabels].map(([id, label]) => ({
+          id,
+          // A name two accounts share would read the same twice without its id.
+          text: labels.indexOf(label) === labels.lastIndexOf(label) ? label : `${label} · ${id}`,
+        }))
+      : [];
 
   // A rescan or a saved scan can replace the findings under the choice, so a
   // choice the select no longer offers is cleared, not merely overridden. Left
@@ -261,13 +277,14 @@ export default function Dashboard() {
   // select at all; and the next scan to offer it again would narrow the table to
   // it, unasked. Cleared during render, as ResourceTable clears its risk filter,
   // so no committed render holds one choice while showing another.
-  const staleAccount = accountFilter !== "all" && !accountLabels.includes(accountFilter);
+  const staleAccount =
+    accountFilter !== "all" && !accountOptions.some((o) => o.id === accountFilter);
   if (staleAccount) setAccountFilter("all");
   const accountView = staleAccount ? "all" : accountFilter;
   const filteredResources =
     accountView === "all"
       ? resources
-      : resources.filter((r) => r.account_label === accountView);
+      : resources.filter((r) => r.account_id === accountView);
 
   return (
     <div className="page">
@@ -392,7 +409,7 @@ export default function Dashboard() {
                 </p>
               )}
 
-              {hasScanned && accountLabels.length > 0 && (
+              {hasScanned && accountOptions.length > 0 && (
                 <div className="account-filter">
                   <label>
                     Account view:{" "}
@@ -401,9 +418,9 @@ export default function Dashboard() {
                       onChange={(e) => setAccountFilter(e.target.value)}
                     >
                       <option value="all">All accounts ({resources.length})</option>
-                      {accountLabels.map((label) => (
-                        <option key={label} value={label}>
-                          {label}
+                      {accountOptions.map(({ id, text }) => (
+                        <option key={id} value={id}>
+                          {text}
                         </option>
                       ))}
                     </select>
