@@ -4,6 +4,7 @@ import AlertsPanel from "../components/AlertsPanel.jsx";
 import CleanupPanel from "../components/CleanupPanel.jsx";
 import CompareBar from "../components/CompareBar.jsx";
 import DiffView from "../components/DiffView.jsx";
+import ExposureCard from "../components/ExposureCard.jsx";
 import Icon from "../components/Icon.jsx";
 import IncompleteScan from "../components/IncompleteScan.jsx";
 import ResourceTable from "../components/ResourceTable.jsx";
@@ -58,6 +59,13 @@ export default function Dashboard() {
   // provider-normalized `as_of`, or a saved scan's `created_at`. Null only
   // before the first scan, where nothing is rendered anyway.
   const [scannedAt, setScannedAt] = useState(null);
+
+  // The live scan's saved id (null when it was not persisted) and its own
+  // verdict on whether it read everything (D21). With `activeScanId` they tell
+  // the Min. $/mo tile which scan is on screen and whether it can be compared;
+  // a saved scan carries its own verdict in the history list.
+  const [liveScanId, setLiveScanId] = useState(null);
+  const [liveComplete, setLiveComplete] = useState(null);
 
   // Compare / diff state.
   const [compareFrom, setCompareFrom] = useState("");
@@ -185,6 +193,8 @@ export default function Dashboard() {
       // provider normalizes one in. Ages then read against when the scan ran
       // rather than against render time.
       setScannedAt(data.as_of);
+      setLiveScanId(data.scan_id ?? null);
+      setLiveComplete(data.complete ?? null);
       setHasScanned(true);
       setActiveScanId(null);
       setViewingMeta(null);
@@ -345,9 +355,12 @@ export default function Dashboard() {
               {summary && (
                 <div className="summary">
                   {summary.estimated_monthly_cost !== undefined && (
-                    <SummaryCard
-                      label="Min. $/mo"
-                      value={`$${Number(summary.estimated_monthly_cost).toFixed(2)}`}
+                    <ExposureCard
+                      summary={summary}
+                      scans={scans}
+                      scanId={viewingLive ? liveScanId : activeScanId}
+                      asOf={scannedAt}
+                      complete={viewingLive ? liveComplete : null}
                     />
                   )}
                   <SummaryCard label="Total resources" value={summary.total_resources} />
