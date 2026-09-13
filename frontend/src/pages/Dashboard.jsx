@@ -74,14 +74,21 @@ export default function Dashboard() {
   const [diff, setDiff] = useState(null);
   const [comparing, setComparing] = useState(false);
 
+  // Refreshes overlap: one runs at mount and one after every scan that lands,
+  // overtaken or not, and they can answer in any order. Only the latest may set
+  // the list, or an older one answering last would drop a scan the newer one
+  // listed, or hide the panel over a failure the newer one did not have.
+  const latestHistory = useRef(0);
+
   async function refreshHistory() {
+    const request = ++latestHistory.current;
     try {
       const data = await scanProvider.listScans();
-      setScans(data.scans);
+      if (request === latestHistory.current) setScans(data.scans);
       return data.scans;
     } catch {
       // 503 (persistence disabled) or backend down — just hide the panel.
-      setScans(null);
+      if (request === latestHistory.current) setScans(null);
       return null;
     }
   }
@@ -179,12 +186,26 @@ export default function Dashboard() {
     );
   }
 
+  // Loads overlap: only the header button is disabled while one is in flight,
+  // not the history items, its "Live" or the banner's "Run scan". So every load,
+  // live or saved, takes the next number and only the latest may write the page.
+  // Otherwise the page ends on whichever response lands last, not on the load
+  // asked for last; and an overtaken load that lands first ends `loading` under
+  // the newer one, and clears an account view the newer one would have offered.
+  // The history list is the exception: an overtaken scan may still have been
+  // saved, so it still refreshes the list, and refreshHistory orders the
+  // refreshes itself.
+  const latestLoad = useRef(0);
+
   async function runScan({ revealResults = true } = {}) {
+    const load = ++latestLoad.current;
     setLoading(true);
     setError(null);
     setProgress({ done: false, reveal: revealResults });
     try {
       const data = await scanProvider.runScan();
+      refreshHistory(); // a saved scan may have just been added, overtaken or not
+      if (load !== latestLoad.current) return;
       setResources(sortByRisk(data.resources));
       setSummary(data.summary);
       setAlerts(data.alerts || []);
@@ -199,10 +220,10 @@ export default function Dashboard() {
       setHasScanned(true);
       setActiveScanId(null);
       setViewingMeta(null);
-      refreshHistory(); // a saved scan may have just been added
       // Let the bar finish; the reveal happens when it dismisses itself.
       setProgress((p) => (p ? { ...p, done: true } : p));
     } catch (e) {
+      if (load !== latestLoad.current) return;
       // Join without doubling the punctuation. An ApiError message is already
       // a terminated sentence; a SyntaxError from a malformed 200 body, or
       // anything thrown above the client, is not — so test rather than assume.
@@ -221,15 +242,20 @@ export default function Dashboard() {
       // and a bar animating to "complete" would contradict it.
       setProgress(null);
     } finally {
-      setLoading(false);
+      if (load === latestLoad.current) setLoading(false);
     }
   }
 
   async function loadSavedScan(scanId) {
+    const load = ++latestLoad.current;
     setLoading(true);
     setError(null);
+    // A live scan still in flight is abandoned, so its bar goes with it; a bar
+    // already finishing belongs to a scan that landed, and plays out.
+    setProgress((p) => (p?.done ? p : null));
     try {
       const record = await scanProvider.getScan(scanId);
+      if (load !== latestLoad.current) return;
       setResources(sortByRisk(record.resources));
       setSummary(record.summary);
       setAlerts([]); // alerts reflect the latest live scan, not a historical view
@@ -240,9 +266,9 @@ export default function Dashboard() {
       setActiveScanId(scanId);
       setViewingMeta({ created_at: record.created_at });
     } catch (e) {
-      setError(e.message);
+      if (load === latestLoad.current) setError(e.message);
     } finally {
-      setLoading(false);
+      if (load === latestLoad.current) setLoading(false);
     }
   }
 

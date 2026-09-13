@@ -11,13 +11,20 @@
  * Nor may it mistake one account for another. A name is only what an account
  * was registered under: two accounts can share one, an account registered later
  * can take the name of one removed, and one can even be called "all".
+ *
+ * And when loads overlap, the page must end on the one asked for last. The
+ * history stays clickable while a scan is in flight, so an overtaken load used
+ * to land anyway: the page ended on whichever response arrived last, and one
+ * without the chosen account cleared the choice on its way through. The history
+ * list races the same way, since every scan that lands refreshes it.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runScan = vi.fn();
 const getScan = vi.fn();
+const listScans = vi.fn();
 
 vi.mock("../data/scanProvider.js", () => ({
   isDemoMode: true,
@@ -30,7 +37,7 @@ vi.mock("../data/scanProvider.js", () => ({
   },
   scanProvider: {
     getMe: async () => ({ user_id: "u1", role: "member" }),
-    listScans: async () => ({ scans: SCANS }),
+    listScans: (...a) => listScans(...a),
     listAccounts: async () => ({ accounts: [] }),
     runScan: (...a) => runScan(...a),
     getScan: (...a) => getScan(...a),
@@ -47,12 +54,20 @@ const ACCOUNT_IDS = {
   "student-03": "222222222222",
 };
 
+// Newest first, as the history lists them.
 const SCANS = [
   {
     scan_id: "2026-08-14T04:12:44Z_efgh5678",
     created_at: "2026-08-14T04:12:44Z",
     resource_count: 2,
     summary: { by_risk_level: { HIGH: 2 } },
+    vs_previous: null,
+  },
+  {
+    scan_id: "2026-08-13T16:41:09Z_abcd1234",
+    created_at: "2026-08-13T16:41:09Z",
+    resource_count: 3,
+    summary: { by_risk_level: { HIGH: 3 } },
     vs_previous: null,
   },
 ];
@@ -129,6 +144,8 @@ async function rescan(user, result) {
 beforeEach(() => {
   runScan.mockReset();
   getScan.mockReset();
+  listScans.mockReset();
+  listScans.mockResolvedValue({ scans: SCANS });
 });
 
 describe("the account view across scans", () => {
@@ -167,7 +184,7 @@ describe("the account view across scans", () => {
 
     const { resources, summary } = scanOf({ "sandbox-lab": 2 });
     getScan.mockResolvedValueOnce({ resources, summary, created_at: SCANS[0].created_at });
-    await waitFor(() => expect(hook("history-item")).toHaveLength(1));
+    await waitFor(() => expect(hook("history-item")).toHaveLength(SCANS.length));
     await user.click(hook("history-item")[0]);
     await waitFor(() => expect(hook("saved-scan-banner")).toHaveLength(1));
 
@@ -245,5 +262,126 @@ describe("accounts the view tells apart", () => {
     await user.selectOptions(accountView(), screen.getByRole("option", { name: "all" }));
 
     expect(findingRows()).toHaveLength(1);
+  });
+});
+
+describe("overlapping loads", () => {
+  // Two saved scans clicked one after the other, before either has landed. The
+  // first lacks the chosen account; the second, where the page should end up,
+  // offers it. Under the choice their row counts differ, so either on screen is
+  // recognizable: three rows for the first, two for the second.
+  const [second, first] = SCANS;
+  const FIRST = scanOf({ "sandbox-lab": 3 });
+  const SECOND = scanOf({ "sandbox-lab": 1, "training-account": 2 });
+
+  /** A promise the test settles by hand. */
+  function deferred() {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  /** Hold every saved-scan request open; the returned `land` answers one. */
+  function holdSavedScans() {
+    const pending = new Map();
+    getScan.mockImplementation((scanId) => new Promise((resolve) => pending.set(scanId, resolve)));
+    return (scan, { resources, summary }) =>
+      act(async () => {
+        pending.get(scan.scan_id)({ resources, summary, created_at: scan.created_at });
+      });
+  }
+
+  /** Choose an account, then click the first saved scan and then the second. */
+  async function chooseThenClickBoth(user) {
+    await renderScanned(scanOf(TWO_ACCOUNTS));
+    await user.selectOptions(accountView(), "training-account");
+    await waitFor(() => expect(hook("history-item")).toHaveLength(SCANS.length));
+    const land = holdSavedScans();
+    await user.click(hook("history-item")[SCANS.indexOf(first)]);
+    await user.click(hook("history-item")[SCANS.indexOf(second)]);
+    return land;
+  }
+
+  it("opens the second on the chosen account when the first lands before it", async () => {
+    const user = userEvent.setup();
+    const land = await chooseThenClickBoth(user);
+
+    await land(first, FIRST);
+    await land(second, SECOND);
+
+    expect(accountView()).toHaveDisplayValue("training-account");
+    expect(findingRows()).toHaveLength(2);
+  });
+
+  it("keeps the second on screen when the first lands after it", async () => {
+    const user = userEvent.setup();
+    const land = await chooseThenClickBoth(user);
+
+    await land(second, SECOND);
+    await land(first, FIRST);
+
+    expect(findingRows()).toHaveLength(2);
+    expect(accountView()).toHaveDisplayValue("training-account");
+  });
+
+  it("stays loading until the second has landed", async () => {
+    // The scan button reports `loading`, and automation waits for it to go idle.
+    const user = userEvent.setup();
+    const land = await chooseThenClickBoth(user);
+    const state = () => hook("scan-button")[0].dataset.sceneState;
+
+    await land(first, FIRST);
+    expect(state()).toBe("scanning");
+
+    await land(second, SECOND);
+    expect(state()).toBe("idle");
+  });
+
+  it("keeps a saved scan clicked during a live scan when the live scan lands", async () => {
+    const user = userEvent.setup();
+    await renderScanned(scanOf(TWO_ACCOUNTS));
+    await waitFor(() => expect(hook("history-item")).toHaveLength(SCANS.length));
+    const live = deferred();
+    runScan.mockReturnValueOnce(live.promise);
+    await user.click(hook("scan-button")[0]);
+    const land = holdSavedScans();
+    await user.click(hook("history-item")[SCANS.indexOf(second)]);
+
+    await land(second, SECOND);
+    await act(async () => live.resolve(scanOf({ "sandbox-lab": 1 })));
+
+    expect(hook("saved-scan-banner")).toHaveLength(1);
+    expect(findingRows()).toHaveLength(3);
+    // The abandoned scan's progress bar went with it, not on under the saved scan.
+    expect(hook("scan-progress")).toHaveLength(0);
+  });
+
+  it.each([
+    ["answers with less", (refresh) => refresh.resolve({ scans: SCANS })],
+    ["fails", (refresh) => refresh.reject(new Error("The API is unreachable."))],
+  ])("keeps the newer history when an older refresh %s after it", async (_, settle) => {
+    // Two live scans overlap, "Live" starting the second while the first is in
+    // flight, and each refreshes the history as it lands. The first scan's
+    // refresh goes out first and sees less, but answers last.
+    const user = userEvent.setup();
+    await renderScanned(scanOf(TWO_ACCOUNTS));
+    await waitFor(() => expect(hook("history-item")).toHaveLength(SCANS.length));
+    const [olderScan, newerScan] = [deferred(), deferred()];
+    runScan.mockReturnValueOnce(olderScan.promise).mockReturnValueOnce(newerScan.promise);
+    await user.click(hook("scan-button")[0]);
+    await user.click(screen.getByRole("button", { name: "Live" }));
+
+    const [olderRefresh, newerRefresh] = [deferred(), deferred()];
+    listScans.mockReturnValueOnce(olderRefresh.promise).mockReturnValueOnce(newerRefresh.promise);
+    await act(async () => olderScan.resolve(scanOf(TWO_ACCOUNTS)));
+    await act(async () => newerScan.resolve(scanOf(TWO_ACCOUNTS)));
+    const saved = { ...SCANS[0], scan_id: "2026-08-15T09:30:02Z_ijkl9012" };
+    await act(async () => newerRefresh.resolve({ scans: [saved, ...SCANS] }));
+    await act(async () => settle(olderRefresh));
+
+    expect(hook("history-item")).toHaveLength(SCANS.length + 1);
   });
 });
