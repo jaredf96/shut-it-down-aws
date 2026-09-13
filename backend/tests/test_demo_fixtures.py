@@ -184,8 +184,13 @@ def test_scanner_variety(current):
 # --- Nothing real may leak ------------------------------------------------
 
 
-def test_fixtures_use_reserved_documentation_account_ids():
-    """AWS reserves these ranges for docs, so they cannot be anyone's account."""
+def test_fixtures_use_only_example_account_ids():
+    """Only the two example account ids appear in the fixtures.
+
+    That is all this claims. The policy test over the generator and the test
+    files words the rule the same way: nothing else appears beside the example
+    ids, not that an example id is nobody's account.
+    """
     allowed = {"111122223333", "444455556666"}
     for account in load("accounts.json")["accounts"]:
         assert account["account_id"] in allowed
