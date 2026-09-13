@@ -40,6 +40,7 @@ OUT_DIR = REPO_ROOT / "demo-data"
 
 sys.path.insert(0, str(BACKEND))
 
+from app.repositories.scan_repository import is_complete  # noqa: E402
 from app.services import evaluate_alerts, scan_all  # noqa: E402
 from app.services.diff_service import diff_resource_lists  # noqa: E402
 
@@ -199,8 +200,12 @@ def pin_age(item: dict) -> None:
     item["created_at"] = _iso(CURRENT_DT - timedelta(days=days))
 
 
-def scan_account(seed_fn, account: dict) -> list[dict]:
-    """Run the real scanners in an isolated moto account and stamp ownership."""
+def scan_account(seed_fn, account: dict) -> tuple[list[dict], bool]:
+    """Run the real scanners in an isolated moto account and stamp ownership.
+
+    Also returns whether that scan read everything, so the fixtures record what
+    the scan reported rather than assert it (D21).
+    """
     with mock_aws():
         mock_random.seed(RANDOM_SEED)
         seed_fn(account["region"])
@@ -216,7 +221,7 @@ def scan_account(seed_fn, account: dict) -> list[dict]:
                 item[field] = item[field].replace(MOTO_ACCOUNT_ID, account["account_id"])
         pin_age(item)
         resources.append(item)
-    return resources
+    return resources, is_complete(result)
 
 
 def summarize(resources: list[dict]) -> dict:
@@ -289,7 +294,12 @@ def main() -> None:
     OUT_DIR.mkdir(exist_ok=True)
     print("Generating demo fixtures from real scanners (moto sandbox)…")
 
-    current = scan_account(seed_sandbox, SANDBOX) + scan_account(seed_training, TRAINING)
+    sandbox, sandbox_complete = scan_account(seed_sandbox, SANDBOX)
+    training, training_complete = scan_account(seed_training, TRAINING)
+    current = sandbox + training
+    # What the sandbox scans reported, recorded rather than assumed. The previous
+    # scan is derived from this one, so it inherits the same answer.
+    complete = sandbox_complete and training_complete
     # Highest risk first, so the demo opens on the findings that matter.
     order = {"HIGH": 0, "REVIEW": 1, "MEDIUM": 2, "LOW": 3}
     current.sort(key=lambda r: (order.get(r["risk_level"], 9), r["resource_type"]))
@@ -300,6 +310,7 @@ def main() -> None:
         {
             "scan_id": CURRENT_SCAN_ID,
             "created_at": CURRENT_AT,
+            "complete": complete,
             "summary": summarize(current),
             "resources": current,
         },
@@ -309,6 +320,7 @@ def main() -> None:
         {
             "scan_id": PREVIOUS_SCAN_ID,
             "created_at": PREVIOUS_AT,
+            "complete": complete,
             "summary": summarize(previous),
             "resources": previous,
         },

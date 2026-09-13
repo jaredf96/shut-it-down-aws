@@ -356,7 +356,8 @@ def scan_everything(save: bool = True, principal: dict = Depends(get_current_pri
     The response includes `alerts` (derived from this scan, and the previous
     saved scan when available). When persistence is configured, the result is
     also saved to DynamoDB and its `scan_id` is returned. Pass `?save=false`
-    to skip saving.
+    to skip saving. `complete` is false when any region, scanner or registered
+    account could not be read, and a saved copy carries the same verdict.
 
     If the workspace has registered AWS accounts, every account is scanned
     (assume-role) and each resource is tagged with its account; otherwise the
@@ -387,7 +388,14 @@ def scan_everything(save: bool = True, principal: dict = Depends(get_current_pri
             # (persistence off, or ?save=false), so no contract changes.
             logger.error("scan not saved for workspace=%s: %s", workspace, exc)
 
-    response = {**result, "alerts": alerts, "scan_id": scan_id, "persisted": scan_id is not None}
+    response = {
+        **result,
+        "alerts": alerts,
+        "scan_id": scan_id,
+        "persisted": scan_id is not None,
+        # The same verdict a saved copy of this scan carries (D21).
+        "complete": scan_repository.is_complete(result),
+    }
 
     # Optionally push alerts to email/Slack on every scan.
     if config.notify_on_scan():

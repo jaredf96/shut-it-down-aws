@@ -189,10 +189,14 @@ Key properties:
   own partitions.
 - **Time-sortable sort keys** mean "newest first" is `ScanIndexForward=False`
   with no secondary index. History deltas fetch `limit + 1` so even the oldest
-  row on a page has a predecessor to diff against.
+  row on a page has a predecessor to diff against, and to return as its
+  `previous`.
 - Bulk scan payloads are stored zlib-compressed; lightweight metadata
   (`created_at`, `resource_count`, `summary_json`) stays native so the history
   list projects cheaply and a saved scan stays legible in the console.
+- **A saved scan keeps what it could not read** (`failures_json`), so its
+  `complete` survives the save. A scan saved before that attribute existed reads
+  as `complete: null`, never `true` (D21).
 - **Every repository read follows `LastEvaluatedKey`**, via
   `dynamo.query_items`. A Query is capped at 1 MB of items *read* — before any
   `ProjectionExpression` — and a short page returned as a complete answer is
@@ -258,7 +262,7 @@ sequenceDiagram
     API->>DB: previous scan (for change-aware alerts)
     API->>AL: evaluate(resources, previous)
     API->>DB: save scan (workspace-scoped)
-    API-->>FE: { summary, resources, regions_failed, scanners_failed, alerts, scan_id }
+    API-->>FE: { summary, resources, regions_failed, scanners_failed, complete, alerts, scan_id }
 ```
 
 ## Deployment shape

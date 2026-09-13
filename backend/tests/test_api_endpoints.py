@@ -33,6 +33,7 @@ def test_scan_all_endpoint_shape():
     # Always present, so a caller can tell "saw everything" from "saw nothing".
     assert body["regions_failed"] == []
     assert body["scanners_failed"] == []
+    assert body["complete"] is True
 
 
 def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
@@ -49,6 +50,7 @@ def test_scan_endpoint_reports_regions_it_could_not_read(monkeypatch):
     assert body["regions_failed"] == [
         {"region": REGION, "reason": "AuthFailure", "account_id": None, "account_label": None}
     ]
+    assert body["complete"] is False
 
 
 def test_scan_endpoint_reports_a_scanner_that_could_not_run(monkeypatch):
@@ -73,6 +75,7 @@ def test_scan_endpoint_reports_a_scanner_that_could_not_run(monkeypatch):
         }
     ]
     assert body["regions_failed"] == []
+    assert body["complete"] is False
 
 
 def test_there_are_no_per_service_scan_endpoints():
@@ -119,11 +122,13 @@ def test_scan_persists_then_history_endpoints_work(dynamo_table):
     listed = client.get("/scans").json()["scans"]
     assert any(s["scan_id"] == scan_id for s in listed)
     assert all("vs_previous" in s for s in listed)
+    assert all(s["complete"] is True for s in listed)
 
     # And be fetchable by id with the same resource shape.
     fetched = client.get(f"/scans/{scan_id}")
     assert fetched.status_code == 200
     assert fetched.json()["scan_id"] == scan_id
+    assert fetched.json()["complete"] is True
 
     # save=false skips persistence even when enabled.
     skipped = client.get("/scan?save=false").json()

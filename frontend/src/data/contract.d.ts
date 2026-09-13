@@ -79,6 +79,12 @@ export interface ScanPayload {
 export interface Scan extends ScanPayload {
   scan_id: string;
   created_at: string;
+  /**
+   * Whether it read every region, scanner and registered account it set out to
+   * (D21). Null for a scan saved before that was recorded: unrecorded is not
+   * complete, and nothing should compare it as though it were.
+   */
+  complete: boolean | null;
 }
 
 /**
@@ -136,10 +142,15 @@ export interface LiveScanResponse extends ScanPayload {
   /** Derived from this scan (and the previous saved one, when there is one). */
   alerts: Alert[];
   persisted: boolean;
-  /** Empty when every region was read. Not stored with a saved scan. */
+  /** Empty when every region was read. A saved copy keeps it, reported as `complete`. */
   regions_failed: RegionFailure[];
-  /** Empty when every scanner ran. Not stored with a saved scan. */
+  /** Empty when every scanner ran. A saved copy keeps it, reported as `complete`. */
   scanners_failed: ScannerFailure[];
+  /**
+   * False when any region, scanner or registered account could not be read — the
+   * same verdict a saved copy of this scan carries (D21).
+   */
+  complete: boolean;
 }
 
 /**
@@ -175,14 +186,26 @@ export interface ScanListItem {
   created_at: string;
   resource_count: number;
   summary: ScanSummary;
+  /** See `Scan.complete`. */
+  complete: boolean | null;
   /** null for the earliest scan, which has no predecessor. */
   vs_previous: DiffCounts | null;
+  /**
+   * The scan saved just before this one, or null for the earliest. Present on the
+   * last item of a page too: the list fetches one scan past its limit.
+   */
+  previous: PreviousScan | null;
 }
 
 export interface ScanMeta {
   scan_id: string;
   created_at: string;
   summary: ScanSummary;
+}
+
+/** What a listed scan says about the one before it: enough to compare against. */
+export interface PreviousScan extends ScanMeta {
+  complete: boolean | null;
 }
 
 /**

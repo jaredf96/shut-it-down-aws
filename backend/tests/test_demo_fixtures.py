@@ -59,12 +59,20 @@ def test_scan_resources_match_the_resource_model(filename):
 @pytest.mark.parametrize("filename", SCAN_FILES)
 def test_scan_envelope_shape(filename):
     scan = load(filename)
-    assert set(scan) == {"scan_id", "created_at", "summary", "resources"}
+    assert set(scan) == {"scan_id", "created_at", "complete", "summary", "resources"}
     assert set(scan["summary"]) == {
         "total_resources",
         "by_risk_level",
         "estimated_monthly_cost",
     }
+
+
+@pytest.mark.parametrize("filename", SCAN_FILES)
+def test_the_demo_scans_read_everything(filename):
+    """The demo's Min. $/mo tile compares two scans only when both are complete
+    (D21), so a sandbox scan that missed something would take the comparison with
+    it. `make demo-fixtures` writes what the scan reported; this pins the answer."""
+    assert load(filename)["complete"] is True
 
 
 def test_alerts_match_the_alert_model():

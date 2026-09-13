@@ -54,5 +54,49 @@ def test_oldest_in_page_still_compares_to_earlier_scan(dynamo_table):
 def test_each_scan_keeps_its_metadata(dynamo_table):
     _save([_resource("i-1")])
     item = list_with_deltas()[0]
-    assert set(item.keys()) == {"scan_id", "created_at", "resource_count", "summary", "vs_previous"}
+    assert set(item.keys()) == {
+        "scan_id",
+        "created_at",
+        "resource_count",
+        "summary",
+        "complete",
+        "vs_previous",
+        "previous",
+    }
     assert item["resource_count"] == 1
+    # The first scan ever has nothing before it.
+    assert item["previous"] is None
+
+
+def test_the_last_scan_on_a_page_still_names_its_predecessor(dynamo_table):
+    ids = sorted(_save([_resource("i-1")]) for _ in range(4))  # oldest first
+
+    newest, last_on_page = list_with_deltas(limit=2)
+
+    assert newest["scan_id"] == ids[3]
+    assert newest["previous"]["scan_id"] == ids[2]
+    # Past the end of the page, but fetched for `vs_previous` anyway — so a client
+    # comparing the last row with the scan before it needs no second request.
+    assert last_on_page["previous"]["scan_id"] == ids[1]
+    assert set(last_on_page["previous"]) == {"scan_id", "created_at", "summary", "complete"}
+
+
+def test_a_predecessor_carries_its_completeness(dynamo_table, monkeypatch):
+    # Fixed ids, so which scan is older does not depend on two saves landing in
+    # different milliseconds.
+    ids = iter(["2026-01-01T00:00:00.000Z_aaaaaaaa", "2026-01-02T00:00:00.000Z_bbbbbbbb"])
+    monkeypatch.setattr(scan_repository, "_new_scan_id", lambda: next(ids))
+    gap = {
+        "region": "us-west-1",
+        "reason": "AuthFailure",
+        "account_id": None,
+        "account_label": None,
+    }
+    scan_repository.save_scan({"summary": {}, "resources": [], "regions_failed": [gap]})
+    scan_repository.save_scan({"summary": {}, "resources": []})
+
+    newest, oldest = list_with_deltas()
+
+    assert newest["complete"] is True
+    assert newest["previous"]["complete"] is False
+    assert oldest["complete"] is False

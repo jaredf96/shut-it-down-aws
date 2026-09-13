@@ -151,6 +151,8 @@ export const demoScanProvider = {
       // report here. Inventing a failure would be fabricating fixture data.
       regions_failed: [],
       scanners_failed: [],
+      // Written by `make demo-fixtures` from what the sandbox scan reported.
+      complete: currentScan.complete === true,
     };
   },
 
@@ -163,7 +165,16 @@ export const demoScanProvider = {
           created_at: scan.created_at,
           resource_count: scan.resources.length,
           summary: scan.summary,
+          complete: scan.complete,
           vs_previous: older ? diff(older, scan).summary : null,
+          previous: older
+            ? {
+                scan_id: older.scan_id,
+                created_at: older.created_at,
+                summary: older.summary,
+                complete: older.complete,
+              }
+            : null,
         };
       }),
     };

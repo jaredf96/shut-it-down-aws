@@ -58,6 +58,7 @@ function stubApi() {
         persisted: false,
         regions_failed: [],
         scanners_failed: [],
+        complete: true,
       };
     } else if (path.startsWith("/scans/diff")) {
       body = expectedDiff;
@@ -71,14 +72,23 @@ function stubApi() {
             created_at: currentScan.created_at,
             resource_count: currentScan.resources.length,
             summary: currentScan.summary,
+            complete: currentScan.complete,
             vs_previous: expectedDiff.summary,
+            previous: {
+              scan_id: previousScan.scan_id,
+              created_at: previousScan.created_at,
+              summary: previousScan.summary,
+              complete: previousScan.complete,
+            },
           },
           {
             scan_id: previousScan.scan_id,
             created_at: previousScan.created_at,
             resource_count: previousScan.resources.length,
             summary: previousScan.summary,
+            complete: previousScan.complete,
             vs_previous: null,
+            previous: null,
           },
         ],
       };

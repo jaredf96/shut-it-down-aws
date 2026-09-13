@@ -19,9 +19,12 @@ plain JSON string and the lightweight metadata (scan_id, created_at,
 resource_count) stays native, so the history list projects cheaply and a saved
 scan is still legible in the DynamoDB console.
 
+`failures_json` keeps what the scan could not read, and every read derives
+`complete` from it — None for a scan saved before the attribute existed (D21).
+
 `workspace_id` is an optional keyword on every function; when omitted it resolves
 to the default workspace (local / single-workspace mode). If persistence is not
-configured, every function is a safe no-op.
+configured, every read and write is a safe no-op.
 """
 
 from __future__ import annotations
@@ -43,11 +46,26 @@ from app.repositories.dynamo import ensure_table, get_table, is_enabled
 __all__ = [
     "ensure_table",
     "get_scan",
+    "is_complete",
     "is_enabled",
     "list_scans",
     "list_scans_full",
     "save_scan",
 ]
+
+# What a scan reports it could not read: regions, whole scanners, and — in a
+# multi-account scan — registered accounts it could not scan at all. Each one
+# lowers the totals with no finding to show for it.
+_FAILURE_KEYS = ("regions_failed", "scanners_failed", "account_errors")
+
+
+def is_complete(result: dict) -> bool:
+    """Whether a scan read everything it set out to read.
+
+    The one definition shared by the live `GET /scan` response and every saved
+    scan, whose `complete` is derived from the failures stored with it.
+    """
+    return not any(result.get(key) for key in _FAILURE_KEYS)
 
 
 def _scan_pk(workspace_id: str | None) -> str:
@@ -114,6 +132,18 @@ def _resources(item: dict) -> list:
     return json.loads(item["resources_json"])
 
 
+def _complete(item: dict) -> bool | None:
+    """A stored scan's `complete`, from its failure record.
+
+    None when it was saved before the record existed. Unrecorded is not
+    complete: nothing says that scan read everything, and a comparison needs
+    something to say so.
+    """
+    if "failures_json" not in item:
+        return None
+    return is_complete(json.loads(item["failures_json"]))
+
+
 def save_scan(result: dict, *, workspace_id: str | None = None) -> str | None:
     """Persist a full scan result for a workspace. Returns scan_id, or None if disabled."""
     if not is_enabled():
@@ -131,6 +161,9 @@ def save_scan(result: dict, *, workspace_id: str | None = None) -> str | None:
         "created_at": created_at,
         "resource_count": len(resources),
         "summary_json": json.dumps(summary),
+        # The failures themselves rather than a flag: what was missed, not only
+        # that something was (D21).
+        "failures_json": json.dumps({key: result.get(key, []) for key in _FAILURE_KEYS}),
         "resources_gz": _compress(json.dumps(resources)),
     }
     size = _item_size(item)
@@ -171,7 +204,7 @@ def list_scans(limit: int = 20, *, workspace_id: str | None = None) -> list[dict
         KeyConditionExpression=Key("pk").eq(_scan_pk(workspace_id)),
         ScanIndexForward=False,  # newest first
         limit=limit,
-        ProjectionExpression="scan_id, created_at, resource_count, summary_json",
+        ProjectionExpression="scan_id, created_at, resource_count, summary_json, failures_json",
     )
     return [_to_meta(item) for item in items]
 
@@ -207,6 +240,7 @@ def get_scan(scan_id: str, *, workspace_id: str | None = None) -> dict | None:
         "scan_id": item["scan_id"],
         "created_at": item["created_at"],
         "summary": json.loads(item["summary_json"]),
+        "complete": _complete(item),
         "resources": _resources(item),
     }
 
@@ -218,4 +252,5 @@ def _to_meta(item: dict) -> dict:
         # Numbers come back from DynamoDB as Decimal; normalize to int.
         "resource_count": int(item.get("resource_count", 0)),
         "summary": json.loads(item["summary_json"]) if item.get("summary_json") else {},
+        "complete": _complete(item),
     }

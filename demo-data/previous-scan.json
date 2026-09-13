@@ -1,6 +1,7 @@
 {
   "scan_id": "2026-08-14T08:12:44.201Z_7c1e93af",
   "created_at": "2026-08-14T08:12:44.201Z",
+  "complete": true,
   "summary": {
     "total_resources": 14,
     "by_risk_level": {

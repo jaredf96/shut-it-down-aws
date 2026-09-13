@@ -89,7 +89,10 @@ with `ScanIndexForward=False`; **no GSIs**. Bulk scan payloads are stored
 zlib-compressed in `resources_gz`; the plain `resources_json` written by earlier
 builds is still read and never migrated (D16). Metadata (`created_at`,
 `resource_count`, `summary_json`) stays native/plain so the history list
-projects cheaply. **Every repository read goes through `dynamo.query_items`,
+projects cheaply. `failures_json` keeps what a scan could not read; every read
+derives `complete` from it, and a scan saved before it existed reads as
+`complete: null`, never `true` (D21). **Every repository read goes through
+`dynamo.query_items`,
 which follows `LastEvaluatedKey`** — a Query caps at 1 MB of items *read*,
 before any projection, and a short page returned as a complete answer is the
 failure this codebase forbids by name. Do not call `table.query` directly from a

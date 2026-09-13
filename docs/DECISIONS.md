@@ -1069,6 +1069,46 @@ wrong — and moves no box outside the inspector.
 
 ---
 
+## D21 — A saved scan records what it could not read, and a scan with no record is not complete
+
+**Decided:** 2026-09-13 · **Status:** executed
+
+`save_scan` stores the scan's own report of its gaps — `regions_failed`,
+`scanners_failed` and, in a multi-account scan, `account_errors` — as
+`failures_json` beside `summary_json`. Every read derives `complete` from it:
+`true` when all three are empty, `false` otherwise, and `null` for a scan saved
+before the attribute existed. `GET /scan` returns the same verdict for the live
+result, from the same `scan_repository.is_complete`, so a scan reads the same
+before and after it is saved. `GET /scans` gives each item its `complete` and a
+`previous` — the scan just before it, as `{scan_id, created_at, summary,
+complete}` — built from the extra scan the list already fetches for
+`vs_previous`.
+
+**Why:** a scan that could not read a region, a scanner or an account totals
+lower, with no finding to show for what it missed. The live response always said
+so, but a saved scan dropped it: reopened from history, an incomplete scan was
+indistinguishable from a complete one, so any comparison with its neighbours read
+"couldn't see" as a change — resources gone, cost down — and the next scan's
+comparison read it back as resources new, cost up. The failures are stored
+rather than a boolean because a handful of them is a few hundred bytes, and they
+keep what was missed, not only that something was. A scan with no record reads
+as `null` rather than `true` because nothing says it read everything, and a
+comparison has to be able to say that. `previous` exists because a client
+holding one page of history cannot see the scan before the page's last row;
+`vs_previous` never had that problem, since the server computes it.
+
+**Consequences:** nothing migrates, so existing items read as `null` for good.
+`failures_json` counts toward D16's item ceiling like every other attribute. Four
+readers of saved scans still treat every one as complete: the previous-scan
+baseline `GET /scan` evaluates alerts against, `vs_previous`, `GET /scans/diff`,
+and the dashboard's saved-scan view, which shows no incompleteness when a scan is
+reopened. `GET /scans/{id}` returns `complete` but not the failures themselves.
+The live dashboard reads `regions_failed` and `scanners_failed` but not
+`account_errors`, so a registered account that could not be scanned counts
+against `complete` without being named on screen.
+
+---
+
 ## Template
 
 ```markdown

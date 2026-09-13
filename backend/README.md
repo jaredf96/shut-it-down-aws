@@ -80,7 +80,7 @@ boto3 picks up credentials automatically from any of:
 | POST   | `/notify`              | Send latest scan's alerts to channels (503 if off) |
 | GET    | `/scan`                | Run every scanner; includes `alerts` (saves if on) |
 | GET    | `/alerts`              | Alerts from the latest saved scan (503 if off)   |
-| GET    | `/scans`               | List saved scans + `vs_previous` deltas (503 if off); `?limit=` 1–100, default 20 |
+| GET    | `/scans`               | List saved scans, each with `complete`, `vs_previous` and `previous` (503 if off); `?limit=` 1–100, default 20 |
 | GET    | `/scans/diff`          | Compare two scans: `?from_id=…&to_id=…`          |
 | GET    | `/scans/{scan_id}`     | Fetch one saved scan (503 if off, 404 if gone)  |
 
@@ -129,7 +129,12 @@ account it belongs to:
 Either gap returns no resources, which is indistinguishable from having none, so
 a scan that could not read three regions — or could not list buckets — has to say
 so rather than present a partial inventory as a clean bill of health. Both are
-empty when everything was read, and neither is stored with a saved scan.
+empty when everything was read.
+
+**`complete`** is `false` when either array is non-empty, or when a registered
+account could not be scanned at all (`account_errors`). A saved scan keeps all
+three as `failures_json` and reports the same `complete` on every read; a scan
+saved before that attribute existed reads as `null`, never `true` (D21).
 
 ### Workspace & auth
 
@@ -336,6 +341,11 @@ Deltas are computed on read in a single `Query` (the list fetches one extra scan
 so even the oldest item in a page can be compared). See
 `app/services/history_service.py`.
 
+Each item also carries `complete` and **`previous`** — the scan just before it,
+as `{ "scan_id", "created_at", "summary", "complete" }`, or `null` for the
+earliest — so a client comparing a scan with its predecessor needs nothing beyond
+the page, even for the page's last row.
+
 ### Diffing two scans
 
 `GET /scans/diff?from_id=<older>&to_id=<newer>` returns what changed between two
@@ -379,6 +389,7 @@ dashboard sidebar light up.
 | `created_at`     | ISO timestamp                                               |
 | `resource_count` | number of resources found                                   |
 | `summary_json`   | small summary (counts by risk level)                        |
+| `failures_json`  | what the scan could not read: `regions_failed`, `scanners_failed`, `account_errors`. `complete` is derived from it; absent on scans saved before it existed, which read as `null` |
 | `resources_gz`   | full resource list — JSON, zlib-compressed (binary)         |
 | `resources_json` | *legacy* — the uncompressed list earlier builds wrote; still read, never migrated |
 

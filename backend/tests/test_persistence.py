@@ -198,3 +198,70 @@ def test_corrupt_scan_item_raises_rather_than_reporting_no_resources(dynamo_tabl
 
     with pytest.raises(KeyError):
         scan_repository.list_scans_full(1)
+
+
+# --- What a saved scan could not read (D21) -------------------------------
+
+REGION_GAP = {
+    "region": "us-west-1",
+    "reason": "AuthFailure",
+    "account_id": None,
+    "account_label": None,
+}
+
+
+def test_completeness_counts_every_kind_of_gap():
+    scanner_gap = {"scanner": "s3", "label": "S3 buckets", "reason": "AccessDenied"}
+    account_gap = {"account_id": "444455556666", "name": "training", "error": "AccessDenied"}
+
+    assert scan_repository.is_complete({"regions_failed": [], "scanners_failed": []}) is True
+    assert scan_repository.is_complete({"regions_failed": [REGION_GAP]}) is False
+    assert scan_repository.is_complete({"scanners_failed": [scanner_gap]}) is False
+    # An account that could not be scanned at all is the widest gap of the three:
+    # every resource it owns is missing, and no region or scanner failure says so.
+    assert scan_repository.is_complete({"account_errors": [account_gap]}) is False
+
+
+def test_a_saved_scan_keeps_what_it_could_not_read(dynamo_table):
+    incomplete = scan_repository.save_scan(
+        {"summary": {}, "resources": [], "regions_failed": [REGION_GAP]}
+    )
+    complete = scan_repository.save_scan(
+        {"summary": {}, "resources": [], "regions_failed": [], "scanners_failed": []}
+    )
+
+    raw = dynamo.get_table().get_item(Key={"pk": "TENANT#default", "sk": incomplete})["Item"]
+    # The failures themselves, not a flag: what was missed, not only that something was.
+    assert json.loads(raw["failures_json"]) == {
+        "regions_failed": [REGION_GAP],
+        "scanners_failed": [],
+        "account_errors": [],
+    }
+
+    expected = {incomplete: False, complete: True}
+    assert {s["scan_id"]: s["complete"] for s in scan_repository.list_scans()} == expected
+    assert {s["scan_id"]: s["complete"] for s in scan_repository.list_scans_full(2)} == expected
+    assert scan_repository.get_scan(incomplete)["complete"] is False
+    assert scan_repository.get_scan(complete)["complete"] is True
+
+
+def test_a_scan_saved_before_the_record_existed_is_not_called_complete(dynamo_table):
+    """Nothing says it read everything, so `complete` is None, never True. Reading
+    it as complete would let a comparison trust the very scans D21 exists to stop
+    it trusting."""
+    scan_id = "2026-01-01T00:00:00.000Z_unrecord"
+    dynamo.get_table().put_item(
+        Item={
+            "pk": "TENANT#default",
+            "sk": scan_id,
+            "scan_id": scan_id,
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "resource_count": 0,
+            "summary_json": json.dumps({}),
+            "resources_json": json.dumps([]),
+        }
+    )
+
+    assert scan_repository.list_scans()[0]["complete"] is None
+    assert scan_repository.list_scans_full(1)[0]["complete"] is None
+    assert scan_repository.get_scan(scan_id)["complete"] is None
