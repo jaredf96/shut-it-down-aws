@@ -243,7 +243,7 @@ User name, filter on **AWS access key** with the `accessKeyId` from the
 Say: *"Temporary credentials, scoped to a read-only role, in an account whose
 keys I do not have."*
 
-### 5. Show the read-only guarantee is enforced outside the app (~20s)
+### 5. Show the read-only guarantee is enforced outside the app (~20s scripted; the cut gives it 30s)
 
 With cleanup enabled, release the fixture's unassociated Elastic IP with dry
 run off. Every in-app gate is cleared — the seven in README's *Safety around
@@ -283,10 +283,11 @@ disabled, live precondition re-check — and IAM still refused, because the scan
 role has no write permissions. Cleanup requires a separate role that this
 deployment does not have."*
 
-This is the strongest twenty seconds available: it demonstrates defense in depth
-with a real refusal rather than a claim.
+This is the strongest thirty seconds available: it demonstrates defense in depth
+with a real refusal rather than a claim, and it is why the cut spends longer here
+than the budget above asks.
 
-### 6. Close (~10s)
+### 6. Close (~10s scripted; the cut gives it 19s)
 
 Say: *"The public demo you can click is fixture data, by design. This is the
 live path, and the two are deployed separately so an anonymous visitor never
