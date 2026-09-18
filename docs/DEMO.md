@@ -1,6 +1,6 @@
 # Cross-account sandbox walkthrough
 
-The recording script for the ~90-second video that proves the AWS integration is
+The recording script for the two-minute video that proves the AWS integration is
 real. The [public demo](../README.md#-try-it) runs on fixtures so anyone can
 click it safely; this is the counterpart that shows the live path.
 
