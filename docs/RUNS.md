@@ -15,8 +15,9 @@ M scanners`) and one when it ends (`scan done: N resource(s) in Ts`), in
 `backend/app/services/scan_service.py`. The regions are whatever
 `describe_regions` returns for the account at run time
 (`backend/app/utils/aws_regions.py`); every run recorded here saw 17. The
-scanners run one after another, each sweeping its regions concurrently, so the
-per-scanner lines sum to the total.
+scanners run one after another, the six regional ones each sweeping their
+regions concurrently while S3 lists its buckets once, so the per-scanner lines
+sum to the total.
 
 ### 2026-07-24 — 12.4 s, 17 regions, an empty account
 
