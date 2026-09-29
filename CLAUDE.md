@@ -291,6 +291,7 @@ the code changes.
 `docs/ARCHITECTURE.md` (components, data model, request flow) ·
 `docs/SECURITY.md` (credentials, IAM, cleanup gates, production gaps) ·
 `docs/DEMO.md` (cross-account sandbox recording script) ·
+`docs/RUNS.md` (recorded runs: scan timings, the own-account canary run) ·
 `backend/README.md` (API reference) · `deploy/README.md` (container/Lambda).
 All env vars are annotated in `backend/.env.example`.
 

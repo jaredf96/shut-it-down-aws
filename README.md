@@ -49,7 +49,9 @@ below is honest about which category it falls into.
 
 - Seven read-only scanners: EC2, EBS, Elastic IPs, NAT Gateways, Load Balancers
   (ALB/NLB/Classic), RDS, S3
-- Concurrent multi-region sweeps (a 17-region scan runs in ~12s)
+- Concurrent multi-region sweeps: 12.4 s for a 17-region scan of an empty
+  account, 14 to 17 s cross-account into one lab account
+  ([recorded runs](docs/RUNS.md))
 - Cross-account access via **STS assume-role**, with per-account tagging and
   sessions named after the caller
 - Minimum monthly exposure per resource **at on-demand list prices** — static
@@ -359,6 +361,7 @@ confidence scores, measured false-positive rates).
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, request flow |
 | [docs/SECURITY.md](docs/SECURITY.md) | Credentials, IAM, cleanup gates, production gaps |
 | [docs/DEMO.md](docs/DEMO.md) | Cross-account walkthrough / recording script |
+| [docs/RUNS.md](docs/RUNS.md) | Recorded runs against real AWS: scan timings, the own-account canary run |
 | [backend/README.md](backend/README.md) | API reference, endpoints, IAM policy |
 | [deploy/README.md](deploy/README.md) | Container / Lambda deployment notes |
 

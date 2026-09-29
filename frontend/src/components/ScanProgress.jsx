@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 // Activity indicator shown while a scan is in flight. The backend returns the
-// whole scan in one response (no streaming), so the bar is paced to the typical
-// ~12s scan rather than wired to true per-stage progress; the elapsed timer is
-// real. Stages mirror the actual scanner order for a believable live readout.
+// whole scan in one response (no streaming), so the bar is paced on its own
+// clock — recorded scans take 12 to 17 s (docs/RUNS.md) — rather than wired to
+// true per-stage progress; the elapsed timer is real. Stages mirror the actual
+// scanner order for a believable live readout.
 const STAGES = [
   "Discovering enabled regions",
   "Scanning EC2 instances",
