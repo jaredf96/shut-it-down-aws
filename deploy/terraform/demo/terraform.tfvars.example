@@ -12,6 +12,7 @@ budget_alert_email = "you@example.com"
 # region             = "us-east-1"
 # name_prefix        = "shut-it-down"
 # monthly_budget_usd = "5"
+# custom_domain      = "demo.jareds.codes"   # "" for no alias (README § The custom domain)
 
 # Name of the Web ACL the CloudFront pricing plan generated for the canonical
 # distribution. It is account-specific, so this placeholder will not match

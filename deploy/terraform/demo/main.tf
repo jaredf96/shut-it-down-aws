@@ -30,6 +30,24 @@ provider "aws" {
   }
 }
 
+# CloudFront reads certificates from us-east-1 only, whatever region the origin
+# bucket is in, so the certificate lookup in canonical.tf is bound to this
+# provider rather than to var.region: a bucket elsewhere must not make the
+# lookup miss the certificate, or pick a same-name regional one CloudFront
+# cannot use.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project   = "shut-it-down-aws"
+      Component = "public-demo"
+      ManagedBy = "terraform"
+    }
+  }
+}
+
 locals {
   bucket_name = "${var.name_prefix}-demo-${data.aws_caller_identity.current.account_id}"
 }
@@ -141,7 +159,8 @@ resource "aws_cloudfront_distribution" "demo" {
   }
 
   viewer_certificate {
-    # No custom domain yet, so use the CloudFront-provided certificate.
+    # The custom domain is an alias of the canonical distribution (canonical.tf);
+    # this one keeps the CloudFront-provided certificate.
     cloudfront_default_certificate = true
   }
 }

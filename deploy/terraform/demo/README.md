@@ -42,9 +42,10 @@ permitted. If you need a header the managed policy does not set, you cannot
 simply write a custom policy; check the plan's feature table first.
 
 The managed policy sets `X-Frame-Options: SAMEORIGIN` (not `DENY`) and omits
-`includeSubdomains` on HSTS. The latter is the better choice here anyway: the
-demo lives on a shared `*.cloudfront.net` hostname, so asserting a policy for
-its subdomains is not ours to assert.
+`includeSubdomains` on HSTS. The latter is right for both hostnames the demo
+answers on: on the shared `*.cloudfront.net` hostname the subdomains are not
+ours to assert a policy for, and `demo.jareds.codes` (§ The custom domain) has
+no subdomains, so the directive would cover nothing.
 
 ## The pricing plan is the cost control
 
@@ -95,6 +96,54 @@ cached objects until they expire, and the fingerprinted assets are cached for a
 year. Always invalidate and wait for `Completed`, then verify an **asset** path
 and not just `/` — `index.html` is served `no-cache` and will revalidate
 immediately, which makes the cut look complete when it is not.
+
+## The custom domain
+
+The demo also answers at **https://demo.jareds.codes**, an alias of the
+canonical distribution with an ACM certificate for that name. The domain was
+attached on 2026-09-01 through the CloudFront console's add-domain flow, not
+through this stack, and until 2026-09-28 nothing here carried it: a refreshed
+plan proposed removing the alias and reverting to the CloudFront-provided
+certificate, while `plan -refresh=false` saw nothing — the two-way check below
+disagreeing over a console change, not a lying state. `canonical.tf` now sets
+`aliases` and `viewer_certificate` from `var.custom_domain`, written to match
+the live distribution, so the plan is clean. Set `custom_domain = ""` to run
+the stack without one.
+
+What lives where:
+
+- **The alias and the certificate settings** — `aws_cloudfront_distribution.canonical`
+  in `canonical.tf`: `aliases`, and `viewer_certificate` with the certificate's
+  ARN, `sni-only`, and `TLSv1.2_2021` as the minimum protocol.
+- **The certificate** — ACM, us-east-1 (the only region CloudFront reads
+  certificates from), for `demo.jareds.codes`: DNS-validated, issued
+  2026-09-01, valid to 2027-03-17, eligible for renewal. It is looked up by
+  `data.aws_acm_certificate.custom_domain` through a provider pinned to
+  us-east-1, whatever `var.region` says, and never managed, so no apply or
+  destroy here can delete it. ACM renews it by itself while its validation
+  record resolves.
+- **DNS — at the registrar (Namecheap), documented here and not managed.** Two
+  records under `jareds.codes`:
+  - `demo` CNAME → `dkhynvqt27enm.cloudfront.net`
+  - `_40f73f8bd8b0e138a634aba1a53853d2.demo` CNAME →
+    `_45d75dade3553ff93f49031adcbd51cd.jkddzztszm.acm-validations.aws`, ACM's
+    validation record. Removing it does not break the site; it breaks the
+    renewal, silently, until the certificate expires.
+
+Checked 2026-09-28:
+
+```bash
+dig +short demo.jareds.codes CNAME
+# dkhynvqt27enm.cloudfront.net.
+dig +short _40f73f8bd8b0e138a634aba1a53853d2.demo.jareds.codes CNAME
+# _45d75dade3553ff93f49031adcbd51cd.jkddzztszm.acm-validations.aws.
+echo | openssl s_client -servername demo.jareds.codes -connect demo.jareds.codes:443 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+# subject=CN=demo.jareds.codes
+# issuer=C=US, O=Amazon, CN=Amazon RSA 2048 M01
+# notBefore=Sep  1 00:00:00 2026 GMT
+# notAfter=Mar 17 23:59:59 2027 GMT
+```
 
 ## Two things that have actually bitten
 

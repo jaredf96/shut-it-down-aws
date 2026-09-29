@@ -1109,6 +1109,52 @@ against `complete` without being named on screen.
 
 ---
 
+## D22 — The demo's custom domain is configured in terraform; its DNS stays at the registrar, documented
+
+**Decided:** 2026-09-28 · **Status:** executed
+
+`demo.jareds.codes` is an alias of `aws_cloudfront_distribution.canonical`,
+with an ACM certificate for that name, and `deploy/terraform/demo/canonical.tf`
+now says so: `aliases` and `viewer_certificate` come from `var.custom_domain`,
+and the certificate is a data-source lookup, never a managed resource. The two
+DNS records behind it — the CNAME to the distribution and ACM's validation
+CNAME — live at the registrar and are documented in
+`deploy/terraform/demo/README.md` § The custom domain, not managed.
+
+**Why:** the domain was attached on 2026-09-01 through the CloudFront console's
+add-domain flow, and nothing in the tree carried it. A refreshed
+`terraform plan` on 2026-09-28 proposed removing the alias and falling back to
+the CloudFront-provided certificate at `TLSv1`, while `plan -refresh=false`
+reported no changes. The stack's two-way check exists to catch state that lies
+about AWS; this was the other case — AWS holding something the configuration
+never said — and the next apply would have taken the demo's own hostname down.
+
+**Why the certificate is looked up and not managed:** a managed
+`aws_acm_certificate` puts the certificate in the blast radius of every apply
+and of `destroy`, for nothing. ACM issued it for the console flow and renews it
+by itself while the validation record resolves; what the stack needs is the ARN.
+
+**Why DNS is documented and not managed:** the zone `jareds.codes` is at the
+registrar, not in Route 53, and hosts more than this demo; moving it for two
+records is a migration this stack has no business starting. The cost of leaving
+it out is that a renewal depends on a record nothing here checks, so the README
+carries both records and the commands that check them.
+
+**Consequences:** `deploy/terraform/demo/canonical.tf` (`aliases`, the
+`viewer_certificate` block, the certificate data source, the HSTS comment, which
+now covers both hostnames), `variables.tf` (`custom_domain`, default
+`demo.jareds.codes`, empty for no alias), `main.tf` (a provider alias pinned
+to us-east-1, which the certificate lookup is bound to so `var.region` cannot
+redirect it, and the disabled distribution's comment),
+`terraform.tfvars.example`, and
+`deploy/terraform/demo/README.md` (§ The custom domain, and the HSTS reasoning).
+No AWS change: the configuration was written to match the live distribution,
+the plan is clean, and the local state was brought level with
+`terraform apply -refresh-only`. Root `README.md`'s Live demo link still names
+the distribution's own hostname; both resolve to the same distribution.
+
+---
+
 ## Template
 
 ```markdown

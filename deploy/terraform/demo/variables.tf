@@ -26,6 +26,19 @@ variable "budget_alert_email" {
   default     = ""
 }
 
+variable "custom_domain" {
+  description = <<-EOT
+    Hostname the canonical distribution also answers on: an alias, with an ACM
+    certificate in us-east-1 looked up by this name. Empty means no alias and
+    the CloudFront-provided certificate. The two DNS records behind it — the
+    CNAME to the distribution and ACM's validation CNAME — live at the
+    registrar and are documented in README.md § The custom domain, not managed
+    here.
+  EOT
+  type        = string
+  default     = "demo.jareds.codes"
+}
+
 variable "plan_web_acl_name" {
   description = <<-EOT
     Name of the CLOUDFRONT-scope Web ACL that the pricing plan created and
